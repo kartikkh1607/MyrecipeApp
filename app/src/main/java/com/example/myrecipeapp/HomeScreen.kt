@@ -27,7 +27,6 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
@@ -61,12 +60,9 @@ fun HomeScreen(
         
         Spacer(modifier = Modifier.height(24.dp))
         
-        // Featured Recipe Card
-        FeaturedRecipeCard(
-            onClick = {
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                // Navigate to featured recipe detail
-            }
+        // Featured Recipe Carousel
+        FeaturedRecipeCarousel(
+            navController = navController
         )
         
         Spacer(modifier = Modifier.height(32.dp))

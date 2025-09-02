@@ -70,6 +70,17 @@ dependencies {
     // Navigation
     implementation("androidx.navigation:navigation-compose:$nav_version")
     
+    // HorizontalPager for Carousel
+    implementation("androidx.compose.foundation:foundation:1.7.5")
+    
+    // Accompanist for advanced UI components
+    implementation("com.google.accompanist:accompanist-pager:0.32.0")
+    implementation("com.google.accompanist:accompanist-pager-indicators:0.32.0")
+    implementation("com.google.accompanist:accompanist-systemuicontroller:0.32.0")
+    
+    // Lottie for advanced animations
+    implementation("com.airbnb.android:lottie-compose:6.1.0")
+    
     // compose viewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.0")
