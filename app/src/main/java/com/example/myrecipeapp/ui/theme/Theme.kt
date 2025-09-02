@@ -12,66 +12,78 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 
-// Modern Recipe App Dark Color Scheme - Sophisticated and warm
-private val ModernRecipeDarkColorScheme = darkColorScheme(
-    primary = CoralDark,
-    onPrimary = Color.White,
-    primaryContainer = PeachDark,
-    onPrimaryContainer = Color.Black,
+// PREMIUM BRAND DARK THEME - Sophisticated Midnight Palette
+private val PremiumDarkColorScheme = darkColorScheme(
+    // Primary - Teal accent for interactive elements
+    primary = Teal,
+    onPrimary = Midnight,
+    primaryContainer = Color(0xFF4A9999),     // Darker teal for containers
+    onPrimaryContainer = Cream,
     
-    secondary = MintDark,
-    onSecondary = Color.White,
-    secondaryContainer = SageDark,
-    onSecondaryContainer = Color.White,
+    // Secondary - Forest green for secondary actions
+    secondary = ForestGreen,
+    onSecondary = Cream,
+    secondaryContainer = Color(0xFF234848),   // Darker forest green
+    onSecondaryContainer = Cream,
     
-    tertiary = LavenderBlush,
-    onTertiary = Color.Black,
+    // Tertiary - Subtle accent
+    tertiary = MutedGray,
+    onTertiary = Cream,
     
-    background = WarmDarkBg,
-    onBackground = LightText,
+    // Backgrounds and surfaces
+    background = Midnight,
+    onBackground = Cream,
     
-    surface = SoftDarkSurface,
-    onSurface = LightText,
-    surfaceVariant = Color(0xFF404040),
-    onSurfaceVariant = MutedText,
+    surface = DarkSurface,
+    onSurface = Cream,
+    surfaceVariant = Color(0xFF2A2C31),       // Slightly lighter than surface
+    onSurfaceVariant = MutedGray,
     
-    outline = Color(0xFF707070),
-    outlineVariant = Color(0xFF505050),
+    // Borders and outlines - minimal and refined
+    outline = Color(0xFF3A3C41),              // Subtle borders
+    outlineVariant = Color(0xFF2F3135),       // Even more subtle
     
-    error = Color(0xFFFF8A80),
-    onError = Color.Black,
-    errorContainer = Color(0xFFD32F2F),
-    onErrorContainer = Color.White
+    // Error states
+    error = Color(0xFFFF6B6B),                // Softer red for dark theme
+    onError = Midnight,
+    errorContainer = Color(0xFF4A1A1A),
+    onErrorContainer = Color(0xFFFFCDD2)
 )
 
-// Modern Recipe App Light Color Scheme - Soft, appetizing, clean
-private val ModernRecipeLightColorScheme = lightColorScheme(
-    primary = SoftCoral,
-    onPrimary = Color.White,
-    primaryContainer = WarmPeach,
-    onPrimaryContainer = CharcoalGray,
+// PREMIUM BRAND LIGHT THEME - Elegant Linen Palette  
+private val PremiumLightColorScheme = lightColorScheme(
+    // Primary - Forest green for main actions
+    primary = ForestGreen,
+    onPrimary = White,
+    primaryContainer = Color(0xFFE8F5F5),     // Very light green container
+    onPrimaryContainer = ForestGreen,
     
-    secondary = FreshMint,
-    onSecondary = Color.White,
-    secondaryContainer = SageGreen,
-    onSecondaryContainer = CharcoalGray,
+    // Secondary - Softer green for secondary actions
+    secondary = Color(0xFF4A7C7C),            // Lighter forest green
+    onSecondary = White,
+    secondaryContainer = Color(0xFFF0F8F8),   // Very light secondary container
+    onSecondaryContainer = ForestGreen,
     
-    tertiary = LavenderBlush,
-    onTertiary = CharcoalGray,
+    // Tertiary - Stone for subtle accents
+    tertiary = Stone,
+    onTertiary = White,
     
-    background = CreamyWhite,
-    onBackground = CharcoalGray,
+    // Backgrounds and surfaces
+    background = Linen,
+    onBackground = Graphite,
     
-    surface = PureWhite,
-    onSurface = CharcoalGray,
-    surfaceVariant = Color(0xFFF8F8F8),
-    onSurfaceVariant = SoftGray,
+    surface = White,
+    onSurface = Graphite,
+    surfaceVariant = Color(0xFFF8F5F3),       // Slightly warmer than white
+    onSurfaceVariant = Stone,
     
-    outline = Color(0xFFD0D0D0),
-    outlineVariant = Color(0xFFE8E8E8),
+    // Borders and outlines - clean and minimal
+    outline = LightGray,
+    outlineVariant = Color(0xFFF0F0F0),       // Very subtle borders
     
-    error = Color(0xFFD32F2F),
-    onError = Color.White,
+    // Error states
+    error = Error,
+    onError = White,
     errorContainer = Color(0xFFFFEBEE),
     onErrorContainer = Color(0xFFB71C1C)
 )
@@ -89,9 +101,9 @@ fun MyrecipeAppTheme(
             val context = LocalContext.current
             if (darkTheme) dynamicDarkColorScheme(context) else dynamicLightColorScheme(context)
         }
-        // Use our modern recipe-themed color schemes by default
-        darkTheme -> ModernRecipeDarkColorScheme
-        else -> ModernRecipeLightColorScheme
+        // Use our premium brand color schemes by default
+        darkTheme -> PremiumDarkColorScheme
+        else -> PremiumLightColorScheme
     }
 
     MaterialTheme(
