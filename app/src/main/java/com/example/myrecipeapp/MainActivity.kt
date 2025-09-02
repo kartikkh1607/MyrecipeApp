@@ -39,7 +39,13 @@ class MainActivity : ComponentActivity() {
                 // For now, using system theme. Can be enhanced later with user preference
                 val darkTheme = isSystemInDarkTheme
                 
-                MyrecipeAppTheme(darkTheme = darkTheme) {
+                MyrecipeAppTheme(
+                    darkTheme = darkTheme,
+                    dynamicColor = false // Explicitly disable dynamic colors for consistency
+                ) {
+                    // Add theme debug info for troubleshooting
+                    ThemeDebugInfo()
+                    
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background
