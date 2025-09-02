@@ -9,22 +9,23 @@ import kotlinx.coroutines.launch
 class MainViewModel : ViewModel() {
 
     data class RecipeState(
-        val loading : Boolean = true,
-        val list : List<Category> = emptyList(),
-        val error : String ?= null
+        val loading: Boolean = true,
+        val list: List<Category> = emptyList(),
+        val error: String? = null
     )
 
     // We’re locking the real data inside the ViewModel
     // and only giving UI a copy to look at (read-only).
 
-    private val _CategoriesState = mutableStateOf(RecipeState()) // private box that stores all the UI info
-    val CategoriesState : State<RecipeState> = _CategoriesState
+    private val _CategoriesState =
+        mutableStateOf(RecipeState()) // private box that stores all the UI info
+    val CategoriesState: State<RecipeState> = _CategoriesState
 
     init {
         fetchCategories()
     }
 
-    private fun fetchCategories(){
+    private fun fetchCategories() {
         viewModelScope.launch {     //  Starts a coroutine (background thread
             try {
                 val response = recepieService.getCategories()
@@ -34,7 +35,7 @@ class MainViewModel : ViewModel() {
                     error = null
                 )
 
-            }catch(e: Exception) {
+            } catch (e: Exception) {
                 _CategoriesState.value = _CategoriesState.value.copy(
                     loading = false,
                     error = ("error fetching Categories ${e.message}")

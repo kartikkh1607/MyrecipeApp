@@ -20,8 +20,8 @@ private val retrofit = Retrofit.Builder()
 
 val recepieService = retrofit.create(ApiServices::class.java)
 
-interface ApiServices{
+interface ApiServices {
     @GET("categories.php")                            // go to this page on this website
-    suspend fun getCategories() : CategoriesResponse  // fetch the data and (wait for it) and get something like
-                                                      // CategoriesResponse
+    suspend fun getCategories(): CategoriesResponse  // fetch the data and (wait for it) and get something like
+    // CategoriesResponse
 }
