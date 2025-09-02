@@ -11,21 +11,42 @@ android {
 
     defaultConfig {
         applicationId = "com.example.myrecipeapp"
-        minSdk = 24
+        minSdk = 26
         targetSdk = 35
         versionCode = 1
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+        
+        // Add vector drawable support for lower API levels
+        vectorDrawables {
+            useSupportLibrary = true
+        }
+        
+        // Enable multidex for better compatibility
+        multiDexEnabled = true
     }
 
     buildTypes {
-        release {
+        debug {
+            isDebuggable = true
+            applicationIdSuffix = ".debug"
+            versionNameSuffix = "-debug"
             isMinifyEnabled = false
+        }
+        release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+            isDebuggable = false
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            
+            // Performance optimizations
+            ndk {
+                debugSymbolLevel = "NONE"
+            }
         }
     }
     compileOptions {
@@ -41,8 +62,17 @@ android {
 }
 
 dependencies {
+    val nav_version = "2.7.7"
+
+    // Material 3 Extended Icons
+    implementation("androidx.compose.material:material-icons-extended")
+    
+    // Navigation
+    implementation("androidx.navigation:navigation-compose:$nav_version")
+    
     // compose viewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
+    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.0")
 
     // Network Calls
     implementation("com.squareup.retrofit2:retrofit:3.0.0")
@@ -52,11 +82,17 @@ dependencies {
 
     // for image loading
     implementation("io.coil-kt:coil-compose:2.7.0")
+    
+    // Gson for TypeConverters
+    implementation("com.google.code.gson:gson:2.11.0")
+    
+    // Date picker
+    implementation("io.github.vanpra.compose-material-dialogs:datetime:0.9.0")
+    
+    // Baseline Profile
+    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
 
-    // for navigation
-    implementation("androidx.navigation:navigation-compose:2.9.1")
-
-
+    // Core & Compose BOM
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -65,11 +101,22 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
+    
+    // Testing
     testImplementation(libs.junit)
+    testImplementation("org.mockito:mockito-core:5.7.0")
+    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
+    testImplementation("org.robolectric:robolectric:4.10.3")
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
+    
+    // Baseline Profile
+    androidTestImplementation("androidx.benchmark:benchmark-macro-junit4:1.2.2")
+    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.2.0")
+
+    // Debugging
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
