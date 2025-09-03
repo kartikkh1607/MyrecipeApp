@@ -13,7 +13,7 @@ import androidx.navigation.compose.rememberNavController
 fun RecipeApp(navController: NavController) {
     val navController = rememberNavController()
     val recipeViewModel: MainViewModel = viewModel()
-    val ViewState by recipeViewModel.CategoriesState
+    val ViewState by recipeViewModel.recipeCategoriesState
 
 
     NavHost(navController = navController, startDestination = Screen.RecipeScreen.route)
@@ -29,8 +29,8 @@ fun RecipeApp(navController: NavController) {
 
         composable(route = Screen.DetailScreen.route) {
             val category =
-                navController.previousBackStackEntry?.savedStateHandle?.get<Category>("cat")
-                    ?: Category("", "", "", "")
+                navController.previousBackStackEntry?.savedStateHandle?.get<RecipeCategory>("cat")
+                    ?: RecipeCategory("", "", "", "")
             CategoryDetailScreen(category = category)
         }
 

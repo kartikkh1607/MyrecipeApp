@@ -37,10 +37,20 @@ fun RecipeDetailScreen(
     navController: NavHostController,
     viewModel: MainViewModel
 ) {
-    // For demo, get sample recipe data
-    val recipe = remember { 
-        SampleData.getFeaturedRecipes().find { it.recipe.id == recipeId }?.recipe
-            ?: SampleData.getFeaturedRecipes().first().recipe
+    // Get recipe from comprehensive data or sample data
+    val recipe = remember(recipeId) {
+        // First try to find in comprehensive data
+        val allRecipes = ComprehensiveRecipeData.getAllRecipes()
+        val sampleRecipe = allRecipes.find { it.id == recipeId }
+        
+        if (sampleRecipe != null) {
+            // Convert SampleRecipe to full Recipe with ingredients and instructions
+            ComprehensiveRecipeData.sampleRecipeToFullRecipe(sampleRecipe)
+        } else {
+            // Fallback to sample featured recipes
+            SampleData.getFeaturedRecipes().find { it.recipe.id == recipeId }?.recipe
+                ?: SampleData.getFeaturedRecipes().first().recipe
+        }
     }
     
     var isCookingMode by remember { mutableStateOf(false) }

@@ -54,7 +54,7 @@ fun Navigation(
 
         // Categories Screen - List all recipe categories
         composable(route = Screen.CategoriesScreen.route) {
-            val viewState by viewModel.CategoriesState
+            val viewState by viewModel.recipeCategoriesState
             RecipeScreen(viewstate = viewState, navigateToDetail = {
                 navController.currentBackStackEntry?.savedStateHandle?.set("cat", it)
                 navController.navigate(Screen.DetailScreen.route)
@@ -87,9 +87,15 @@ fun Navigation(
         // Category Detail Screen - Recipes in a specific category
         composable(route = Screen.DetailScreen.route) {
             val category =
-                navController.previousBackStackEntry?.savedStateHandle?.get<Category>("cat")
-                    ?: Category("", "", "", "")
-            CategoryDetailScreen(category = category)
+                navController.previousBackStackEntry?.savedStateHandle?.get<RecipeCategory>("cat")
+                    ?: RecipeCategory("", "", "", "")
+            CategoryDetailScreen(
+                category = category,
+                onBackClick = { navController.popBackStack() },
+                onRecipeClick = { recipeId ->
+                    navController.navigate(Screen.RecipeDetailScreen.route + "/$recipeId")
+                }
+            )
         }
 
         // Recipe Detail Screen - Individual recipe details
@@ -138,7 +144,7 @@ fun Navigation(
 
         // Legacy Recipe Screen (for backward compatibility)
         composable(route = Screen.RecipeScreen.route) {
-            val viewState by viewModel.CategoriesState
+            val viewState by viewModel.recipeCategoriesState
             RecipeScreen(viewstate = viewState, navigateToDetail = {
                 navController.currentBackStackEntry?.savedStateHandle?.set("cat", it)
                 navController.navigate(Screen.DetailScreen.route)

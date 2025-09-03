@@ -38,7 +38,7 @@ fun HomeScreen(
     viewModel: MainViewModel
 ) {
     val hapticFeedback = LocalHapticFeedback.current
-    val viewState by viewModel.CategoriesState
+    val categoriesState by viewModel.recipeCategoriesState
     
     Column(
         modifier = Modifier
@@ -68,7 +68,7 @@ fun HomeScreen(
         Spacer(modifier = Modifier.height(32.dp))
         
         // Categories Section
-        if (viewState.loading) {
+        if (categoriesState.loading) {
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -77,9 +77,9 @@ fun HomeScreen(
             ) {
                 CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
             }
-        } else if (viewState.error != null) {
+        } else if (categoriesState.error != null) {
             ErrorSection(
-                message = viewState.error ?: "Unknown error",
+                message = categoriesState.error ?: "Unknown error",
                 onRetry = {
                     // For now, we'll just show a message since fetchCategories is private
                     // In a real app, you'd make fetchCategories public or add a retry method
@@ -87,11 +87,11 @@ fun HomeScreen(
             )
         } else {
             CategoriesSection(
-                categories = viewState.list,
+                categories = categoriesState.categories,
                 onCategoryClick = { category ->
                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    navController.currentBackStackEntry?.savedStateHandle?.set("cat", category)
-                    navController.navigate(Screen.DetailScreen.route)
+                    // Navigate to category detail using new category ID
+                    navController.navigate(Screen.CategoriesScreen.route + "/${category.id}")
                 }
             )
         }
@@ -288,8 +288,8 @@ fun FeaturedRecipeCard(onClick: () -> Unit) {
 
 @Composable
 fun CategoriesSection(
-    categories: List<Category>,
-    onCategoryClick: (Category) -> Unit
+    categories: List<RecipeCategory>,
+    onCategoryClick: (RecipeCategory) -> Unit
 ) {
     Column(
         modifier = Modifier.padding(horizontal = 16.dp)
@@ -330,7 +330,7 @@ fun CategoriesSection(
 
 @Composable
 fun CategoryCard(
-    category: Category,
+    category: RecipeCategory,
     onClick: () -> Unit
 ) {
     var isPressed by remember { mutableStateOf(false) }
@@ -365,8 +365,8 @@ fun CategoryCard(
             verticalArrangement = Arrangement.Center
         ) {
             AsyncImage(
-                model = category.strCategoryThumb,
-                contentDescription = category.strCategory,
+                model = category.imageUrl,
+                contentDescription = category.name,
                 modifier = Modifier
                     .size(40.dp)
                     .clip(CircleShape),
@@ -374,7 +374,7 @@ fun CategoryCard(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = category.strCategory,
+                text = category.name,
                 style = MaterialTheme.typography.bodySmall,
                 fontWeight = FontWeight.Medium,
                 maxLines = 2,

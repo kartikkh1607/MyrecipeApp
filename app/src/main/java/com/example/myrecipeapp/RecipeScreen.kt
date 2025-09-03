@@ -7,21 +7,30 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Error
+import androidx.compose.material.icons.filled.FilterList
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material.icons.outlined.ViewList
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.draw.shadow
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 
@@ -29,23 +38,77 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 @Composable
 fun RecipeScreen(
     modifier: Modifier = Modifier,
-    viewstate: MainViewModel.RecipeState,
-    navigateToDetail: (Category) -> Unit
+    viewstate: MainViewModel.RecipeCategoryState,
+    navigateToDetail: (RecipeCategory) -> Unit
 ) {
     Column(
         modifier = modifier
             .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
+            .background(
+                brush = Brush.verticalGradient(
+                    colors = listOf(
+                        MaterialTheme.colorScheme.background,
+                        MaterialTheme.colorScheme.background.copy(alpha = 0.95f)
+                    )
+                )
+            )
             .padding(16.dp)
     ) {
-        // Header
-        Text(
-            text = "Recipe Categories",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
+        // Enhanced Header Section
+        Column(
+            modifier = Modifier.padding(bottom = 24.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = "Recipe Categories",
+                style = MaterialTheme.typography.headlineLarge.copy(
+                    fontSize = 32.sp
+                ),
+                fontWeight = FontWeight.ExtraBold,
+                color = MaterialTheme.colorScheme.onBackground,
+            )
+            
+            Text(
+                text = "Discover delicious recipes by category",
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.7f),
+                fontWeight = FontWeight.Medium
+            )
+            
+            // Category count indicator
+            if (!viewstate.loading && viewstate.error == null) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    Card(
+                        colors = CardDefaults.cardColors(
+                            containerColor = MaterialTheme.colorScheme.primaryContainer
+                        ),
+                        shape = RoundedCornerShape(20.dp)
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Outlined.GridView,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(16.dp)
+                            )
+                            Text(
+                                text = "${viewstate.categories.size} Categories",
+                                style = MaterialTheme.typography.labelMedium,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+            }
+        }
 
         Box(modifier = Modifier.fillMaxSize()) {
             when {
@@ -76,7 +139,7 @@ fun RecipeScreen(
 
                 else -> {
                     // Display Categories
-                    CategoryScreen(categories = viewstate.list, navigateToDetail)
+                    CategoryScreen(categories = viewstate.categories, navigateToDetail)
                 }
             }
         }
@@ -85,8 +148,8 @@ fun RecipeScreen(
 
 @Composable
 fun CategoryScreen(
-    categories: List<Category>,
-    navigateToDetail: (Category) -> Unit
+    categories: List<RecipeCategory>,
+    navigateToDetail: (RecipeCategory) -> Unit
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
@@ -103,25 +166,38 @@ fun CategoryScreen(
 
 @Composable
 fun CategoryItems(
-    category: Category,
-    navigateToDetail: (Category) -> Unit
+    category: RecipeCategory,
+    navigateToDetail: (RecipeCategory) -> Unit
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
+    
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
+        targetValue = if (isPressed) 0.92f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
+            stiffness = Spring.StiffnessHigh
         ),
         label = "category_scale"
+    )
+    
+    val elevation by animateDpAsState(
+        targetValue = if (isPressed) 12.dp else 8.dp,
+        animationSpec = tween(durationMillis = 300),
+        label = "category_elevation"
     )
 
     Card(
         modifier = Modifier
             .fillMaxWidth()
-            .aspectRatio(0.85f)
+            .aspectRatio(0.8f)
             .scale(scale)
+            .shadow(
+                elevation = elevation,
+                shape = RoundedCornerShape(20.dp),
+                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+            )
             .clickable {
                 isPressed = !isPressed
                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -130,37 +206,119 @@ fun CategoryItems(
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 6.dp),
-        shape = RoundedCornerShape(16.dp)
+        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+        shape = RoundedCornerShape(20.dp)
     ) {
-        Column(
-            modifier = Modifier.fillMaxSize(),
-            horizontalAlignment = Alignment.CenterHorizontally
+        Box(
+            modifier = Modifier.fillMaxSize()
         ) {
+            // Background Image with Overlay
             AsyncImage(
-                model = category.strCategoryThumb,
-                contentDescription = category.strCategory,
+                model = category.imageUrl,
+                contentDescription = category.name,
                 modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f)
-                    .clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(20.dp)),
                 contentScale = ContentScale.Crop
             )
-
+            
+            // Gradient Overlay for better text readability
             Box(
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .fillMaxSize()
+                    .background(
+                        brush = Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Transparent,
+                                Color.Transparent,
+                                Color.Black.copy(alpha = 0.3f),
+                                Color.Black.copy(alpha = 0.7f)
+                            ),
+                            startY = 0f,
+                            endY = Float.POSITIVE_INFINITY
+                        )
+                    )
+            )
+            
+            // Recipe count badge at top right
+            Card(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
                     .padding(12.dp),
-                contentAlignment = Alignment.Center
+                colors = CardDefaults.cardColors(
+                    containerColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.9f)
+                ),
+                shape = RoundedCornerShape(12.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+            ) {
+                Row(
+                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Restaurant,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.onPrimary,
+                        modifier = Modifier.size(14.dp)
+                    )
+                    Text(
+                        text = category.recipeCount.toString(),
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onPrimary,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+            
+            // Category information at bottom
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 Text(
-                    text = category.strCategory,
-                    style = MaterialTheme.typography.titleMedium,
+                    text = category.name,
+                    style = MaterialTheme.typography.titleLarge.copy(
+                        fontSize = 18.sp
+                    ),
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    maxLines = 2,
+                    color = Color.White,
+                    maxLines = 1,
                     overflow = TextOverflow.Ellipsis
                 )
+                
+                Text(
+                    text = category.description,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Color.White.copy(alpha = 0.9f),
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 14.sp
+                )
+            }
+            
+            // Subtle press effect indicator - only show when pressed
+            if (isPressed) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.Center)
+                        .size(40.dp)
+                        .background(
+                            color = MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                            shape = CircleShape
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        imageVector = Icons.Outlined.GridView,
+                        contentDescription = "View Category",
+                        tint = Color.White,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
             }
         }
     }

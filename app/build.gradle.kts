@@ -17,14 +17,17 @@ android {
         versionName = "1.0"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
-        
+
         // Add vector drawable support for lower API levels
         vectorDrawables {
             useSupportLibrary = true
         }
-        
+
         // Enable multidex for better compatibility
         multiDexEnabled = true
+
+        // This line reads the property from local.properties and creates a field in BuildConfig
+        buildConfigField("String", "SPOONACULAR_API_KEY", "\"${project.findProperty("spoonacular.api.key")}\"")
     }
 
     buildTypes {
@@ -42,7 +45,7 @@ android {
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-            
+
             // Performance optimizations
             ndk {
                 debugSymbolLevel = "NONE"
@@ -58,6 +61,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true  // Enable BuildConfig for API keys
     }
 }
 
@@ -66,21 +70,21 @@ dependencies {
 
     // Material 3 Extended Icons
     implementation("androidx.compose.material:material-icons-extended")
-    
+
     // Navigation
     implementation("androidx.navigation:navigation-compose:$nav_version")
-    
+
     // HorizontalPager for Carousel
     implementation("androidx.compose.foundation:foundation:1.7.5")
-    
+
     // Accompanist for advanced UI components
     implementation("com.google.accompanist:accompanist-pager:0.32.0")
     implementation("com.google.accompanist:accompanist-pager-indicators:0.32.0")
     implementation("com.google.accompanist:accompanist-systemuicontroller:0.32.0")
-    
+
     // Lottie for advanced animations
     implementation("com.airbnb.android:lottie-compose:6.1.0")
-    
+
     // compose viewModel
     implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
     implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.0")
@@ -93,13 +97,13 @@ dependencies {
 
     // for image loading
     implementation("io.coil-kt:coil-compose:2.7.0")
-    
+
     // Gson for TypeConverters
     implementation("com.google.code.gson:gson:2.11.0")
-    
+
     // Date picker
     implementation("io.github.vanpra.compose-material-dialogs:datetime:0.9.0")
-    
+
     // Baseline Profile
     implementation("androidx.profileinstaller:profileinstaller:1.3.1")
 
@@ -112,7 +116,7 @@ dependencies {
     implementation(libs.androidx.ui.graphics)
     implementation(libs.androidx.ui.tooling.preview)
     implementation(libs.androidx.material3)
-    
+
     // Testing
     testImplementation(libs.junit)
     testImplementation("org.mockito:mockito-core:5.7.0")
@@ -122,7 +126,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
-    
+
     // Baseline Profile
     androidTestImplementation("androidx.benchmark:benchmark-macro-junit4:1.2.2")
     androidTestImplementation("androidx.test.uiautomator:uiautomator:2.2.0")
@@ -131,3 +135,4 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
+
