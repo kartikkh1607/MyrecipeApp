@@ -43,9 +43,6 @@ class MainActivity : ComponentActivity() {
                     darkTheme = darkTheme,
                     dynamicColor = false // Explicitly disable dynamic colors for consistency
                 ) {
-                    // Add theme debug info for troubleshooting
-                    ThemeDebugInfo()
-                    
                     Surface(
                         modifier = Modifier.fillMaxSize(),
                         color = MaterialTheme.colorScheme.background

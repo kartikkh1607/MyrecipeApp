@@ -129,16 +129,14 @@ fun Navigation(
         composable(route = Screen.ProfileScreen.route) {
             ProfileScreen(
                 navController = navController,
-                viewModel = viewModel,
-                modifier = Modifier.fillMaxSize()
+                viewModel = viewModel
             )
         }
 
         // About Screen - App information
         composable(route = Screen.AboutScreen.route) {
             AboutScreen(
-                navController = navController,
-                modifier = Modifier.fillMaxSize()
+                navController = navController
             )
         }
 

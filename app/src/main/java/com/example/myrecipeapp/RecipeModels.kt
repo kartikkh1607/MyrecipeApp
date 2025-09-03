@@ -133,7 +133,7 @@ object SampleData {
                 id = "1",
                 name = "Spicy Korean Ramen",
                 description = "Authentic Korean ramen with a perfect balance of spice and umami flavors",
-                imageUrl = "https://www.themealdb.com/images/media/meals/ustsqw1468250014.jpg",
+                imageUrl = "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=500",
                 category = "Asian",
                 cuisine = "Korean",
                 difficulty = RecipeDifficulty.MEDIUM,

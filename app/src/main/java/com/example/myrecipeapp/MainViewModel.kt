@@ -9,6 +9,9 @@ import kotlinx.coroutines.launch
 
 class MainViewModel : ViewModel() {
 
+    // Initialize Spoonacular API service
+    private val apiService = spoonacularApiService
+
     // --- STATE FOR THE HOME SCREEN ---
     data class HomeRecipeState(
         val loading: Boolean = true,
@@ -27,7 +30,7 @@ class MainViewModel : ViewModel() {
     private val _recipeDetailState = mutableStateOf(RecipeDetailState())
     val recipeDetailState: State<RecipeDetailState> = _recipeDetailState
 
-    // --- STATE FOR RECIPE CATEGORIES (from Spoonacular API) ---
+    // --- STATE FOR RECIPE CATEGORIES (from custom API) ---
     data class RecipeCategoryState(
         val loading: Boolean = true,
         val categories: List<RecipeCategory> = emptyList(),
@@ -61,14 +64,14 @@ class MainViewModel : ViewModel() {
             try {
                 _homeRecipeState.value = _homeRecipeState.value.copy(loading = true, error = null)
 
-                // Check if we have a valid API key configured
+                // Check if we have Spoonacular API configured
                 if (isSpoonacularApiConfigured()) {
                     Log.d("MainViewModel", "Fetching recipes from Spoonacular API")
                     
-                    // Make the network call to Spoonacular to get 5 random recipes
-                    val response = spoonacularApiService.getRandomRecipes(number = 5)
+                    // Make the network call to Spoonacular API to get random recipes
+                    val response = apiService.getRandomRecipes(number = 10)
 
-                    // Use the adapter to convert the raw API models into our app's clean Recipe models
+                    // Use the adapter to convert the API models into our app's clean Recipe models
                     val recipes = response.recipes.map { it.toRecipe() }
 
                     // Create the final list of FeaturedRecipe objects for the UI
@@ -119,9 +122,9 @@ class MainViewModel : ViewModel() {
      * Check if Spoonacular API is properly configured
      */
     private fun isSpoonacularApiConfigured(): Boolean {
-        // This checks if the API key has been replaced with a real one
-        // In production, you might want to store the API key in BuildConfig or a secure location
-        return false // Set to true when you have a valid Spoonacular API key
+        // This checks if you want to use Spoonacular API
+        // Set to true when you have a valid Spoonacular API key
+        return true // Set to true to use Spoonacular API, false to use sample data
     }
 
     /**
@@ -135,7 +138,7 @@ class MainViewModel : ViewModel() {
 
                 if (isSpoonacularApiConfigured()) {
                     // Try to fetch from Spoonacular API
-                    val response = spoonacularApiService.getRecipeInformation(id = recipeId.toInt())
+                    val response = apiService.getRecipeDetails(recipeId.toInt())
                     val recipe = response.toRecipe()
                     _recipeDetailState.value = _recipeDetailState.value.copy(loading = false, recipe = recipe)
                 } else {
@@ -178,7 +181,7 @@ class MainViewModel : ViewModel() {
 
                 if (isSpoonacularApiConfigured() && query.isNotEmpty()) {
                     // Search using Spoonacular API
-                    val response = spoonacularApiService.searchRecipes(query = query, number = 20)
+                    val response = apiService.searchRecipes(query = query, number = 20)
                     val recipes = response.results.map { it.toRecipe() }
                     _searchState.value = _searchState.value.copy(loading = false, recipes = recipes)
                 } else {
@@ -205,15 +208,15 @@ class MainViewModel : ViewModel() {
 
 
     /**
-     * Fetches recipe categories using modern Spoonacular-based approach.
-     * Uses sample data as these categories work well with Spoonacular API.
+     * Fetches recipe categories using custom API.
+     * Uses sample data as fallback when API is not configured.
      */
     private fun fetchRecipeCategories() {
         viewModelScope.launch {
             try {
                 _recipeCategoriesState.value = _recipeCategoriesState.value.copy(loading = true, error = null)
                 
-                // Use our curated recipe categories that work well with Spoonacular
+                // Use our curated recipe categories
                 val categories = RecipeCategorySamples.getRecipeCategories()
                 
                 _recipeCategoriesState.value = _recipeCategoriesState.value.copy(
@@ -250,7 +253,7 @@ class MainViewModel : ViewModel() {
                 
                 if (isSpoonacularApiConfigured()) {
                     // Search for recipes in this category using Spoonacular API
-                    val response = spoonacularApiService.searchRecipes(
+                    val response = apiService.searchRecipes(
                         query = "",
                         type = category.name.lowercase(),
                         number = limit
@@ -276,5 +279,18 @@ class MainViewModel : ViewModel() {
             }
         }
     }
+    
+    /**
+     * Refresh featured recipes (can be called by pull-to-refresh)
+     */
+    fun refreshFeaturedRecipes() {
+        fetchFeaturedRecipes()
+    }
+    
+    /**
+     * Refresh recipe categories
+     */
+    fun refreshRecipeCategories() {
+        fetchRecipeCategories()
+    }
 }
-

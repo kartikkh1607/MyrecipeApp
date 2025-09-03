@@ -35,12 +35,27 @@ fun CategoryDetailScreen(
     var selectedDietaryFilter by remember { mutableStateOf(DietaryFilter.ALL) }
     var showFilterBottomSheet by remember { mutableStateOf(false) }
     
-    // Get comprehensive recipes for this category
-    val allRecipes = remember { ComprehensiveRecipeData.getExtensiveRecipesByCategory(category.id) }
+    // Get sample recipes for this category
+    val allRecipes = remember { 
+        SampleData.getFeaturedRecipes().map { it.recipe }.filter { 
+            it.category.equals(category.name, ignoreCase = true)
+        }
+    }
     val filteredRecipes = if (selectedDietaryFilter == DietaryFilter.ALL) {
         allRecipes
     } else {
-        allRecipes.filter { it.dietaryTags.contains(selectedDietaryFilter) }
+        // Basic dietary filtering based on recipe properties
+        allRecipes.filter { recipe ->
+            when (selectedDietaryFilter) {
+                DietaryFilter.VEGETARIAN -> recipe.isVegetarian
+                DietaryFilter.VEGAN -> recipe.isVegan
+                DietaryFilter.GLUTEN_FREE -> recipe.isGlutenFree
+                DietaryFilter.DAIRY_FREE -> recipe.isDairyFree
+                DietaryFilter.KETO -> recipe.isKeto
+                DietaryFilter.LOW_CARB -> recipe.isLowCarb
+                else -> true
+            }
+        }
     }
     
     Column(
@@ -217,7 +232,7 @@ fun CategoryDetailScreen(
 
 @Composable
 fun RecipeCard(
-    recipe: SampleRecipe,
+    recipe: Recipe,
     onClick: () -> Unit
 ) {
     Card(
@@ -339,71 +354,4 @@ fun DietaryFilterBottomSheet(
     }
 }
 
-// Sample recipe data class(
-data class SampleRecipe(
-    val id: String,
-    val name: String,
-    val description: String,
-    val imageUrl: String,
-    val rating: Double,
-    val cookTime: Int,
-    val dietaryTags: List<DietaryFilter>
-)
-
-// Sample recipes for different categories
-fun getSampleRecipesForCategory(categoryId: String): List<SampleRecipe> {
-    return when (categoryId) {
-        "indian" -> listOf(
-            SampleRecipe(
-                id = "butter_chicken",
-                name = "Butter Chicken",
-                description = "Creamy and rich chicken curry with aromatic spices",
-                imageUrl = "https://images.unsplash.com/photo-1603894584373-5ac82b2ae398?w=400",
-                rating = 4.8,
-                cookTime = 45,
-                dietaryTags = listOf(DietaryFilter.NON_VEG)
-            ),
-            SampleRecipe(
-                id = "dal_tadka",
-                name = "Dal Tadka",
-                description = "Comforting lentil curry with tempered spices",
-                imageUrl = "https://images.unsplash.com/photo-1546833999-b9f581a1996d?w=400",
-                rating = 4.5,
-                cookTime = 30,
-                dietaryTags = listOf(DietaryFilter.VEGETARIAN, DietaryFilter.VEGAN)
-            )
-        )
-        "italian" -> listOf(
-            SampleRecipe(
-                id = "margherita_pizza",
-                name = "Margherita Pizza",
-                description = "Classic pizza with fresh mozzarella, tomatoes, and basil",
-                imageUrl = "https://images.unsplash.com/photo-1604068549290-dea0e4a305ca?w=400",
-                rating = 4.7,
-                cookTime = 25,
-                dietaryTags = listOf(DietaryFilter.VEGETARIAN)
-            ),
-            SampleRecipe(
-                id = "carbonara",
-                name = "Spaghetti Carbonara",
-                description = "Creamy pasta with eggs, cheese, and pancetta",
-                imageUrl = "https://images.unsplash.com/photo-1621996346565-e3dbc353d2e5?w=400",
-                rating = 4.6,
-                cookTime = 20,
-                dietaryTags = listOf(DietaryFilter.NON_VEG)
-            )
-        )
-        else -> listOf(
-            SampleRecipe(
-                id = "sample_1",
-                name = "Delicious Recipe",
-                description = "A wonderful recipe from this category",
-                imageUrl = "https://images.unsplash.com/photo-1567620905732-2d1ec7ab7445?w=400",
-                rating = 4.3,
-                cookTime = 35,
-                dietaryTags = listOf(DietaryFilter.VEGETARIAN)
-            )
-        )
-    }
-}
 

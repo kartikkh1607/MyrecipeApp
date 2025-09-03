@@ -1,5 +1,6 @@
 package com.example.myrecipeapp
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.*
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -12,7 +13,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Search
+import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -22,6 +26,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -39,35 +44,62 @@ fun HomeScreen(
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     val categoriesState by viewModel.recipeCategoriesState
-    
+    var selectedCategory by remember { mutableStateOf<RecipeCategory?>(null) }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
     ) {
-        // Header Section
-        HeaderSection(
-            onSearchClick = {
+        // Use the new ModernHeaderSection
+        ModernHeaderSection(
+            onProfileClick = {
                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                navController.navigate(Screen.SearchScreen.route)
-            },
-            onFavoritesClick = {
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                navController.navigate(Screen.FavoritesScreen.route)
+                navController.navigate(Screen.ProfileScreen.route)
             }
         )
+
+        // Featured Recipe Carousel with loading states
+        val homeRecipeState by viewModel.homeRecipeState
         
+        if (homeRecipeState.loading) {
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(280.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    Spacer(modifier = Modifier.height(8.dp))
+                    Text(
+                        text = "Loading delicious recipes...",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        } else if (homeRecipeState.error != null) {
+            ErrorSection(
+                message = homeRecipeState.error ?: "Unknown error",
+                onRetry = { 
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    viewModel.refreshFeaturedRecipes()
+                }
+            )
+        } else if (homeRecipeState.featuredRecipes.isNotEmpty()) {
+            FeaturedRecipeCarousel(
+                navController = navController,
+                viewModel = viewModel
+            )
+        }
+
         Spacer(modifier = Modifier.height(24.dp))
-        
-        // Featured Recipe Carousel
-        FeaturedRecipeCarousel(
-            navController = navController
-        )
-        
-        Spacer(modifier = Modifier.height(32.dp))
-        
-        // Categories Section
+
+        // Updated Categories Section with Chips
         if (categoriesState.loading) {
             Box(
                 modifier = Modifier
@@ -80,115 +112,195 @@ fun HomeScreen(
         } else if (categoriesState.error != null) {
             ErrorSection(
                 message = categoriesState.error ?: "Unknown error",
-                onRetry = {
-                    // For now, we'll just show a message since fetchCategories is private
-                    // In a real app, you'd make fetchCategories public or add a retry method
+                onRetry = { 
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    viewModel.refreshRecipeCategories()
                 }
             )
         } else {
-            CategoriesSection(
-                categories = categoriesState.categories,
-                onCategoryClick = { category ->
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    // Navigate to category detail using new category ID
-                    navController.navigate(Screen.CategoriesScreen.route + "/${category.id}")
+            Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+                Text(
+                    text = "Categories",
+                    style = MaterialTheme.typography.headlineSmall,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                LazyRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    contentPadding = PaddingValues(horizontal = 4.dp)
+                ) {
+                    items(categoriesState.categories.take(6)) { category ->
+                        CategoryChip(
+                            category = category,
+                            isSelected = selectedCategory == category,
+                            onClick = {
+                                selectedCategory = category
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                navController.currentBackStackEntry?.savedStateHandle?.set("cat", category)
+                                navController.navigate(Screen.DetailScreen.route)
+                            }
+                        )
+                    }
                 }
-            )
+            }
         }
-        
+
         Spacer(modifier = Modifier.height(32.dp))
-        
-        // Quick Actions Section
-        QuickActionsSection(navController, hapticFeedback)
-        
-        // Bottom padding for navigation bar
+
+        // Updated Quick Actions Section with Cards
+        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+            Text(
+                text = "Feeling Spontaneous?",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(16.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                QuickActionCard(
+                    text = "Random Recipe",
+                    icon = Icons.Default.Shuffle,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        /* TODO: Navigate to random recipe */
+                    }
+                )
+                QuickActionCard(
+                    text = "Shopping List",
+                    icon = Icons.Default.ShoppingCart,
+                    modifier = Modifier.weight(1f),
+                    onClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        /* TODO: Navigate to shopping list */
+                    }
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.height(100.dp))
     }
 }
 
 @Composable
-fun HeaderSection(
-    onSearchClick: () -> Unit,
-    onFavoritesClick: () -> Unit
+fun ModernHeaderSection(
+    onProfileClick: () -> Unit
 ) {
-    Card(
+    val currentHour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
+    val greeting = when (currentHour) {
+        in 0..11 -> "Good Morning"
+        in 12..16 -> "Good Afternoon"
+        else -> "Good Evening"
+    }
+
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(16.dp),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.primaryContainer
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        Box(
+        Column {
+            Text(
+                text = greeting,
+                style = MaterialTheme.typography.bodyLarge,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Text(
+                text = "What will you cook today?",
+                style = MaterialTheme.typography.headlineMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+        }
+        IconButton(
+            onClick = onProfileClick,
             modifier = Modifier
-                .fillMaxWidth()
-                .height(120.dp)
-                .background(
-                    Brush.horizontalGradient(
-                        colors = listOf(
-                            MaterialTheme.colorScheme.primary,
-                            MaterialTheme.colorScheme.primaryContainer
-                        )
-                    )
-                )
+                .size(40.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.surfaceVariant)
         ) {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(20.dp),
-                verticalArrangement = Arrangement.Center
-            ) {
-                Text(
-                    text = "Good Morning!",
-                    style = MaterialTheme.typography.headlineMedium,
-                    color = MaterialTheme.colorScheme.onPrimary,
-                    fontWeight = FontWeight.Bold
-                )
-                Spacer(modifier = Modifier.height(8.dp))
-                Text(
-                    text = "What would you like to cook today?",
-                    style = MaterialTheme.typography.bodyLarge,
-                    color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.9f)
-                )
-            }
-            
-            Row(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(16.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                IconButton(
-                    onClick = onSearchClick,
-                    modifier = Modifier
-                        .background(
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
-                            CircleShape
-                        )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Search,
-                        contentDescription = "Search",
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-                
-                IconButton(
-                    onClick = onFavoritesClick,
-                    modifier = Modifier
-                        .background(
-                            MaterialTheme.colorScheme.surface.copy(alpha = 0.2f),
-                            CircleShape
-                        )
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Favorite,
-                        contentDescription = "Favorites",
-                        tint = MaterialTheme.colorScheme.onPrimary
-                    )
-                }
-            }
+            Icon(
+                imageVector = Icons.Default.Person,
+                contentDescription = "Profile",
+                tint = MaterialTheme.colorScheme.primary
+            )
+        }
+    }
+}
+
+@Composable
+fun CategoryChip(
+    category: RecipeCategory,
+    onClick: () -> Unit,
+    isSelected: Boolean
+) {
+    val backgroundColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.surfaceVariant,
+        label = "chip_background_color"
+    )
+    val contentColor by animateColorAsState(
+        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSurfaceVariant,
+        label = "chip_content_color"
+    )
+
+    Card(
+        onClick = onClick,
+        modifier = Modifier.height(40.dp),
+        shape = RoundedCornerShape(20.dp),
+        colors = CardDefaults.cardColors(containerColor = backgroundColor),
+        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 0.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = category.name,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Medium,
+                color = contentColor
+            )
+        }
+    }
+}
+
+@Composable
+fun QuickActionCard(
+    text: String,
+    icon: ImageVector,
+    modifier: Modifier = Modifier,
+    onClick: () -> Unit
+) {
+    Card(
+        onClick = onClick,
+        modifier = modifier.height(120.dp),
+        shape = RoundedCornerShape(16.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer)
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.Center,
+            horizontalAlignment = Alignment.CenterHorizontally
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = text,
+                tint = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.size(32.dp)
+            )
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSecondaryContainer
+            )
         }
     }
 }
@@ -204,16 +316,16 @@ fun FeaturedRecipeCard(onClick: () -> Unit) {
         ),
         label = "featured_card_scale"
     )
-    
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
             .height(200.dp)
             .padding(horizontal = 16.dp)
             .scale(scale)
-            .clickable { 
+            .clickable {
                 isPressed = !isPressed
-                onClick() 
+                onClick()
             },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surfaceVariant
@@ -223,12 +335,12 @@ fun FeaturedRecipeCard(onClick: () -> Unit) {
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
-                model = "https://www.themealdb.com/images/media/meals/ustsqw1468250014.jpg",
+                model = "https://images.unsplash.com/photo-1569718212165-3a8278d5f624?w=500",
                 contentDescription = "Featured Recipe",
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
-            
+
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -241,7 +353,7 @@ fun FeaturedRecipeCard(onClick: () -> Unit) {
                         )
                     )
             )
-            
+
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
@@ -311,9 +423,9 @@ fun CategoriesSection(
                 Text("See All")
             }
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(12.dp),
             contentPadding = PaddingValues(horizontal = 4.dp)
@@ -341,15 +453,15 @@ fun CategoryCard(
         ),
         label = "category_card_scale"
     )
-    
+
     Card(
         modifier = Modifier
             .width(140.dp)
             .height(100.dp)
             .scale(scale)
-            .clickable { 
+            .clickable {
                 isPressed = !isPressed
-                onClick() 
+                onClick()
             },
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
@@ -399,9 +511,9 @@ fun QuickActionsSection(
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         Row(
             modifier = Modifier.fillMaxWidth(),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -414,7 +526,7 @@ fun QuickActionsSection(
                     // Navigate to random recipe
                 }
             )
-            
+
             QuickActionButton(
                 text = "Shopping List",
                 modifier = Modifier.weight(1f),
@@ -439,11 +551,11 @@ fun QuickActionButton(
         animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
         label = "quick_action_scale"
     )
-    
+
     Button(
-        onClick = { 
+        onClick = {
             isPressed = !isPressed
-            onClick() 
+            onClick()
         },
         modifier = modifier
             .height(56.dp)

@@ -41,27 +41,31 @@ import kotlin.math.absoluteValue
 @Composable
 fun FeaturedRecipeCarousel(
     navController: NavHostController,
+    viewModel: MainViewModel,
     modifier: Modifier = Modifier
 ) {
-    val featuredRecipes = remember { SampleData.getFeaturedRecipes() }
+    val homeRecipeState by viewModel.homeRecipeState
+    val featuredRecipes = homeRecipeState.featuredRecipes
     val pagerState = rememberPagerState(
         initialPage = 0,
         pageCount = { featuredRecipes.size }
     )
     val hapticFeedback = LocalHapticFeedback.current
 
-    // Auto-scroll effect
-    LaunchedEffect(pagerState) {
-        while (true) {
-            delay(4000) // 4 seconds delay
-            val nextPage = (pagerState.currentPage + 1) % featuredRecipes.size
-            pagerState.animateScrollToPage(
-                page = nextPage,
-                animationSpec = tween(
-                    durationMillis = 800,
-                    easing = FastOutSlowInEasing
+    // Auto-scroll effect (only when we have recipes)
+    LaunchedEffect(pagerState, featuredRecipes.size) {
+        if (featuredRecipes.size > 1) {
+            while (true) {
+                delay(4000) // 4 seconds delay
+                val nextPage = (pagerState.currentPage + 1) % featuredRecipes.size
+                pagerState.animateScrollToPage(
+                    page = nextPage,
+                    animationSpec = tween(
+                        durationMillis = 800,
+                        easing = FastOutSlowInEasing
+                    )
                 )
-            )
+            }
         }
     }
 

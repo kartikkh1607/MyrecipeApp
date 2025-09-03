@@ -18,8 +18,8 @@ enum class CuisineType {
 }
 
 /**
- * Modern Recipe Category model based on Spoonacular API data
- * This replaces the old TheMealDB Category model
+ * Modern Recipe Category model for your custom API
+ * This provides comprehensive category data structure
  */
 @Parcelize
 data class RecipeCategory(
