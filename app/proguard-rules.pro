@@ -43,6 +43,13 @@
 # Keep all navigation route data classes
 -keep @kotlinx.serialization.Serializable class com.example.myrecipeapp.ui.navigation.** { *; }
 
+# ── Room (local database) ─────────────────────────────────────────────────────
+# Room generates *_Impl classes at compile time via KSP. R8 must not strip them.
+-keep class * extends androidx.room.RoomDatabase
+-keep @androidx.room.Entity class *
+-keep @androidx.room.Dao interface *
+-dontwarn androidx.room.**
+
 # ── Coil (image loading) ──────────────────────────────────────────────────────
 -dontwarn coil.**
 

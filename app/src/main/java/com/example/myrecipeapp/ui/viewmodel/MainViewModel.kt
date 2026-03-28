@@ -6,6 +6,12 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.myrecipeapp.data.local.FavoriteDao
+import com.example.myrecipeapp.data.local.ShoppingDao
+import com.example.myrecipeapp.data.local.ShoppingItemEntity
+import com.example.myrecipeapp.data.local.toFavoriteEntity
+import com.example.myrecipeapp.data.local.toRecipe
+import com.example.myrecipeapp.data.local.toShoppingListItem
 import com.example.myrecipeapp.di.AppContainer
 import com.example.myrecipeapp.domain.model.FeaturedRecipe
 import com.example.myrecipeapp.domain.model.Recipe
@@ -28,10 +34,12 @@ import kotlinx.coroutines.launch
  */
 class MainViewModel(
     private val getFeaturedRecipes: GetFeaturedRecipesUseCase,
-    private val searchUseCase: SearchRecipesUseCase,          // avoids clash with fun searchRecipes()
+    private val searchUseCase: SearchRecipesUseCase,
     private val getRecipeDetails: GetRecipeDetailsUseCase,
     private val getCategories: GetCategoriesUseCase,
-    private val getByCategoryUseCase: GetRecipesByCategoryUseCase // avoids clash with fun getRecipesByCategory()
+    private val getByCategoryUseCase: GetRecipesByCategoryUseCase,
+    private val favoriteDao: FavoriteDao,
+    private val shoppingDao: ShoppingDao
 ) : ViewModel() {
 
     // ── Home Screen State ─────────────────────────────────────────────────────
@@ -83,26 +91,24 @@ class MainViewModel(
         // categoryId removed: it was stored but never consumed by the UI
     )
 
-    // ── Favorites State ───────────────────────────────────────────────────────
-    // In-memory favorites: survives navigation, resets on app restart.
-    private val knownRecipes = mutableMapOf<String, Recipe>()   // cache of every recipe seen
+    // ── Favorites State (Room-backed) ─────────────────────────────────────────
     private val _favoriteIds = mutableStateOf<Set<String>>(emptySet())
     val favoriteIds: State<Set<String>> = _favoriteIds
-
-    // Category recipe cache: avoids re-fetching when user navigates back to the same category
-    private val categoryCache = mutableMapOf<String, List<Recipe>>()
 
     private val _favoriteRecipes = mutableStateOf<List<Recipe>>(emptyList())
     val favoriteRecipes: State<List<Recipe>> = _favoriteRecipes
 
     fun toggleFavorite(recipe: Recipe) {
-        knownRecipes[recipe.id] = recipe
-        val ids = _favoriteIds.value
-        _favoriteIds.value = if (recipe.id in ids) ids - recipe.id else ids + recipe.id
-        _favoriteRecipes.value = _favoriteIds.value.mapNotNull { knownRecipes[it] }
+        viewModelScope.launch {
+            if (recipe.id in _favoriteIds.value) {
+                favoriteDao.delete(recipe.id)
+            } else {
+                favoriteDao.insert(recipe.toFavoriteEntity())
+            }
+        }
     }
 
-    // ── Shopping List State ────────────────────────────────────────────────────
+    // ── Shopping List State (Room-backed) ─────────────────────────────────────
     data class ShoppingListItem(
         val key: String,
         val ingredientName: String,
@@ -115,44 +121,69 @@ class MainViewModel(
     private val _shoppingList = mutableStateOf<List<ShoppingListItem>>(emptyList())
     val shoppingList: State<List<ShoppingListItem>> = _shoppingList
 
-    /** Adds all ingredients from [recipe] to the list, skipping duplicates. */
+    /** Adds all ingredients from [recipe], skipping duplicates (IGNORE conflict strategy). */
     fun addToShoppingList(recipe: Recipe) {
-        val existingKeys = _shoppingList.value.map { it.key }.toSet()
-        val newItems = recipe.ingredients.mapNotNull { ing ->
-            val key = "${recipe.id}_${ing.id.ifEmpty { ing.name }}"
-            if (key !in existingKeys) ShoppingListItem(
-                key = key, ingredientName = ing.name,
-                amount = ing.amount, unit = ing.unit, recipeName = recipe.name
-            ) else null
+        viewModelScope.launch {
+            recipe.ingredients.forEach { ing ->
+                val key = "${recipe.id}_${ing.id.ifEmpty { ing.name }}"
+                shoppingDao.insert(
+                    ShoppingItemEntity(
+                        key            = key,
+                        ingredientName = ing.name,
+                        amount         = ing.amount,
+                        unit           = ing.unit,
+                        recipeName     = recipe.name
+                    )
+                )
+            }
         }
-        _shoppingList.value = _shoppingList.value + newItems
     }
 
     fun toggleShoppingItem(key: String) {
-        _shoppingList.value = _shoppingList.value.map {
-            if (it.key == key) it.copy(isChecked = !it.isChecked) else it
+        viewModelScope.launch {
+            val current = _shoppingList.value.find { it.key == key } ?: return@launch
+            shoppingDao.setChecked(key, !current.isChecked)
         }
     }
 
     fun removeCheckedItems() {
-        _shoppingList.value = _shoppingList.value.filter { !it.isChecked }
+        viewModelScope.launch { shoppingDao.deleteChecked() }
     }
 
     fun removeItem(key: String) {
-        _shoppingList.value = _shoppingList.value.filter { it.key != key }
+        viewModelScope.launch { shoppingDao.deleteByKey(key) }
     }
 
     fun clearShoppingList() {
-        _shoppingList.value = emptyList()
+        viewModelScope.launch { shoppingDao.deleteAll() }
     }
 
 
+    // ── Category Recipes State ────────────────────────────────────────────────
     private val _categoryRecipesState = mutableStateOf(CategoryRecipesState())
     val categoryRecipesState: State<CategoryRecipesState> = _categoryRecipesState
 
+    // ── Category cache ────────────────────────────────────────────────────────
+    private val categoryCache = mutableMapOf<String, List<Recipe>>()
 
     // ─────────────────────────────────────────────────────────────────────────
     init {
+        // Collect Room Flows → update mutableStateOf so all existing UI code works unchanged
+        viewModelScope.launch {
+            favoriteDao.getAllFlow().collect { entities ->
+                _favoriteRecipes.value = entities.map { it.toRecipe() }
+            }
+        }
+        viewModelScope.launch {
+            favoriteDao.getIdsFlow().collect { ids ->
+                _favoriteIds.value = ids.toSet()
+            }
+        }
+        viewModelScope.launch {
+            shoppingDao.getAllFlow().collect { entities ->
+                _shoppingList.value = entities.map { it.toShoppingListItem() }
+            }
+        }
         loadFeaturedRecipes()
         loadCategories()
     }
@@ -288,11 +319,13 @@ class MainViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return MainViewModel(
-                getFeaturedRecipes = AppContainer.getFeaturedRecipesUseCase,
-                searchUseCase = AppContainer.searchRecipesUseCase,
-                getRecipeDetails = AppContainer.getRecipeDetailsUseCase,
-                getCategories = AppContainer.getCategoriesUseCase,
-                getByCategoryUseCase = AppContainer.getRecipesByCategoryUseCase
+                getFeaturedRecipes    = AppContainer.getFeaturedRecipesUseCase,
+                searchUseCase         = AppContainer.searchRecipesUseCase,
+                getRecipeDetails      = AppContainer.getRecipeDetailsUseCase,
+                getCategories         = AppContainer.getCategoriesUseCase,
+                getByCategoryUseCase  = AppContainer.getRecipesByCategoryUseCase,
+                favoriteDao           = AppContainer.favoriteDao,
+                shoppingDao           = AppContainer.shoppingDao
             ) as T
         }
     }

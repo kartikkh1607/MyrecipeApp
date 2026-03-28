@@ -6,6 +6,7 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     id("kotlin-parcelize")
+    id("com.google.devtools.ksp") version "2.0.21-1.0.28"
 }
 
 // Load local.properties
@@ -77,6 +78,7 @@ android {
 }
 
 dependencies {
+    implementation(libs.androidx.room3.common.jvm)
     val nav_version = "2.8.5"
 
     // Kotlinx Serialization (required for type-safe Navigation 2.8+)
@@ -108,6 +110,12 @@ dependencies {
 
     // for image loading
     implementation("io.coil-kt:coil-compose:2.7.0")
+
+    // Room (local database for favorites + shopping list persistence)
+    val room_version = "2.6.1"
+    implementation("androidx.room:room-runtime:$room_version")
+    implementation("androidx.room:room-ktx:$room_version")   // coroutines + Flow support
+    ksp("androidx.room:room-compiler:$room_version")
 
     // Gson for TypeConverters
     implementation("com.google.code.gson:gson:2.11.0")

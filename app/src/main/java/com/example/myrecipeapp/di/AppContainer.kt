@@ -1,5 +1,7 @@
 package com.example.myrecipeapp.di
 
+import com.example.myrecipeapp.MyRecipeApplication
+import com.example.myrecipeapp.data.local.AppDatabase
 import com.example.myrecipeapp.data.remote.NetworkModule
 import com.example.myrecipeapp.data.repository.RecipeRepositoryImpl
 import com.example.myrecipeapp.domain.repository.RecipeRepository
@@ -13,11 +15,17 @@ import com.example.myrecipeapp.domain.usecase.SearchRecipesUseCase
  * Manual dependency injection container.
  *
  * Each dependency is created lazily and shared as a singleton for the app's lifetime.
- * The ViewModel factory reads use cases from here.
- *
- * No Hilt / Dagger is needed at this scale — this is intentionally simple.
+ * The ViewModel factory reads use cases and DAOs from here.
  */
 object AppContainer {
+
+    // ── Local database ────────────────────────────────────────────────────────
+    private val database by lazy {
+        AppDatabase.getInstance(MyRecipeApplication.instance)
+    }
+
+    val favoriteDao by lazy { database.favoriteDao() }
+    val shoppingDao by lazy { database.shoppingDao() }
 
     // ── Data layer ────────────────────────────────────────────────────────────
     private val apiService by lazy { NetworkModule.provideApiService() }
