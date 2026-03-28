@@ -1,11 +1,9 @@
 package com.example.myrecipeapp.ui.screens
 
-import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -28,12 +26,10 @@ import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -44,6 +40,7 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -63,9 +60,11 @@ import androidx.core.graphics.toColorInt
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.myrecipeapp.domain.model.FeaturedRecipe
+import com.example.myrecipeapp.ui.navigation.Categories
 import com.example.myrecipeapp.ui.navigation.RecipeDetail
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlin.math.absoluteValue
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -126,7 +125,11 @@ fun FeaturedRecipeCarousel(
             TextButton(
                 onClick = {
                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    // Navigate to all featured recipes
+                    navController.navigate(Categories) {
+                        popUpTo<com.example.myrecipeapp.ui.navigation.Home> { saveState = true }
+                        launchSingleTop = true
+                        restoreState = true
+                    }
                 }
             ) {
                 Text("See All")
@@ -184,7 +187,6 @@ fun FeaturedRecipeCard(
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    val hapticFeedback = LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
     val pressScale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
@@ -200,7 +202,7 @@ fun FeaturedRecipeCard(
             .fillMaxSize()
             .scale(pressScale)
             .clickable {
-                isPressed = !isPressed
+                isPressed = true
                 onClick()
             },
         colors = CardDefaults.cardColors(
@@ -326,27 +328,14 @@ fun FeaturedRecipeCard(
                     )
                 }
             }
+        }
+    }
 
-            // Play Button for Recipe Videos (if available)
-            if (featuredRecipe.recipe.videoUrl != null) {
-                FloatingActionButton(
-                    onClick = {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        // Play video
-                    },
-                    modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(56.dp),
-                    containerColor = Color.White.copy(alpha = 0.9f),
-                    contentColor = MaterialTheme.colorScheme.primary
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.PlayArrow,
-                        contentDescription = "Play Recipe Video",
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
+    // Auto-reset press scale so card looks normal on back-navigation
+    LaunchedEffect(isPressed) {
+        if (isPressed) {
+            delay(200)
+            isPressed = false
         }
     }
 }
@@ -358,6 +347,7 @@ fun CarouselIndicators(
     pageCount: Int,
     modifier: Modifier = Modifier
 ) {
+    val scope = rememberCoroutineScope()
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.spacedBy(8.dp),
@@ -391,19 +381,26 @@ fun CarouselIndicators(
                         MaterialTheme.colorScheme.primary.copy(alpha = animatedAlpha)
                     )
                     .clickable {
-                        // Allow clicking indicators to jump to page - would need coroutineScope here
+                        scope.launch {
+                            pagerState.animateScrollToPage(
+                                page = index,
+                                animationSpec = spring(
+                                    dampingRatio = Spring.DampingRatioNoBouncy,
+                                    stiffness = 280f
+                                )
+                            )
+                        }
                     }
             )
         }
     }
 }
 
-// Utility function to parse hex color strings
-@Composable
-private fun parseColor(colorString: String): Color {
-    return try {
-        Color(colorString.toColorInt())
-    } catch (e: Exception) {
-        MaterialTheme.colorScheme.primary
-    }
+
+// Parses a hex color string (e.g. "#FF6B6B") into a Compose Color.
+// Plain fun — no @Composable overhead needed.
+private fun parseColor(colorString: String): Color = try {
+    Color(colorString.toColorInt())
+} catch (_: Exception) {
+    Color(0xFFFF6B6BL.toInt()) // safe fallback: opaque salmon-red
 }

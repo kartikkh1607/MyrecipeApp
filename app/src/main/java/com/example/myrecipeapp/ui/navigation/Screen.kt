@@ -11,17 +11,27 @@ import kotlinx.serialization.Serializable
  */
 
 // ── Bottom nav screens ────────────────────────────────────────────────────────
-@Serializable object Home
-@Serializable object Categories
-@Serializable object Search
-@Serializable object Favorites
-@Serializable object Settings
+@Serializable
+object Home
+@Serializable
+object Categories
+@Serializable
+object Search
+@Serializable
+object Favorites
+@Serializable
+object Settings
 
 // ── Detail screens ────────────────────────────────────────────────────────────
-@Serializable object CategoryDetail           // category passed via savedStateHandle (Parcelable)
-@Serializable data class RecipeDetail(val recipeId: String)  // type-safe argument
+@Serializable
+data class CategoryDetail(val categoryId: String)  // type-safe argument (process-death safe)
+@Serializable
+data class RecipeDetail(val recipeId: String)      // type-safe argument
 
 // ── Secondary screens ─────────────────────────────────────────────────────────
-@Serializable object Profile
-@Serializable object About
-@Serializable object ShoppingList
+@Serializable
+object Profile
+@Serializable
+object About
+@Serializable
+object ShoppingList

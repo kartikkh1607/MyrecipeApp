@@ -28,10 +28,7 @@ data class Recipe(
     val isGlutenFree: Boolean = false,
     val isDairyFree: Boolean = false,
     val isKeto: Boolean = false,
-    val isLowCarb: Boolean = false,
-    val isFavorite: Boolean = false,
-    val createdBy: String = "",
-    val createdAt: Long = System.currentTimeMillis()
+    val isLowCarb: Boolean = false
 ) : Parcelable
 
 @Parcelize

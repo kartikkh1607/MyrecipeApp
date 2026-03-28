@@ -1,21 +1,68 @@
 package com.example.myrecipeapp.ui.screens
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInHorizontally
+import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.ArrowForward
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.Pause
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Refresh
+import androidx.compose.material.icons.filled.Undo
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.Checkbox
+import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilledTonalButton
+import androidx.compose.material3.FilledTonalIconButton
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.LinearProgressIndicator
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
@@ -24,10 +71,8 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextDecoration
-import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import com.example.myrecipeapp.domain.model.Ingredient
 import com.example.myrecipeapp.domain.model.Recipe
 import com.example.myrecipeapp.domain.model.RecipeStep
 import kotlinx.coroutines.delay
@@ -45,7 +90,8 @@ fun CookingModeScreen(
     var timerSeconds by remember { mutableStateOf(0) }
     var timerTotal by remember { mutableStateOf(1) }
     val hapticFeedback = LocalHapticFeedback.current
-    val isAllDone = completedSteps.size == recipe.instructions.size && recipe.instructions.isNotEmpty()
+    val isAllDone =
+        completedSteps.size == recipe.instructions.size && recipe.instructions.isNotEmpty()
 
     // Countdown timer
     LaunchedEffect(isTimerRunning, timerSeconds) {
@@ -127,7 +173,10 @@ fun CookingModeScreen(
                 // Progress bar
                 LinearProgressIndicator(
                     progress = { progressFraction },
-                    modifier = Modifier.fillMaxWidth().height(6.dp).clip(CircleShape),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(6.dp)
+                        .clip(CircleShape),
                     color = Color.White,
                     trackColor = Color.White.copy(alpha = 0.3f)
                 )
@@ -266,7 +315,9 @@ fun CookingModeScreen(
                                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                     }
                                     .background(
-                                        if (isCurrent) MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.3f)
+                                        if (isCurrent) MaterialTheme.colorScheme.primaryContainer.copy(
+                                            alpha = 0.3f
+                                        )
                                         else Color.Transparent,
                                         RoundedCornerShape(8.dp)
                                     )
@@ -301,7 +352,9 @@ fun CookingModeScreen(
                                 Text(
                                     step.instruction,
                                     style = MaterialTheme.typography.bodySmall,
-                                    color = if (isDone) MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                    color = if (isDone) MaterialTheme.colorScheme.onSurface.copy(
+                                        alpha = 0.5f
+                                    )
                                     else if (isCurrent) MaterialTheme.colorScheme.onSurface
                                     else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
                                     textDecoration = if (isDone) TextDecoration.LineThrough else TextDecoration.None,
@@ -311,7 +364,11 @@ fun CookingModeScreen(
                             }
                             if (index < recipe.instructions.lastIndex) {
                                 HorizontalDivider(
-                                    modifier = Modifier.padding(start = 36.dp, top = 4.dp, bottom = 4.dp),
+                                    modifier = Modifier.padding(
+                                        start = 36.dp,
+                                        top = 4.dp,
+                                        bottom = 4.dp
+                                    ),
                                     color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f)
                                 )
                             }
@@ -344,13 +401,19 @@ fun CookingModeScreen(
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
-                                    .clickable { completedIngredients = if (done) completedIngredients - key else completedIngredients + key }
+                                    .clickable {
+                                        completedIngredients =
+                                            if (done) completedIngredients - key else completedIngredients + key
+                                    }
                                     .padding(vertical = 4.dp),
                                 verticalAlignment = Alignment.CenterVertically
                             ) {
                                 Checkbox(
                                     checked = done,
-                                    onCheckedChange = { completedIngredients = if (done) completedIngredients - key else completedIngredients + key },
+                                    onCheckedChange = {
+                                        completedIngredients =
+                                            if (done) completedIngredients - key else completedIngredients + key
+                                    },
                                     colors = CheckboxDefaults.colors(checkedColor = MaterialTheme.colorScheme.primary)
                                 )
                                 Text(
@@ -388,12 +451,16 @@ fun CookingModeScreen(
                 OutlinedButton(
                     onClick = {
                         if (currentStepIndex > 0) {
+                            // Un-mark the step we're leaving so progress + strikethrough go back
+                            completedSteps = completedSteps - currentStepIndex
                             currentStepIndex--
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                         }
                     },
                     enabled = currentStepIndex > 0,
-                    modifier = Modifier.weight(1f).height(52.dp),
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(52.dp),
                     shape = RoundedCornerShape(14.dp)
                 ) {
                     Icon(Icons.Default.ArrowBack, null, modifier = Modifier.size(18.dp))
@@ -403,18 +470,15 @@ fun CookingModeScreen(
                 Button(
                     onClick = {
                         val isLast = currentStepIndex == recipe.instructions.size - 1
-                        if (isLast) {
-                            completedSteps = completedSteps + currentStepIndex
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        } else {
-                            // Auto-mark current step done when advancing
-                            completedSteps = completedSteps + currentStepIndex
-                            currentStepIndex++
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        }
+                        // Auto-mark current step done when advancing or finishing
+                        completedSteps = completedSteps + currentStepIndex
+                        if (!isLast) currentStepIndex++
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                     },
                     enabled = currentStepIndex < recipe.instructions.size,
-                    modifier = Modifier.weight(1.4f).height(52.dp),
+                    modifier = Modifier
+                        .weight(1.4f)
+                        .height(52.dp),
                     shape = RoundedCornerShape(14.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = MaterialTheme.colorScheme.primary

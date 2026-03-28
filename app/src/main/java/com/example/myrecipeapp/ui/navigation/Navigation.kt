@@ -1,6 +1,9 @@
 package com.example.myrecipeapp.ui.navigation
 
 import androidx.compose.animation.core.FiniteAnimationSpec
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.VisibilityThreshold
+import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -10,10 +13,6 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.SpringSpec
-import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.VisibilityThreshold
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.ui.unit.IntOffset
@@ -21,8 +20,17 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
-import com.example.myrecipeapp.domain.model.RecipeCategory
-import com.example.myrecipeapp.ui.screens.*
+import com.example.myrecipeapp.data.source.CategoryDataSource
+import com.example.myrecipeapp.ui.screens.AboutScreen
+import com.example.myrecipeapp.ui.screens.CategoryDetailScreen
+import com.example.myrecipeapp.ui.screens.FavoritesScreen
+import com.example.myrecipeapp.ui.screens.HomeScreen
+import com.example.myrecipeapp.ui.screens.ProfileScreen
+import com.example.myrecipeapp.ui.screens.RecipeDetailScreen
+import com.example.myrecipeapp.ui.screens.RecipeScreen
+import com.example.myrecipeapp.ui.screens.SearchScreen
+import com.example.myrecipeapp.ui.screens.SettingsScreen
+import com.example.myrecipeapp.ui.screens.ShoppingListScreen
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 
 // ── iOS-style spring specs ────────────────────────────────────────────────────
@@ -84,12 +92,9 @@ fun Navigation(
             RecipeScreen(
                 viewstate = viewModel.recipeCategoriesState.value,
                 navigateToDetail = { category ->
-                    navController.navigate(CategoryDetail) {
+                    navController.navigate(CategoryDetail(categoryId = category.id)) {
                         launchSingleTop = true
                     }
-                    navController.currentBackStackEntry
-                        ?.savedStateHandle
-                        ?.set("cat", category)
                 }
             )
         }
@@ -141,13 +146,14 @@ fun Navigation(
         }
 
         composable<Settings> {
-            SettingsScreen(navController = navController, viewModel = viewModel)
+            SettingsScreen(navController = navController)
         }
 
         // ── Detail screens ─────────────────────────────────────────────────────────
 
         composable<CategoryDetail> { backStackEntry ->
-            val category = backStackEntry.savedStateHandle.get<RecipeCategory>("cat")
+            val args = backStackEntry.toRoute<CategoryDetail>()
+            val category = CategoryDataSource.getCategoryById(args.categoryId)
             if (category == null) {
                 LaunchedEffect(Unit) { navController.popBackStack() }
                 return@composable
@@ -202,7 +208,7 @@ fun Navigation(
         // ── Secondary screens ──────────────────────────────────────────────────────
 
         composable<Profile> {
-            ProfileScreen(navController = navController, viewModel = viewModel)
+            ProfileScreen(navController = navController)
         }
 
         composable<About> {

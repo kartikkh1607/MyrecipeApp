@@ -1,6 +1,5 @@
 package com.example.myrecipeapp.data.remote.dto
 
-import android.text.Html
 import com.example.myrecipeapp.domain.model.*
 import java.util.Locale
 
@@ -9,25 +8,33 @@ import java.util.Locale
  * These live in the data layer — domain models know nothing about DTOs.
  */
 
+// Strips HTML tags without creating a Spanned object — faster than Html.fromHtml
+// and avoids importing android.text.Html into the data layer.
+private val HTML_TAG_REGEX = Regex("<[^>]*>")
+
 fun SpoonacularRecipeDto.toDomain(): Recipe {
     val rating = (this.healthScore / 20.0f).coerceIn(0.0f, 5.0f)
     val prepTime = (this.readyInMinutes * 0.4).toInt()
     val cookTime = (this.readyInMinutes * 0.6).toInt()
-    val cleanSummary = Html.fromHtml(
-        this.summary.take(500),  // cap before parsing — Spoonacular summaries can be 2000+ chars
-        Html.FROM_HTML_MODE_LEGACY
-    ).toString().trim()
+
+    // Strip HTML tags with regex — avoids android.text.Html allocation overhead
+    val cleanSummary = this.summary.take(500).replace(HTML_TAG_REGEX, "").trim()
+
     val difficulty = when {
         this.readyInMinutes < 20 -> RecipeDifficulty.EASY
         this.readyInMinutes < 45 -> RecipeDifficulty.MEDIUM
         else -> RecipeDifficulty.HARD
     }
+
+    // Cache dishTypes once — used for both category and tags below
+    val dishTypes = this.dishTypes.orEmpty()
+
     return Recipe(
         id = this.id.toString(),
         name = this.title,
         description = cleanSummary,
         imageUrl = this.image ?: "https://placehold.co/600x400?text=No+Image",
-        category = this.dishTypes?.firstOrNull() ?: "General",
+        category = dishTypes.firstOrNull() ?: "General",
         cuisine = this.cuisines?.firstOrNull() ?: "",
         difficulty = difficulty,
         prepTime = prepTime,
@@ -39,7 +46,7 @@ fun SpoonacularRecipeDto.toDomain(): Recipe {
         instructions = this.instructions
             ?.flatMap { it.steps ?: emptyList() }
             ?.map { it.toDomain() } ?: emptyList(),
-        tags = this.dishTypes ?: emptyList(),
+        tags = dishTypes,
         isVegetarian = this.isVegetarian,
         isVegan = this.isVegan,
         isGlutenFree = this.isGlutenFree,
@@ -50,7 +57,7 @@ fun SpoonacularRecipeDto.toDomain(): Recipe {
 fun SpoonacularIngredientDto.toDomain(): Ingredient = Ingredient(
     id = this.id.toString(),
     name = this.name ?: this.original,
-    amount = String.format(Locale.ROOT, "%.1f", this.amount),  // Locale.ROOT prevents "1,50" in DE/FR locales
+    amount = String.format(Locale.ROOT, "%.1f", this.amount),  // Locale.ROOT avoids "1,50" in DE/FR
     unit = this.unit,
     notes = this.original
 )

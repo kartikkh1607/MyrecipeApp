@@ -7,7 +7,12 @@ import com.example.myrecipeapp.data.remote.dto.SpoonacularRecipeDto
 import com.example.myrecipeapp.data.remote.dto.toDomain
 import com.example.myrecipeapp.data.source.CategoryDataSource
 import com.example.myrecipeapp.data.source.SampleDataSource
-import com.example.myrecipeapp.domain.model.*
+import com.example.myrecipeapp.domain.model.CuisineType
+import com.example.myrecipeapp.domain.model.FeaturedRecipe
+import com.example.myrecipeapp.domain.model.FeaturedType
+import com.example.myrecipeapp.domain.model.Recipe
+import com.example.myrecipeapp.domain.model.RecipeCategory
+import com.example.myrecipeapp.domain.model.SearchResult
 import com.example.myrecipeapp.domain.repository.RecipeRepository
 
 /**
@@ -41,7 +46,7 @@ class RecipeRepositoryImpl(
         }
         return try {
             Log.d(TAG, "Fetching featured recipes from Spoonacular")
-            val response = apiService.getRandomRecipes(number = 10)
+            val response = apiService.getRandomRecipes(number = 5)  // 5 pts vs 10 pts per open
             response.recipes.mapIndexed { index, dto ->
                 val recipe = dto.toDomain()
                 FeaturedRecipe(
@@ -70,8 +75,8 @@ class RecipeRepositoryImpl(
         if (!apiConfigured || query.isBlank()) {
             val filtered = sampleRecipes.filter {
                 it.name.contains(query, ignoreCase = true) ||
-                it.category.contains(query, ignoreCase = true) ||
-                it.cuisine.contains(query, ignoreCase = true)
+                        it.category.contains(query, ignoreCase = true) ||
+                        it.cuisine.contains(query, ignoreCase = true)
             }
             return SearchResult(filtered, filtered.size)
         }
@@ -97,8 +102,13 @@ class RecipeRepositoryImpl(
 
     override suspend fun getRecipeDetails(recipeId: String): Recipe? {
         if (!apiConfigured) return sampleRecipeById(recipeId)
+        val numericId = recipeId.toIntOrNull()
+        if (numericId == null) {
+            Log.w(TAG, "getRecipeDetails: non-integer ID \"$recipeId\", falling back to sample")
+            return sampleRecipeById(recipeId)
+        }
         return try {
-            val dto = apiService.getRecipeDetails(recipeId = recipeId.toInt())
+            val dto = apiService.getRecipeDetails(recipeId = numericId)
             dto.toDomain()
         } catch (e: Exception) {
             Log.w(TAG, "Recipe details API failed, using sample: ${e.message}")
@@ -134,10 +144,22 @@ class RecipeRepositoryImpl(
             var total = Int.MAX_VALUE
 
             while (aggregated.size < total && aggregated.size < limit) {
+                // Request exactly what's still needed — never fetch more than required
+                val batchSize = minOf(limit - aggregated.size, PAGE_SIZE)
                 val resp = if (category.cuisineType == CuisineType.INTERNATIONAL)
-                    apiService.searchRecipes(query = "", type = category.spoonacularTag, number = PAGE_SIZE, offset = offset)
+                    apiService.searchRecipes(
+                        query = "",
+                        type = category.spoonacularTag,
+                        number = batchSize,
+                        offset = offset
+                    )
                 else
-                    apiService.searchRecipes(query = "", cuisine = category.spoonacularTag, number = PAGE_SIZE, offset = offset)
+                    apiService.searchRecipes(
+                        query = "",
+                        cuisine = category.spoonacularTag,
+                        number = batchSize,
+                        offset = offset
+                    )
 
                 if (total == Int.MAX_VALUE) total = resp.totalResults
                 if (resp.results.isEmpty()) break
@@ -158,12 +180,12 @@ class RecipeRepositoryImpl(
         sampleRecipes
             .filter {
                 it.category.equals(category.name, ignoreCase = true) ||
-                it.cuisine.equals(category.name, ignoreCase = true)
+                        it.cuisine.equals(category.name, ignoreCase = true)
             }
             .take(limit)
 
     companion object {
         private const val TAG = "RecipeRepositoryImpl"
-        private const val PAGE_SIZE = 100
+        private const val PAGE_SIZE = 50  // matches GetRecipesByCategoryUseCase.defaultLimit
     }
 }

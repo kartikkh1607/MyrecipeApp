@@ -22,7 +22,11 @@ object CategoryDataSource {
             description = "Authentic Indian flavors with aromatic spices and rich curries",
             imageUrl = "https://images.unsplash.com/photo-1631452180519-c014fe946bc7?w=500&h=400&fit=crop",
             recipeCount = 2850, cuisineType = CuisineType.INDIAN,
-            dietaryTags = listOf(DietaryFilter.VEGETARIAN, DietaryFilter.VEGAN, DietaryFilter.NON_VEG),
+            dietaryTags = listOf(
+                DietaryFilter.VEGETARIAN,
+                DietaryFilter.VEGAN,
+                DietaryFilter.NON_VEG
+            ),
             spoonacularTag = "indian"
         ),
         RecipeCategory(
@@ -54,7 +58,11 @@ object CategoryDataSource {
             description = "Vibrant Mexican flavors with fresh ingredients and bold spices",
             imageUrl = "https://images.unsplash.com/photo-1555939594-58d7cb561ad1?w=500&h=400&fit=crop",
             recipeCount = 1850, cuisineType = CuisineType.MEXICAN,
-            dietaryTags = listOf(DietaryFilter.VEGETARIAN, DietaryFilter.VEGAN, DietaryFilter.NON_VEG),
+            dietaryTags = listOf(
+                DietaryFilter.VEGETARIAN,
+                DietaryFilter.VEGAN,
+                DietaryFilter.NON_VEG
+            ),
             spoonacularTag = "mexican"
         ),
         RecipeCategory(
@@ -96,7 +104,11 @@ object CategoryDataSource {
             description = "Delicious starters and small bites to begin your meal",
             imageUrl = "https://images.unsplash.com/photo-1541529086526-db283c563270?w=400",
             recipeCount = 890, cuisineType = CuisineType.INTERNATIONAL,
-            dietaryTags = listOf(DietaryFilter.VEGETARIAN, DietaryFilter.VEGAN, DietaryFilter.NON_VEG),
+            dietaryTags = listOf(
+                DietaryFilter.VEGETARIAN,
+                DietaryFilter.VEGAN,
+                DietaryFilter.NON_VEG
+            ),
             spoonacularTag = "appetizer"
         ),
         RecipeCategory(
@@ -146,7 +158,11 @@ object CategoryDataSource {
             description = "Warming and comforting soups for every season",
             imageUrl = "https://images.unsplash.com/photo-1547592166-23ac45744acd?w=400",
             recipeCount = 520, cuisineType = CuisineType.INTERNATIONAL,
-            dietaryTags = listOf(DietaryFilter.VEGETARIAN, DietaryFilter.VEGAN, DietaryFilter.NON_VEG),
+            dietaryTags = listOf(
+                DietaryFilter.VEGETARIAN,
+                DietaryFilter.VEGAN,
+                DietaryFilter.NON_VEG
+            ),
             spoonacularTag = "soup"
         ),
         RecipeCategory(

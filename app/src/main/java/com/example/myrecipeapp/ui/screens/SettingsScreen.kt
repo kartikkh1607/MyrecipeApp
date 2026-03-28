@@ -47,12 +47,10 @@ import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.example.myrecipeapp.ui.navigation.About
 import com.example.myrecipeapp.ui.navigation.Profile
-import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 
 @Composable
 fun SettingsScreen(
-    navController: NavHostController,
-    viewModel: MainViewModel
+    navController: NavHostController
 ) {
     val hapticFeedback = LocalHapticFeedback.current
 
@@ -199,7 +197,7 @@ fun SettingsItem(icon: ImageVector, title: String, subtitle: String, onClick: ()
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(navController: NavHostController, viewModel: MainViewModel) {
+fun ProfileScreen(navController: NavHostController) {
     val hapticFeedback = LocalHapticFeedback.current
 
     Column(

@@ -3,7 +3,11 @@ package com.example.myrecipeapp.di
 import com.example.myrecipeapp.data.remote.NetworkModule
 import com.example.myrecipeapp.data.repository.RecipeRepositoryImpl
 import com.example.myrecipeapp.domain.repository.RecipeRepository
-import com.example.myrecipeapp.domain.usecase.*
+import com.example.myrecipeapp.domain.usecase.GetCategoriesUseCase
+import com.example.myrecipeapp.domain.usecase.GetFeaturedRecipesUseCase
+import com.example.myrecipeapp.domain.usecase.GetRecipeDetailsUseCase
+import com.example.myrecipeapp.domain.usecase.GetRecipesByCategoryUseCase
+import com.example.myrecipeapp.domain.usecase.SearchRecipesUseCase
 
 /**
  * Manual dependency injection container.
@@ -24,8 +28,8 @@ object AppContainer {
 
     // ── Use cases ─────────────────────────────────────────────────────────────
     val getFeaturedRecipesUseCase by lazy { GetFeaturedRecipesUseCase(repository) }
-    val searchRecipesUseCase      by lazy { SearchRecipesUseCase(repository) }
-    val getRecipeDetailsUseCase   by lazy { GetRecipeDetailsUseCase(repository) }
-    val getCategoriesUseCase      by lazy { GetCategoriesUseCase(repository) }
+    val searchRecipesUseCase by lazy { SearchRecipesUseCase(repository) }
+    val getRecipeDetailsUseCase by lazy { GetRecipeDetailsUseCase(repository) }
+    val getCategoriesUseCase by lazy { GetCategoriesUseCase(repository) }
     val getRecipesByCategoryUseCase by lazy { GetRecipesByCategoryUseCase(repository) }
 }

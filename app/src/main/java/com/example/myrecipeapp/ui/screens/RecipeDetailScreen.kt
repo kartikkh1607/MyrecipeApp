@@ -1,17 +1,64 @@
 package com.example.myrecipeapp.ui.screens
 
+import androidx.activity.compose.BackHandler
+import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.*
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.LocalFireDepartment
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.ShoppingCart
+import androidx.compose.material.icons.filled.Timer
+import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -41,12 +88,12 @@ fun RecipeDetailScreen(
 ) {
     // Get recipe from sample data or use ViewModel state
     val recipeDetailState by viewModel.recipeDetailState
-    
+
     // Trigger loading of recipe details when screen is first composed
     LaunchedEffect(recipeId) {
         viewModel.fetchRecipeDetails(recipeId)
     }
-    
+
     // Only block the screen when there is NO recipe to show at all.
     // If a previous recipe is already loaded, keep it visible while the new one loads
     // (avoids a blank spinner with no back button trapping the user).
@@ -70,102 +117,141 @@ fun RecipeDetailScreen(
         }
         return
     }
-    
+
     var isCookingMode by remember { mutableStateOf(false) }
     val hapticFeedback = LocalHapticFeedback.current
     val favoriteIds by viewModel.favoriteIds
     val isFavorite = favoriteIds.contains(recipe.id)
 
-    if (isCookingMode) {
-        CookingModeScreen(
-            recipe = recipe,
-            onExitCookingMode = { 
+    AnimatedContent(
+        targetState = isCookingMode,
+        transitionSpec = {
+            if (targetState) {
+                // Entering cooking mode: slide up from bottom + fade in
+                (slideInVertically(
+                    initialOffsetY = { it },
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioNoBouncy,
+                        stiffness = 320f
+                    )
+                ) + fadeIn(tween(220))) togetherWith
+                        (slideOutVertically(
+                            targetOffsetY = { -it / 4 },
+                            animationSpec = tween(200)
+                        ) + fadeOut(tween(180)))
+            } else {
+                // Exiting cooking mode: slide back down + fade in recipe detail
+                (slideInVertically(
+                    initialOffsetY = { -it / 4 },
+                    animationSpec = tween(220)
+                ) + fadeIn(tween(220))) togetherWith
+                        (slideOutVertically(
+                            targetOffsetY = { it },
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = 320f
+                            )
+                        ) + fadeOut(tween(180)))
+            }
+        },
+        label = "cooking_mode_transition"
+    ) { inCookingMode ->
+        if (inCookingMode) {
+            BackHandler {
                 isCookingMode = false
                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
             }
-        )
-    } else {
-        val listState = rememberLazyListState()
-        // Parallax: hero image translates at 40% of scroll speed
-        val parallaxOffset by remember {
-            derivedStateOf {
-                if (listState.firstVisibleItemIndex == 0)
-                    listState.firstVisibleItemScrollOffset * 0.4f
-                else 300f  // hero fully scrolled away
-            }
-        }
-
-        LazyColumn(
-            state = listState,
-            modifier = Modifier
-                .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
-        ) {
-            item {
-                RecipeHeroSection(
-                    recipe = recipe,
-                    isFavorite = isFavorite,
-                    parallaxOffsetPx = parallaxOffset,
-                    onBackClick = { navController.popBackStack() },
-                    onFavoriteClick = {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.toggleFavorite(recipe)
-                    }
-                )
-            }
-
-            item {
-                // Recipe Overview
-                RecipeOverviewSection(recipe = recipe)
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            item {
-                // Cooking Action Buttons
-                CookingActionButtons(
-                    onStartCooking = { 
-                        isCookingMode = true
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    },
-                    onAddToShoppingList = {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.addToShoppingList(recipe)
-                        navController.navigate(ShoppingList) {
-                            launchSingleTop = true
-                        }
-                    }
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            item {
-                // Ingredients Section
-                IngredientsSection(ingredients = recipe.ingredients)
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            item {
-                // Instructions Section
-                InstructionsSection(instructions = recipe.instructions)
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            item {
-                // Nutrition Info (if available)
-                recipe.nutritionInfo?.let { nutrition ->
-                    NutritionSection(nutritionInfo = nutrition)
-                    Spacer(modifier = Modifier.height(24.dp))
+            CookingModeScreen(
+                recipe = recipe,
+                onExitCookingMode = {
+                    isCookingMode = false
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
+            )
+        } else {
+            val listState = rememberLazyListState()
+            // Parallax: hero image translates at 40% of scroll speed
+            val parallaxOffset by remember {
+                derivedStateOf {
+                    if (listState.firstVisibleItemIndex == 0)
+                        listState.firstVisibleItemScrollOffset * 0.4f
+                    else 300f  // hero fully scrolled away
                 }
             }
 
-            item {
-                // Tags
-                TagsSection(tags = recipe.tags)
-                Spacer(modifier = Modifier.height(100.dp)) // Bottom padding
-            }
-        }
-    }
-}
+            LazyColumn(
+                state = listState,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(MaterialTheme.colorScheme.background)
+            ) {
+                item {
+                    RecipeHeroSection(
+                        recipe = recipe,
+                        isFavorite = isFavorite,
+                        parallaxOffsetPx = parallaxOffset,
+                        onBackClick = { navController.popBackStack() },
+                        onFavoriteClick = {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.toggleFavorite(recipe)
+                        }
+                    )
+                }
+
+                item {
+                    // Recipe Overview
+                    RecipeOverviewSection(recipe = recipe)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
+                item {
+                    // Cooking Action Buttons
+                    CookingActionButtons(
+                        onStartCooking = {
+                            isCookingMode = true
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        onAddToShoppingList = {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.addToShoppingList(recipe)
+                            navController.navigate(ShoppingList) {
+                                launchSingleTop = true
+                            }
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
+                item {
+                    // Ingredients Section
+                    IngredientsSection(ingredients = recipe.ingredients)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
+                item {
+                    // Instructions Section
+                    InstructionsSection(instructions = recipe.instructions)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+
+                item {
+                    // Nutrition Info (if available)
+                    recipe.nutritionInfo?.let { nutrition ->
+                        NutritionSection(nutritionInfo = nutrition)
+                        Spacer(modifier = Modifier.height(24.dp))
+                    }
+                }
+
+                item {
+                    // Tags
+                    TagsSection(tags = recipe.tags)
+                    Spacer(modifier = Modifier.height(100.dp)) // Bottom padding
+                }
+            }       // end LazyColumn
+        }       // end else (recipe detail view)
+    }           // end AnimatedContent lambda
+}               // end RecipeDetailScreen
+
 
 @Composable
 fun RecipeHeroSection(
@@ -298,19 +384,19 @@ fun RecipeOverviewSection(recipe: Recipe) {
                 label = "Total Time",
                 value = "${recipe.prepTime + recipe.cookTime} min"
             )
-            
+
             RecipeInfoItem(
                 icon = Icons.Default.Restaurant,
                 label = "Servings",
                 value = "${recipe.servings}"
             )
-            
+
             RecipeInfoItem(
                 icon = Icons.Default.TrendingUp,
                 label = "Difficulty",
                 value = recipe.difficulty.displayName()
             )
-            
+
             if (recipe.calories != null) {
                 RecipeInfoItem(
                     icon = Icons.Default.LocalFireDepartment,
@@ -417,9 +503,9 @@ fun IngredientsSection(ingredients: List<Ingredient>) {
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(
@@ -515,9 +601,9 @@ fun InstructionsSection(instructions: List<RecipeStep>) {
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
         )
-        
+
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         instructions.forEach { step ->
             InstructionStepCard(step = step)
             Spacer(modifier = Modifier.height(12.dp))
@@ -618,7 +704,7 @@ fun NutritionSection(nutritionInfo: NutritionInfo) {
         )
 
         Spacer(modifier = Modifier.height(16.dp))
-        
+
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(

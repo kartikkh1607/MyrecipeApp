@@ -120,13 +120,23 @@ fun ShoppingListScreen(
                     )
                     .statusBarsPadding()
             ) {
-                Column(modifier = Modifier.padding(start = 4.dp, end = 16.dp, top = 8.dp, bottom = 20.dp)) {
+                Column(
+                    modifier = Modifier.padding(
+                        start = 4.dp,
+                        end = 16.dp,
+                        top = 8.dp,
+                        bottom = 20.dp
+                    )
+                ) {
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         verticalAlignment = Alignment.CenterVertically,
                         horizontalArrangement = Arrangement.SpaceBetween
                     ) {
-                        Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.weight(1f)) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            modifier = Modifier.weight(1f)
+                        ) {
                             IconButton(onClick = { navController.popBackStack() }) {
                                 Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
                             }
@@ -143,10 +153,20 @@ fun ShoppingListScreen(
                                         isAllDone -> "🎉 All done! Great job!"
                                         else -> "$checkedCount of $totalCount items"
                                     },
-                                    transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
+                                    transitionSpec = {
+                                        fadeIn(tween(300)) togetherWith fadeOut(
+                                            tween(
+                                                200
+                                            )
+                                        )
+                                    },
                                     label = "subtitle"
                                 ) { subtitle ->
-                                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.White.copy(alpha = 0.85f))
+                                    Text(
+                                        subtitle,
+                                        style = MaterialTheme.typography.bodySmall,
+                                        color = Color.White.copy(alpha = 0.85f)
+                                    )
                                 }
                             }
                         }
@@ -156,18 +176,32 @@ fun ShoppingListScreen(
                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                     viewModel.removeCheckedItems()
                                 }) {
-                                    Icon(Icons.Default.RemoveDone, "Remove checked", tint = Color.White)
+                                    Icon(
+                                        Icons.Default.RemoveDone,
+                                        "Remove checked",
+                                        tint = Color.White
+                                    )
                                 }
                             }
                             if (totalCount > 0) {
                                 IconButton(onClick = {
-                                    val text = grouped.entries.joinToString("\n\n") { (recipe, ings) ->
-                                        "🍽 $recipe\n" + ings.joinToString("\n") { ing ->
-                                            val qty = ing.amount + if (ing.unit.isNotBlank()) " ${ing.unit}" else ""
-                                            "  ☐ $qty ${ing.ingredientName}"
+                                    val text =
+                                        grouped.entries.joinToString("\n\n") { (recipe, ings) ->
+                                            "🍽 $recipe\n" + ings.joinToString("\n") { ing ->
+                                                val qty =
+                                                    ing.amount + if (ing.unit.isNotBlank()) " ${ing.unit}" else ""
+                                                "  ☐ $qty ${ing.ingredientName}"
+                                            }
                                         }
-                                    }
-                                    clipboardManager.setText(AnnotatedString("🛒 My Shopping List\n${"─".repeat(30)}\n\n$text"))
+                                    clipboardManager.setText(
+                                        AnnotatedString(
+                                            "🛒 My Shopping List\n${
+                                                "─".repeat(
+                                                    30
+                                                )
+                                            }\n\n$text"
+                                        )
+                                    )
                                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                 }) {
                                     Icon(Icons.Default.Share, "Share", tint = Color.White)
@@ -179,13 +213,18 @@ fun ShoppingListScreen(
                     if (totalCount > 0) {
                         Spacer(modifier = Modifier.height(12.dp))
                         Row(
-                            modifier = Modifier.fillMaxWidth().padding(horizontal = 16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(horizontal = 16.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             LinearProgressIndicator(
                                 progress = { progressFraction },
-                                modifier = Modifier.weight(1f).height(8.dp).clip(CircleShape),
+                                modifier = Modifier
+                                    .weight(1f)
+                                    .height(8.dp)
+                                    .clip(CircleShape),
                                 color = Color.White,
                                 trackColor = Color.White.copy(alpha = 0.25f)
                             )
@@ -226,7 +265,9 @@ fun ShoppingListScreen(
                 if (isAllDone) {
                     item(key = "celebration") {
                         Card(
-                            modifier = Modifier.fillMaxWidth().padding(bottom = 16.dp),
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(bottom = 16.dp),
                             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
                             shape = RoundedCornerShape(20.dp)
                         ) {
@@ -332,7 +373,9 @@ fun ShoppingListScreen(
                             )
                         }
                         HorizontalDivider(
-                            modifier = Modifier.background(MaterialTheme.colorScheme.surface).padding(start = 56.dp, end = 16.dp),
+                            modifier = Modifier
+                                .background(MaterialTheme.colorScheme.surface)
+                                .padding(start = 56.dp, end = 16.dp),
                             color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)
                         )
                     }
@@ -355,7 +398,9 @@ fun ShoppingListScreen(
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                             viewModel.clearShoppingList()
                         },
-                        modifier = Modifier.fillMaxWidth().height(48.dp),
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(48.dp),
                         shape = RoundedCornerShape(14.dp),
                         colors = ButtonDefaults.outlinedButtonColors(
                             contentColor = MaterialTheme.colorScheme.error
@@ -370,9 +415,6 @@ fun ShoppingListScreen(
         }
     }
 }
-
-// ── Modifier extension for clip (avoids import clash) ────────────────────────
-
 
 // ── Swipeable item row ────────────────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
@@ -394,7 +436,8 @@ private fun SwipeableShoppingItem(
         state = dismissState,
         backgroundContent = {
             val fraction = dismissState.progress.coerceIn(0f, 1f)
-            val bgAlpha = if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) fraction else 0f
+            val bgAlpha =
+                if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) fraction else 0f
             Box(
                 modifier = Modifier
                     .fillMaxSize()
@@ -487,7 +530,9 @@ private fun EmptyShoppingListState(
     LaunchedEffect(Unit) { delay(120); iconVisible = true; delay(180); textVisible = true }
 
     Column(
-        modifier = modifier.fillMaxSize().padding(32.dp),
+        modifier = modifier
+            .fillMaxSize()
+            .padding(32.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.Center
     ) {
@@ -509,7 +554,10 @@ private fun EmptyShoppingListState(
         Spacer(modifier = Modifier.height(28.dp))
         AnimatedVisibility(
             visible = textVisible,
-            enter = slideInVertically(initialOffsetY = { 30 }, animationSpec = spring(stiffness = 300f)) + fadeIn()
+            enter = slideInVertically(
+                initialOffsetY = { 30 },
+                animationSpec = spring(stiffness = 300f)
+            ) + fadeIn()
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
@@ -530,7 +578,9 @@ private fun EmptyShoppingListState(
                 Button(
                     onClick = onGoToHome,
                     shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier.fillMaxWidth(0.6f).height(48.dp)
+                    modifier = Modifier
+                        .fillMaxWidth(0.6f)
+                        .height(48.dp)
                 ) {
                     Icon(Icons.Default.Fastfood, null, modifier = Modifier.size(18.dp))
                     Spacer(modifier = Modifier.width(8.dp))

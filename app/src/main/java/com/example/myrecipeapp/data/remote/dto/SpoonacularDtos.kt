@@ -15,8 +15,6 @@ data class SpoonacularGetRecipesResponse(
 // Response for GET /recipes/complexSearch
 data class SpoonacularSearchResponse(
     @SerializedName("results") val results: List<SpoonacularRecipeDto>,
-    @SerializedName("offset") val offset: Int,
-    @SerializedName("number") val number: Int,
     @SerializedName("totalResults") val totalResults: Int
 )
 

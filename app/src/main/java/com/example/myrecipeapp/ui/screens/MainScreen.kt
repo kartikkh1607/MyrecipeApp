@@ -79,11 +79,11 @@ fun BottomNavigationBar(navController: NavHostController) {
     // Remembered so the list isn't rebuilt on every recomposition triggered by navigation
     val items = remember {
         listOf(
-            BottomNavItem("Home",       Icons.Default.Home,             Home),
+            BottomNavItem("Home", Icons.Default.Home, Home),
             BottomNavItem("Categories", Icons.AutoMirrored.Filled.List, Categories),
-            BottomNavItem("Search",     Icons.Default.Search,           Search),
-            BottomNavItem("Favorites",  Icons.Default.Favorite,         Favorites),
-            BottomNavItem("Settings",   Icons.Default.Settings,         Settings)
+            BottomNavItem("Search", Icons.Default.Search, Search),
+            BottomNavItem("Favorites", Icons.Default.Favorite, Favorites),
+            BottomNavItem("Settings", Icons.Default.Settings, Settings)
         )
     }
 
@@ -95,9 +95,8 @@ fun BottomNavigationBar(navController: NavHostController) {
     // prevents stack accumulation when switching between tabs repeatedly.
     fun navigateToTab(route: Any) {
         navController.navigate(route) {
-            popUpTo<Home> { saveState = true }
+            popUpTo<Home> { inclusive = true }
             launchSingleTop = true
-            restoreState = true
         }
     }
 
@@ -143,7 +142,9 @@ fun BottomNavigationBar(navController: NavHostController) {
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                             navigateToTab(item.route)
                         },
-                        modifier = Modifier.scale(scale).size(56.dp),
+                        modifier = Modifier
+                            .scale(scale)
+                            .size(56.dp),
                         shape = CircleShape,
                         containerColor = MaterialTheme.colorScheme.primary,
                         contentColor = MaterialTheme.colorScheme.onPrimary,
@@ -155,7 +156,9 @@ fun BottomNavigationBar(navController: NavHostController) {
                         Icon(
                             imageVector = item.icon,
                             contentDescription = item.label,
-                            modifier = Modifier.size(28.dp).scale(iconScale)
+                            modifier = Modifier
+                                .size(28.dp)
+                                .scale(iconScale)
                         )
                     }
                 } else {
@@ -164,7 +167,9 @@ fun BottomNavigationBar(navController: NavHostController) {
                             Icon(
                                 imageVector = item.icon,
                                 contentDescription = item.label,
-                                modifier = Modifier.size(24.dp).scale(iconScale)
+                                modifier = Modifier
+                                    .size(24.dp)
+                                    .scale(iconScale)
                             )
                         },
                         label = {

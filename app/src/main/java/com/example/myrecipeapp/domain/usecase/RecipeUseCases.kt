@@ -33,7 +33,10 @@ class GetRecipesByCategoryUseCase(
     private val repository: RecipeRepository,
     private val defaultLimit: Int = 50  // 50 results = 1 API call; 1000 = 10 calls/tap (quota killer)
 ) {
-    suspend operator fun invoke(categoryId: String, limit: Int = defaultLimit): Result<List<Recipe>> =
+    suspend operator fun invoke(
+        categoryId: String,
+        limit: Int = defaultLimit
+    ): Result<List<Recipe>> =
         runCatching {
             repository.getRecipesByCategory(categoryId, limit)
         }

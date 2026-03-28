@@ -10,7 +10,12 @@ import com.example.myrecipeapp.di.AppContainer
 import com.example.myrecipeapp.domain.model.FeaturedRecipe
 import com.example.myrecipeapp.domain.model.Recipe
 import com.example.myrecipeapp.domain.model.RecipeCategory
-import com.example.myrecipeapp.domain.usecase.*
+import com.example.myrecipeapp.domain.usecase.GetCategoriesUseCase
+import com.example.myrecipeapp.domain.usecase.GetFeaturedRecipesUseCase
+import com.example.myrecipeapp.domain.usecase.GetRecipeDetailsUseCase
+import com.example.myrecipeapp.domain.usecase.GetRecipesByCategoryUseCase
+import com.example.myrecipeapp.domain.usecase.SearchRecipesUseCase
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 
 /**
@@ -83,6 +88,9 @@ class MainViewModel(
     private val knownRecipes = mutableMapOf<String, Recipe>()   // cache of every recipe seen
     private val _favoriteIds = mutableStateOf<Set<String>>(emptySet())
     val favoriteIds: State<Set<String>> = _favoriteIds
+
+    // Category recipe cache: avoids re-fetching when user navigates back to the same category
+    private val categoryCache = mutableMapOf<String, List<Recipe>>()
 
     private val _favoriteRecipes = mutableStateOf<List<Recipe>>(emptyList())
     val favoriteRecipes: State<List<Recipe>> = _favoriteRecipes
@@ -158,9 +166,14 @@ class MainViewModel(
         // Skip re-fetch if this recipe is already loaded
         if (_recipeDetailState.value.recipe?.id == recipeId) return
         launchOp(
-            onStart = { _recipeDetailState.value = _recipeDetailState.value.copy(loading = true, error = null) },
+            onStart = {
+                _recipeDetailState.value =
+                    _recipeDetailState.value.copy(loading = true, error = null)
+            },
             call = { getRecipeDetails(recipeId) },
-            onSuccess = { _recipeDetailState.value = RecipeDetailState(loading = false, recipe = it) },
+            onSuccess = {
+                _recipeDetailState.value = RecipeDetailState(loading = false, recipe = it)
+            },
             onFailure = {
                 Log.w(TAG, "fetchRecipeDetails: ${it.message}")
                 _recipeDetailState.value = RecipeDetailState(loading = false, error = it.message)
@@ -168,39 +181,66 @@ class MainViewModel(
         )
     }
 
-    fun searchRecipes(query: String) = launchOp(
-        onStart = { _searchState.value = _searchState.value.copy(loading = true, error = null, query = query) },
-        call = { searchUseCase(query) },
-        onSuccess = { _searchState.value = SearchState(loading = false, recipes = it.recipes, query = query) },
-        onFailure = {
-            Log.w(TAG, "searchRecipes: ${it.message}")
-            _searchState.value = _searchState.value.copy(loading = false, error = "Failed to search recipes")
-        }
-    )
+    // Job reference so we can cancel a stale search when a new one starts
+    private var searchJob: Job? = null
 
-    fun getRecipesByCategory(categoryId: String) = launchOp(
-        onStart = {
-            _categoryRecipesState.value = _categoryRecipesState.value.copy(loading = true, error = null)
-        },
-        call = { getByCategoryUseCase(categoryId) },
-        onSuccess = {
-            _categoryRecipesState.value = CategoryRecipesState(loading = false, recipes = it)
-        },
-        onFailure = {
-            Log.e(TAG, "getRecipesByCategory: ${it.message}")
-            _categoryRecipesState.value = CategoryRecipesState(
-                loading = false,
-                error = "API temporarily unavailable. Please try again later."
-            )
+    fun searchRecipes(query: String) {
+        searchJob?.cancel()   // cancel previous — prevents stale results overwriting fresh ones
+        searchJob = launchOp(
+            onStart = {
+                _searchState.value =
+                    _searchState.value.copy(loading = true, error = null, query = query)
+            },
+            call = { searchUseCase(query) },
+            onSuccess = {
+                _searchState.value =
+                    SearchState(loading = false, recipes = it.recipes, query = query)
+            },
+            onFailure = {
+                Log.w(TAG, "searchRecipes: ${it.message}")
+                _searchState.value =
+                    _searchState.value.copy(loading = false, error = "Failed to search recipes")
+            }
+        )
+    }
+
+    fun getRecipesByCategory(categoryId: String) {
+        // Serve from cache instantly — avoids re-fetching when the user navigates back
+        val cached = categoryCache[categoryId]
+        if (cached != null) {
+            _categoryRecipesState.value = CategoryRecipesState(loading = false, recipes = cached)
+            return
         }
-    )
+        launchOp(
+            onStart = {
+                _categoryRecipesState.value =
+                    _categoryRecipesState.value.copy(loading = true, error = null)
+            },
+            call = { getByCategoryUseCase(categoryId) },
+            onSuccess = {
+                categoryCache[categoryId] = it   // store for instant next access
+                _categoryRecipesState.value = CategoryRecipesState(loading = false, recipes = it)
+            },
+            onFailure = {
+                Log.e(TAG, "getRecipesByCategory: ${it.message}")
+                _categoryRecipesState.value = CategoryRecipesState(
+                    loading = false,
+                    error = "API temporarily unavailable. Please try again later."
+                )
+            }
+        )
+    }
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
     private fun loadFeaturedRecipes() = launchOp(
-        onStart = { _homeRecipeState.value = _homeRecipeState.value.copy(loading = true, error = null) },
+        onStart = {
+            _homeRecipeState.value = _homeRecipeState.value.copy(loading = true, error = null)
+        },
         call = { getFeaturedRecipes() },
-        onSuccess = { _homeRecipeState.value = HomeRecipeState(loading = false, featuredRecipes = it) },
+        onSuccess = {
+            _homeRecipeState.value = HomeRecipeState(loading = false, featuredRecipes = it)
+        },
         onFailure = {
             Log.w(TAG, "loadFeaturedRecipes: ${it.message}")
             _homeRecipeState.value = HomeRecipeState(loading = false, error = it.message)
@@ -208,7 +248,10 @@ class MainViewModel(
     )
 
     private fun loadCategories() = launchOp(
-        onStart = { _recipeCategoriesState.value = _recipeCategoriesState.value.copy(loading = true, error = null) },
+        onStart = {
+            _recipeCategoriesState.value =
+                _recipeCategoriesState.value.copy(loading = true, error = null)
+        },
         call = { getCategories() },
         onSuccess = {
             _recipeCategoriesState.value = RecipeCategoryState(loading = false, categories = it)
@@ -230,7 +273,7 @@ class MainViewModel(
         call: suspend () -> Result<T>,
         onSuccess: (T) -> Unit,
         onFailure: (Throwable) -> Unit
-    ) = viewModelScope.launch {
+    ): Job = viewModelScope.launch {
         onStart()
         call().fold(onSuccess, onFailure)
     }
@@ -245,11 +288,11 @@ class MainViewModel(
         @Suppress("UNCHECKED_CAST")
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
             return MainViewModel(
-                getFeaturedRecipes   = AppContainer.getFeaturedRecipesUseCase,
-                searchUseCase        = AppContainer.searchRecipesUseCase,
-                getRecipeDetails     = AppContainer.getRecipeDetailsUseCase,
-                getCategories        = AppContainer.getCategoriesUseCase,
-                getByCategoryUseCase   = AppContainer.getRecipesByCategoryUseCase
+                getFeaturedRecipes = AppContainer.getFeaturedRecipesUseCase,
+                searchUseCase = AppContainer.searchRecipesUseCase,
+                getRecipeDetails = AppContainer.getRecipeDetailsUseCase,
+                getCategories = AppContainer.getCategoriesUseCase,
+                getByCategoryUseCase = AppContainer.getRecipesByCategoryUseCase
             ) as T
         }
     }

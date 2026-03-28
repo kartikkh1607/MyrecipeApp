@@ -101,7 +101,9 @@ fun HomeScreen(
         when {
             homeRecipeState.loading -> {
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(280.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(280.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
@@ -115,6 +117,7 @@ fun HomeScreen(
                     }
                 }
             }
+
             homeRecipeState.error != null -> {
                 ErrorSection(
                     message = homeRecipeState.error ?: "Unknown error",
@@ -124,6 +127,7 @@ fun HomeScreen(
                     }
                 )
             }
+
             homeRecipeState.featuredRecipes.isNotEmpty() -> {
                 FeaturedRecipeCarousel(navController = navController, viewModel = viewModel)
             }
@@ -155,12 +159,15 @@ fun HomeScreen(
         when {
             categoriesState.loading -> {
                 Box(
-                    modifier = Modifier.fillMaxWidth().height(130.dp),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(130.dp),
                     contentAlignment = Alignment.Center
                 ) {
                     CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
                 }
             }
+
             categoriesState.error != null -> {
                 ErrorSection(
                     message = categoriesState.error ?: "Unknown error",
@@ -170,6 +177,7 @@ fun HomeScreen(
                     }
                 )
             }
+
             else -> {
                 Column {
                     // Section header
@@ -221,9 +229,9 @@ fun HomeScreen(
                                     onClick = {
                                         selectedCategory = category
                                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        navController.navigate(CategoryDetail) { launchSingleTop = true }
-                                        navController.currentBackStackEntry
-                                            ?.savedStateHandle?.set("cat", category)
+                                        navController.navigate(CategoryDetail(categoryId = category.id)) {
+                                            launchSingleTop = true
+                                        }
                                     }
                                 )
                             }
@@ -243,9 +251,9 @@ fun ModernHeaderSection(onProfileClick: () -> Unit) {
     val greeting = remember {
         val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
         when (hour) {
-            in 0..11  -> "Good Morning ☀️"
+            in 0..11 -> "Good Morning ☀️"
             in 12..16 -> "Good Afternoon 🌤️"
-            else      -> "Good Evening 🌙"
+            else -> "Good Evening 🌙"
         }
     }
     Row(
@@ -312,7 +320,10 @@ private fun QuickActionsRow(
             )
             FilledTonalButton(
                 onClick = { rndPressed = true; onRandomRecipe() },
-                modifier = Modifier.weight(1f).height(52.dp).scale(rndScale),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp)
+                    .scale(rndScale),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.filledTonalButtonColors(
                     containerColor = MaterialTheme.colorScheme.secondaryContainer,
@@ -334,7 +345,10 @@ private fun QuickActionsRow(
             )
             Button(
                 onClick = { shpPressed = true; onShoppingList() },
-                modifier = Modifier.weight(1f).height(52.dp).scale(shpScale),
+                modifier = Modifier
+                    .weight(1f)
+                    .height(52.dp)
+                    .scale(shpScale),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
                     containerColor = MaterialTheme.colorScheme.primary,
@@ -434,84 +448,13 @@ fun CategoryImageCard(
     }
 }
 
-// ── Legacy chip kept for backward compat (used nowhere now but safe to keep) ───
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun CategoryChip(
-    category: RecipeCategory,
-    onClick: () -> Unit,
-    isSelected: Boolean
-) {
-    val backgroundColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primary
-        else MaterialTheme.colorScheme.surfaceVariant,
-        label = "chip_bg"
-    )
-    val contentColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.onPrimary
-        else MaterialTheme.colorScheme.onSurfaceVariant,
-        label = "chip_fg"
-    )
-    Card(
-        onClick = onClick,
-        modifier = Modifier.height(40.dp),
-        shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = backgroundColor),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 4.dp else 0.dp)
-    ) {
-        Row(
-            modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = category.name,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = contentColor
-            )
-        }
-    }
-}
-
-// ── Quick Action Card (kept for backward compat) ───────────────────────────────
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun QuickActionCard(
-    text: String,
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    modifier: Modifier = Modifier,
-    onClick: () -> Unit
-) {
-    var isPressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.96f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMedium),
-        label = "quick_action_scale"
-    )
-    Card(
-        onClick = { isPressed = true; onClick() },
-        modifier = modifier.height(120.dp).scale(scale),
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.secondaryContainer),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isPressed) 0.dp else 4.dp)
-    ) {
-        Column(
-            modifier = Modifier.fillMaxSize().padding(16.dp),
-            verticalArrangement = Arrangement.Center,
-            horizontalAlignment = Alignment.CenterHorizontally
-        ) {
-            Icon(imageVector = icon, contentDescription = text, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(32.dp))
-            Spacer(modifier = Modifier.height(8.dp))
-            Text(text = text, style = MaterialTheme.typography.bodyMedium, fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSecondaryContainer)
-        }
-    }
-}
-
 // ── Error section ──────────────────────────────────────────────────────────────
 @Composable
 fun ErrorSection(message: String, onRetry: () -> Unit) {
     Column(
-        modifier = Modifier.fillMaxWidth().padding(16.dp),
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(16.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
         Text(
@@ -521,9 +464,16 @@ fun ErrorSection(message: String, onRetry: () -> Unit) {
             fontWeight = FontWeight.Bold
         )
         Spacer(modifier = Modifier.height(8.dp))
-        Text(message, style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onSurfaceVariant)
+        Text(
+            message,
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
         Spacer(modifier = Modifier.height(16.dp))
-        Button(onClick = onRetry, colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)) {
+        Button(
+            onClick = onRetry,
+            colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+        ) {
             Text("Retry")
         }
     }

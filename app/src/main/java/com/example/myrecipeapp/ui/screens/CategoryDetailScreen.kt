@@ -77,35 +77,36 @@ fun CategoryDetailScreen(
     // Observe favorites at composable scope — reads inside items{} won't
     // trigger recomposition on their own without this delegation.
     val favoriteIds by viewModel.favoriteIds
-    
+
     // Get category recipes state from ViewModel
     val categoryRecipesState by viewModel.categoryRecipesState
-    
+
     // Fetch recipes when category changes or screen is first loaded
     LaunchedEffect(category.id) {
         viewModel.getRecipesByCategory(category.id)
     }
-    
+
     // remember() so the filter only re-runs when recipes, filter, or sort changes
-    val filteredRecipes = remember(selectedDietaryFilter, categoryRecipesState.recipes, sortByRating) {
-        val base = if (selectedDietaryFilter == DietaryFilter.ALL) {
-            categoryRecipesState.recipes
-        } else {
-            categoryRecipesState.recipes.filter { recipe ->
-                when (selectedDietaryFilter) {
-                    DietaryFilter.VEGETARIAN  -> recipe.isVegetarian
-                    DietaryFilter.VEGAN       -> recipe.isVegan
-                    DietaryFilter.GLUTEN_FREE -> recipe.isGlutenFree
-                    DietaryFilter.DAIRY_FREE  -> recipe.isDairyFree
-                    DietaryFilter.KETO        -> recipe.isKeto
-                    DietaryFilter.LOW_CARB    -> recipe.isLowCarb
-                    else -> true
+    val filteredRecipes =
+        remember(selectedDietaryFilter, categoryRecipesState.recipes, sortByRating) {
+            val base = if (selectedDietaryFilter == DietaryFilter.ALL) {
+                categoryRecipesState.recipes
+            } else {
+                categoryRecipesState.recipes.filter { recipe ->
+                    when (selectedDietaryFilter) {
+                        DietaryFilter.VEGETARIAN -> recipe.isVegetarian
+                        DietaryFilter.VEGAN -> recipe.isVegan
+                        DietaryFilter.GLUTEN_FREE -> recipe.isGlutenFree
+                        DietaryFilter.DAIRY_FREE -> recipe.isDairyFree
+                        DietaryFilter.KETO -> recipe.isKeto
+                        DietaryFilter.LOW_CARB -> recipe.isLowCarb
+                        else -> true
+                    }
                 }
             }
+            if (sortByRating) base.sortedByDescending { it.rating } else base
         }
-        if (sortByRating) base.sortedByDescending { it.rating } else base
-    }
-    
+
     Column(
         modifier = Modifier
             .fillMaxSize()
@@ -123,7 +124,7 @@ fun CategoryDetailScreen(
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
-            
+
             // Gradient overlay
             Box(
                 modifier = Modifier
@@ -137,7 +138,7 @@ fun CategoryDetailScreen(
                         )
                     )
             )
-            
+
             // Back button
             IconButton(
                 onClick = onBackClick,
@@ -151,7 +152,7 @@ fun CategoryDetailScreen(
                     tint = Color.White
                 )
             }
-            
+
             // Filter button
             IconButton(
                 onClick = { showFilterBottomSheet = true },
@@ -165,7 +166,7 @@ fun CategoryDetailScreen(
                     tint = Color.White
                 )
             }
-            
+
             // Category info
             Column(
                 modifier = Modifier
@@ -179,13 +180,13 @@ fun CategoryDetailScreen(
                     fontWeight = FontWeight.Bold,
                     color = Color.White
                 )
-                
+
                 Text(
                     text = category.description,
                     style = MaterialTheme.typography.bodyMedium,
                     color = Color.White.copy(alpha = 0.9f)
                 )
-                
+
                 // Recipe count badge
                 Card(
                     colors = CardDefaults.cardColors(
@@ -214,7 +215,7 @@ fun CategoryDetailScreen(
                 }
             }
         }
-        
+
         // Recipes list with lazy loading indicator
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
@@ -236,7 +237,10 @@ fun CategoryDetailScreen(
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
                             Text(
-                                text = "Showing ${selectedDietaryFilter.name.lowercase().replaceFirstChar { it.uppercase() }} recipes",
+                                text = "Showing ${
+                                    selectedDietaryFilter.name.lowercase()
+                                        .replaceFirstChar { it.uppercase() }
+                                } recipes",
                                 style = MaterialTheme.typography.bodyMedium,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer,
                                 fontWeight = FontWeight.Medium
@@ -251,7 +255,7 @@ fun CategoryDetailScreen(
                     }
                 }
             }
-            
+
             // Show loading state with progress indicator
             if (categoryRecipesState.loading) {
                 item {
@@ -272,7 +276,7 @@ fun CategoryDetailScreen(
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
                             Text(
-                                text = "Fetching up to 1000 delicious recipes",
+                                text = "Fetching up to 50 recipes",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
@@ -280,7 +284,7 @@ fun CategoryDetailScreen(
                     }
                 }
             }
-            
+
             // Show error state
             if (categoryRecipesState.error != null && !categoryRecipesState.loading) {
                 item {
@@ -318,7 +322,7 @@ fun CategoryDetailScreen(
                     }
                 }
             }
-            
+
             // Show empty state when no recipes found
             if (!categoryRecipesState.loading && categoryRecipesState.error == null && filteredRecipes.isEmpty()) {
                 item {
@@ -360,7 +364,7 @@ fun CategoryDetailScreen(
                     }
                 }
             }
-            
+
             // Show recipes when available with count header
             if (!categoryRecipesState.loading && filteredRecipes.isNotEmpty()) {
                 // Recipe count and sort options
@@ -378,15 +382,20 @@ fun CategoryDetailScreen(
                             fontWeight = FontWeight.Medium,
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                         )
-                        
+
                         FilterChip(
                             onClick = { sortByRating = !sortByRating },
-                            label = { Text("Sort by Rating", style = MaterialTheme.typography.labelSmall) },
+                            label = {
+                                Text(
+                                    "Sort by Rating",
+                                    style = MaterialTheme.typography.labelSmall
+                                )
+                            },
                             selected = sortByRating
                         )
                     }
                 }
-                
+
                 items(filteredRecipes) { recipe ->
                     EnhancedRecipeCard(
                         recipe = recipe,
@@ -398,7 +407,7 @@ fun CategoryDetailScreen(
             }
         }
     }
-    
+
     // Filter Bottom Sheet
     if (showFilterBottomSheet) {
         ModalBottomSheet(
@@ -425,7 +434,7 @@ fun EnhancedRecipeCard(
     onFavoriteToggle: (Recipe) -> Unit = {}
 ) {
     var isPressed by remember { mutableStateOf(false) }
-    
+
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.98f else 1f,
         animationSpec = spring(
@@ -434,12 +443,14 @@ fun EnhancedRecipeCard(
         ),
         label = "card_scale"
     )
-    
+
     val favoriteColor by animateColorAsState(
-        targetValue = if (isFavorite) Color(0xFFE91E63) else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
+        targetValue = if (isFavorite) Color(0xFFE91E63) else MaterialTheme.colorScheme.onSurface.copy(
+            alpha = 0.6f
+        ),
         label = "favorite_color"
     )
-    
+
     Card(
         onClick = {
             isPressed = true
@@ -471,7 +482,7 @@ fun EnhancedRecipeCard(
                         .clip(RoundedCornerShape(12.dp)),
                     contentScale = ContentScale.Crop
                 )
-                
+
                 // Rating badge on image
                 if (recipe.rating > 0) {
                     Card(
@@ -504,7 +515,7 @@ fun EnhancedRecipeCard(
                     }
                 }
             }
-            
+
             // Recipe information
             Column(
                 modifier = Modifier.weight(1f),
@@ -522,9 +533,11 @@ fun EnhancedRecipeCard(
                         fontWeight = FontWeight.Bold,
                         maxLines = 2,
                         overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier.weight(1f).padding(end = 8.dp)
+                        modifier = Modifier
+                            .weight(1f)
+                            .padding(end = 8.dp)
                     )
-                    
+
                     IconButton(
                         onClick = { onFavoriteToggle(recipe) },
                         modifier = Modifier.size(32.dp)
@@ -537,7 +550,7 @@ fun EnhancedRecipeCard(
                         )
                     }
                 }
-                
+
                 // Description
                 Text(
                     text = recipe.description,
@@ -546,9 +559,9 @@ fun EnhancedRecipeCard(
                     maxLines = 2,
                     overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
                 )
-                
+
                 Spacer(modifier = Modifier.weight(1f))
-                
+
                 // Recipe metadata with enhanced styling
                 Row(
                     modifier = Modifier.fillMaxWidth(),
@@ -573,7 +586,7 @@ fun EnhancedRecipeCard(
                             color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                         )
                     }
-                    
+
                     // Cuisine type if available
                     if (recipe.cuisine.isNotEmpty()) {
                         Card(
@@ -595,7 +608,7 @@ fun EnhancedRecipeCard(
             }
         }
     }
-    
+
     // Reset pressed state after animation
     LaunchedEffect(isPressed) {
         if (isPressed) {
@@ -622,7 +635,7 @@ fun DietaryFilterBottomSheet(
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold
         )
-        
+
         LazyRow(
             horizontalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -642,7 +655,7 @@ fun DietaryFilterBottomSheet(
                 )
             }
         }
-        
+
         Spacer(modifier = Modifier.height(16.dp))
     }
 }

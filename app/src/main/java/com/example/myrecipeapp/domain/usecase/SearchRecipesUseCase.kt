@@ -6,29 +6,36 @@ import com.example.myrecipeapp.domain.repository.RecipeRepository
 
 /**
  * Use case: search recipes by keyword.
- * Handles pagination internally, aggregating up to [maxResults].
+ *
+ * Since [pageSize] == [maxResults] (both 50), this always makes exactly **one** API call
+ * at default config. The loop is preserved for future flexibility (e.g. load-more).
+ *
+ * API cost: 1 point per search call.
  */
 class SearchRecipesUseCase(
     private val repository: RecipeRepository,
     private val pageSize: Int = 50,
-    private val maxResults: Int = 50   // 50 = 1 API call/search; 1000 = 10 calls (quota killer)
+    private val maxResults: Int = 50
 ) {
     suspend operator fun invoke(query: String): Result<SearchResult> = runCatching {
         if (query.isBlank()) return@runCatching SearchResult(emptyList(), 0)
 
         val aggregated = mutableListOf<Recipe>()
         var offset = 0
-        var total = Int.MAX_VALUE
+        var total = Int.MAX_VALUE   // sentinel: updated on first response
 
-        while (aggregated.size < total && aggregated.size < maxResults) {
-            val page = repository.searchRecipes(query, offset, pageSize)
+        while (aggregated.size < maxResults && aggregated.size < total) {
+            val batch = pageSize.coerceAtMost(maxResults - aggregated.size)
+            val page = repository.searchRecipes(query, offset, batch)
             if (total == Int.MAX_VALUE) total = page.totalResults
             if (page.recipes.isEmpty()) break
             aggregated += page.recipes
             offset += page.recipes.size
         }
 
-        val finalResults = aggregated.take(minOf(total, maxResults))
-        SearchResult(finalResults, total)
+        SearchResult(
+            recipes = aggregated.take(minOf(total, maxResults)),
+            totalResults = if (total == Int.MAX_VALUE) 0 else total
+        )
     }
 }

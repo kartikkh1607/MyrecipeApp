@@ -1,9 +1,28 @@
 package com.example.myrecipeapp.ui.screens
 
-import androidx.compose.animation.*
-import androidx.compose.animation.core.*
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.Row
+import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -12,9 +31,29 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.*
-import androidx.compose.material3.*
-import androidx.compose.runtime.*
+import androidx.compose.material.icons.filled.Explore
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
+import androidx.compose.material.icons.filled.GridView
+import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.ViewList
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
+import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
+import androidx.compose.material3.IconButtonDefaults
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
@@ -122,9 +161,12 @@ fun FavoritesScreen(
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            itemsIndexed(favoriteRecipes) { index, recipe ->
+                            itemsIndexed(
+                                    favoriteRecipes,
+                                    key = { _, recipe -> recipe.id }
+                                ) { index, recipe ->
                                 var visible by remember { mutableStateOf(false) }
-                                LaunchedEffect(index) {
+                                LaunchedEffect(recipe.id) {   // stable key — not index
                                     delay(index * 50L)
                                     visible = true
                                 }
@@ -157,9 +199,12 @@ fun FavoritesScreen(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
-                            itemsIndexed(favoriteRecipes) { index, recipe ->
+                            itemsIndexed(
+                                    favoriteRecipes,
+                                    key = { _, recipe -> recipe.id }
+                                ) { index, recipe ->
                                 var visible by remember { mutableStateOf(false) }
-                                LaunchedEffect(index) {
+                                LaunchedEffect(recipe.id) {   // stable key — not index
                                     delay(index * 60L)
                                     visible = true
                                 }
@@ -272,13 +317,22 @@ private fun CompactFavoriteCard(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(4.dp)
                 ) {
-                    Icon(Icons.Default.Star, null, tint = Color(0xFFFFD700), modifier = Modifier.size(12.dp))
+                    Icon(
+                        Icons.Default.Star,
+                        null,
+                        tint = Color(0xFFFFD700),
+                        modifier = Modifier.size(12.dp)
+                    )
                     Text(
                         recipe.rating.toString(),
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.9f)
                     )
-                    Text("·", color = Color.White.copy(alpha = 0.7f), style = MaterialTheme.typography.labelSmall)
+                    Text(
+                        "·",
+                        color = Color.White.copy(alpha = 0.7f),
+                        style = MaterialTheme.typography.labelSmall
+                    )
                     Text(
                         "${recipe.prepTime + recipe.cookTime} min",
                         style = MaterialTheme.typography.labelSmall,
@@ -307,7 +361,10 @@ fun EmptyFavoritesState(onExploreClick: () -> Unit = {}) {
             visible = visible,
             enter = scaleIn(
                 initialScale = 0.6f,
-                animationSpec = spring(dampingRatio = Spring.DampingRatioLowBouncy, stiffness = 260f)
+                animationSpec = spring(
+                    dampingRatio = Spring.DampingRatioLowBouncy,
+                    stiffness = 260f
+                )
             ) + fadeIn()
         ) {
             Surface(
@@ -330,7 +387,10 @@ fun EmptyFavoritesState(onExploreClick: () -> Unit = {}) {
 
         AnimatedVisibility(
             visible = visible,
-            enter = slideInVertically(initialOffsetY = { 30 }, animationSpec = spring(stiffness = 280f)) + fadeIn()
+            enter = slideInVertically(
+                initialOffsetY = { 30 },
+                animationSpec = spring(stiffness = 280f)
+            ) + fadeIn()
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(

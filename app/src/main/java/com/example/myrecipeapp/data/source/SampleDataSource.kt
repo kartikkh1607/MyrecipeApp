@@ -1,6 +1,11 @@
 package com.example.myrecipeapp.data.source
 
-import com.example.myrecipeapp.domain.model.*
+import com.example.myrecipeapp.domain.model.FeaturedRecipe
+import com.example.myrecipeapp.domain.model.FeaturedType
+import com.example.myrecipeapp.domain.model.Ingredient
+import com.example.myrecipeapp.domain.model.Recipe
+import com.example.myrecipeapp.domain.model.RecipeDifficulty
+import com.example.myrecipeapp.domain.model.RecipeStep
 
 /**
  * Provides hard-coded sample recipes used as a fallback when the Spoonacular API
@@ -36,10 +41,22 @@ object SampleDataSource {
                     Ingredient("7", "Sesame oil", "1", "tsp")
                 ),
                 instructions = listOf(
-                    RecipeStep(1, "Boil water in a large pot and cook ramen noodles according to package instructions", 3),
-                    RecipeStep(2, "In a small bowl, mix gochujang, soy sauce, and minced garlic", 2),
+                    RecipeStep(
+                        1,
+                        "Boil water in a large pot and cook ramen noodles according to package instructions",
+                        3
+                    ),
+                    RecipeStep(
+                        2,
+                        "In a small bowl, mix gochujang, soy sauce, and minced garlic",
+                        2
+                    ),
                     RecipeStep(3, "Drain noodles and toss with the sauce mixture", 1),
-                    RecipeStep(4, "Top with sliced green onions, soft-boiled eggs, and drizzle with sesame oil", 2)
+                    RecipeStep(
+                        4,
+                        "Top with sliced green onions, soft-boiled eggs, and drizzle with sesame oil",
+                        2
+                    )
                 ),
                 tags = listOf("Spicy", "Quick", "Asian", "Comfort Food"),
                 isVegetarian = false, isVegan = false
@@ -73,7 +90,11 @@ object SampleDataSource {
                     RecipeStep(1, "Cook quinoa according to package instructions and let cool", 15),
                     RecipeStep(2, "Dice cucumber and halve cherry tomatoes", 5),
                     RecipeStep(3, "Whisk together olive oil, lemon juice, salt and pepper", 2),
-                    RecipeStep(4, "Combine quinoa, vegetables, feta, and dressing. Garnish with herbs", 3)
+                    RecipeStep(
+                        4,
+                        "Combine quinoa, vegetables, feta, and dressing. Garnish with herbs",
+                        3
+                    )
                 ),
                 tags = listOf("Healthy", "Vegetarian", "Mediterranean", "Quick"),
                 isVegetarian = true, isVegan = false, isGlutenFree = true
@@ -107,7 +128,11 @@ object SampleDataSource {
                     RecipeStep(2, "Stretch pizza dough on floured surface", 5),
                     RecipeStep(3, "Spread crushed tomatoes evenly, leaving 1-inch border", 2),
                     RecipeStep(4, "Add torn mozzarella and fresh basil leaves", 2),
-                    RecipeStep(5, "Bake for 10-12 minutes until crust is golden and cheese bubbles", 12)
+                    RecipeStep(
+                        5,
+                        "Bake for 10-12 minutes until crust is golden and cheese bubbles",
+                        12
+                    )
                 ),
                 tags = listOf("Italian", "Classic", "Vegetarian", "Comfort Food"),
                 isVegetarian = true, isVegan = false
@@ -138,9 +163,17 @@ object SampleDataSource {
                     Ingredient("7", "Basmati rice", "1", "cup")
                 ),
                 instructions = listOf(
-                    RecipeStep(1, "Marinate chicken pieces with yogurt, garam masala, and salt for 30 minutes", 30),
+                    RecipeStep(
+                        1,
+                        "Marinate chicken pieces with yogurt, garam masala, and salt for 30 minutes",
+                        30
+                    ),
                     RecipeStep(2, "Cook chicken in a pan until golden brown, then set aside", 8),
-                    RecipeStep(3, "In the same pan, sauté onions and ginger-garlic paste until fragrant", 5),
+                    RecipeStep(
+                        3,
+                        "In the same pan, sauté onions and ginger-garlic paste until fragrant",
+                        5
+                    ),
                     RecipeStep(4, "Add tomato puree, spices, and cook until thick", 10),
                     RecipeStep(5, "Return chicken to pan, add cream, and simmer until tender", 15)
                 ),
@@ -173,8 +206,16 @@ object SampleDataSource {
                     Ingredient("7", "Olive oil", "1/4", "cup")
                 ),
                 instructions = listOf(
-                    RecipeStep(1, "Pound chicken breasts to even thickness and season with salt and pepper", 5),
-                    RecipeStep(2, "Dip chicken in beaten eggs, then coat with breadcrumb-parmesan mixture", 8),
+                    RecipeStep(
+                        1,
+                        "Pound chicken breasts to even thickness and season with salt and pepper",
+                        5
+                    ),
+                    RecipeStep(
+                        2,
+                        "Dip chicken in beaten eggs, then coat with breadcrumb-parmesan mixture",
+                        8
+                    ),
                     RecipeStep(3, "Pan-fry chicken until golden brown and cooked through", 12),
                     RecipeStep(4, "Top with marinara sauce and mozzarella cheese", 2),
                     RecipeStep(5, "Bake in oven until cheese is melted and bubbly", 15)
@@ -317,7 +358,11 @@ object SampleDataSource {
                     RecipeStep(2, "Sauté finely chopped onion in butter until soft", 8),
                     RecipeStep(3, "Add rice, stir for 2 minutes until translucent", 3),
                     RecipeStep(4, "Add wine, stir until absorbed", 5),
-                    RecipeStep(5, "Add warm stock ladle by ladle, stirring constantly for 20 minutes", 20),
+                    RecipeStep(
+                        5,
+                        "Add warm stock ladle by ladle, stirring constantly for 20 minutes",
+                        20
+                    ),
                     RecipeStep(6, "Finish with butter and parmesan, serve immediately", 2)
                 ),
                 tags = listOf("Italian", "Creamy", "Luxurious", "Comfort Food"),
