@@ -1,8 +1,18 @@
+import java.util.Properties
+
 plugins {
     alias(libs.plugins.android.application)
     alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
+    alias(libs.plugins.kotlin.serialization)
     id("kotlin-parcelize")
+}
+
+// Load local.properties
+val localPropertiesFile = rootProject.file("local.properties")
+val localProperties = Properties()
+if (localPropertiesFile.exists()) {
+    localProperties.load(localPropertiesFile.inputStream())
 }
 
 android {
@@ -27,7 +37,8 @@ android {
         multiDexEnabled = true
 
         // This line reads the property from local.properties and creates a field in BuildConfig
-        buildConfigField("String", "SPOONACULAR_API_KEY", "\"${project.findProperty("spoonacular.api.key")}\"")
+        val apiKey = localProperties.getProperty("spoonacular.api.key") ?: "null"
+        buildConfigField("String", "SPOONACULAR_API_KEY", "\"$apiKey\"")
     }
 
     buildTypes {
@@ -66,7 +77,10 @@ android {
 }
 
 dependencies {
-    val nav_version = "2.7.7"
+    val nav_version = "2.8.5"
+
+    // Kotlinx Serialization (required for type-safe Navigation 2.8+)
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
 
     // Material 3 Extended Icons
     implementation("androidx.compose.material:material-icons-extended")
@@ -94,6 +108,9 @@ dependencies {
 
     // json to kotlin object mapping
     implementation("com.squareup.retrofit2:converter-gson:3.0.0")
+    
+    // HTTP logging interceptor for debugging
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
 
     // for image loading
     implementation("io.coil-kt:coil-compose:2.7.0")
