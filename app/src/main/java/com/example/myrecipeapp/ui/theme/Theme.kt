@@ -90,7 +90,7 @@ private val PremiumLightColorScheme = lightColorScheme(
 
 @Composable
 fun MyrecipeAppTheme(
-    darkTheme: Boolean = isSystemInDarkTheme(),
+    darkTheme: Boolean = false,
     // DISABLED dynamic color to ensure consistent theming across all devices
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit

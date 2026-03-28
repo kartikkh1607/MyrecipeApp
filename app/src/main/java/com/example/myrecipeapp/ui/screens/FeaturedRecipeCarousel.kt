@@ -89,13 +89,18 @@ fun FeaturedRecipeCarousel(
             while (true) {
                 delay(4000)
                 val nextPage = (pagerState.currentPage + 1) % featuredRecipes.size
-                pagerState.animateScrollToPage(
-                    page = nextPage,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = 90f
+                if (nextPage == 0) {
+                    // Instantly snap to the first page to avoid backwards rewind animation
+                    pagerState.scrollToPage(0)
+                } else {
+                    pagerState.animateScrollToPage(
+                        page = nextPage,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioNoBouncy,
+                            stiffness = 90f
+                        )
                     )
-                )
+                }
             }
         }
     }

@@ -21,7 +21,6 @@ class MainActivity : ComponentActivity() {
         setContent {
             val recipeViewModel: MainViewModel = viewModel(factory = MainViewModel.Factory())
             MyrecipeAppTheme(
-                darkTheme = isSystemInDarkTheme(),
                 dynamicColor = false
             ) {
                 Surface(
