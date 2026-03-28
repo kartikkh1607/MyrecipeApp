@@ -79,6 +79,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import com.example.myrecipeapp.domain.model.ShoppingListItem
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 
@@ -420,7 +421,7 @@ fun ShoppingListScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SwipeableShoppingItem(
-    item: MainViewModel.ShoppingListItem,
+    item: ShoppingListItem,
     onToggle: () -> Unit,
     onDelete: () -> Unit
 ) {
@@ -461,7 +462,7 @@ private fun SwipeableShoppingItem(
 
 @Composable
 private fun ShoppingItemRow(
-    item: MainViewModel.ShoppingListItem,
+    item: ShoppingListItem,
     onToggle: () -> Unit
 ) {
     val checkScale by animateFloatAsState(

@@ -78,7 +78,6 @@ android {
 }
 
 dependencies {
-    implementation(libs.androidx.room3.common.jvm)
     val nav_version = "2.8.5"
 
     // Kotlinx Serialization (required for type-safe Navigation 2.8+)
@@ -152,4 +151,3 @@ dependencies {
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
 }
-

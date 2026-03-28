@@ -16,6 +16,7 @@ import com.example.myrecipeapp.di.AppContainer
 import com.example.myrecipeapp.domain.model.FeaturedRecipe
 import com.example.myrecipeapp.domain.model.Recipe
 import com.example.myrecipeapp.domain.model.RecipeCategory
+import com.example.myrecipeapp.domain.model.ShoppingListItem
 import com.example.myrecipeapp.domain.usecase.GetCategoriesUseCase
 import com.example.myrecipeapp.domain.usecase.GetFeaturedRecipesUseCase
 import com.example.myrecipeapp.domain.usecase.GetRecipeDetailsUseCase
@@ -108,16 +109,6 @@ class MainViewModel(
         }
     }
 
-    // ── Shopping List State (Room-backed) ─────────────────────────────────────
-    data class ShoppingListItem(
-        val key: String,
-        val ingredientName: String,
-        val amount: String,
-        val unit: String,
-        val recipeName: String,
-        val isChecked: Boolean = false
-    )
-
     private val _shoppingList = mutableStateOf<List<ShoppingListItem>>(emptyList())
     val shoppingList: State<List<ShoppingListItem>> = _shoppingList
 
@@ -133,6 +124,7 @@ class MainViewModel(
                         amount         = ing.amount,
                         unit           = ing.unit,
                         recipeName     = recipe.name
+                        // checked defaults to false
                     )
                 )
             }
@@ -168,15 +160,11 @@ class MainViewModel(
 
     // ─────────────────────────────────────────────────────────────────────────
     init {
-        // Collect Room Flows → update mutableStateOf so all existing UI code works unchanged
+        // Single Room query feeds both favorites state objects — no duplicate DB round-trip
         viewModelScope.launch {
             favoriteDao.getAllFlow().collect { entities ->
                 _favoriteRecipes.value = entities.map { it.toRecipe() }
-            }
-        }
-        viewModelScope.launch {
-            favoriteDao.getIdsFlow().collect { ids ->
-                _favoriteIds.value = ids.toSet()
+                _favoriteIds.value = entities.map { it.id }.toSet()
             }
         }
         viewModelScope.launch {
