@@ -1,0 +1,25 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Network Security Configuration
+    ================================
+    - Blocks ALL cleartext (plain HTTP) traffic app-wide.
+    - The app only communicates with api.spoonacular.com over HTTPS,
+      so this has zero functional impact and prevents accidental HTTP leaks.
+    - Android 7+ honours this config; lower API levels rely on OS defaults.
+-->
+<network-security-config>
+    <base-config cleartextTrafficPermitted="false">
+        <trust-anchors>
+            <!-- Trust the standard CA store only — no user-added CAs in release -->
+            <certificates src="system" />
+        </trust-anchors>
+    </base-config>
+
+    <!-- In debug builds also trust user-installed certificates (e.g. Charles Proxy) -->
+    <debug-overrides>
+        <trust-anchors>
+            <certificates src="system" />
+            <certificates src="user" />
+        </trust-anchors>
+    </debug-overrides>
+</network-security-config>
