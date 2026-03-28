@@ -188,6 +188,18 @@ fun FeaturedRecipeCard(
     modifier: Modifier = Modifier
 ) {
     var isPressed by remember { mutableStateOf(false) }
+    // Cache parsed color — parseColor() does string parsing and should not run every frame
+    val badgeColor = remember(featuredRecipe.gradientColors) {
+        parseColor(featuredRecipe.gradientColors.firstOrNull() ?: "#FF6B6B").copy(alpha = 0.9f)
+    }
+    // Cache static gradient brush — avoids allocating a new Brush + List on every recompose
+    val overlayGradient = remember {
+        Brush.verticalGradient(
+            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.3f), Color.Black.copy(alpha = 0.8f)),
+            startY = 0f,
+            endY = 1000f
+        )
+    }
     val pressScale by animateFloatAsState(
         targetValue = if (isPressed) 0.97f else 1f,
         animationSpec = spring(
@@ -220,31 +232,17 @@ fun FeaturedRecipeCard(
                 contentScale = ContentScale.Crop
             )
 
-            // Gradient Overlay
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.3f),
-                                Color.Black.copy(alpha = 0.8f)
-                            ),
-                            startY = 0f,
-                            endY = 1000f
-                        )
-                    )
+                    .background(overlayGradient)
             )
 
-            // Featured Badge
             Surface(
                 modifier = Modifier
                     .align(Alignment.TopStart)
                     .padding(16.dp),
-                color = parseColor(featuredRecipe.gradientColors.firstOrNull() ?: "#FF6B6B").copy(
-                    alpha = 0.9f
-                ),
+                color = badgeColor,
                 shape = RoundedCornerShape(20.dp)
             ) {
                 Text(
@@ -340,6 +338,34 @@ fun FeaturedRecipeCard(
     }
 }
 
+// ── Indicator dot — own composable so only the selected/deselected dot recomposes ──
+@Composable
+private fun IndicatorDot(isSelected: Boolean, onClick: () -> Unit) {
+    val animatedSize by animateDpAsState(
+        targetValue = if (isSelected) 24.dp else 8.dp,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioMediumBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "indicator_size"
+    )
+    val animatedAlpha by animateFloatAsState(
+        targetValue = if (isSelected) 1f else 0.35f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioNoBouncy,
+            stiffness = Spring.StiffnessMedium
+        ),
+        label = "indicator_alpha"
+    )
+    Box(
+        modifier = Modifier
+            .size(width = animatedSize, height = 8.dp)
+            .clip(CircleShape)
+            .background(MaterialTheme.colorScheme.primary.copy(alpha = animatedAlpha))
+            .clickable(onClick = onClick)
+    )
+}
+
 @OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun CarouselIndicators(
@@ -354,43 +380,20 @@ fun CarouselIndicators(
         verticalAlignment = Alignment.CenterVertically
     ) {
         repeat(pageCount) { index ->
-            val isSelected = pagerState.currentPage == index
-            val animatedSize by animateDpAsState(
-                targetValue = if (isSelected) 24.dp else 8.dp,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
-                ),
-                label = "indicator_size"
-            )
-
-            val animatedAlpha by animateFloatAsState(
-                targetValue = if (isSelected) 1f else 0.35f,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMedium
-                ),
-                label = "indicator_alpha"
-            )
-
-            Box(
-                modifier = Modifier
-                    .size(width = animatedSize, height = 8.dp)
-                    .clip(CircleShape)
-                    .background(
-                        MaterialTheme.colorScheme.primary.copy(alpha = animatedAlpha)
-                    )
-                    .clickable {
-                        scope.launch {
-                            pagerState.animateScrollToPage(
-                                page = index,
-                                animationSpec = spring(
-                                    dampingRatio = Spring.DampingRatioNoBouncy,
-                                    stiffness = 280f
-                                )
+            // Each IndicatorDot is its own composable scope — Compose skips dots that didn’t change
+            IndicatorDot(
+                isSelected = pagerState.currentPage == index,
+                onClick = {
+                    scope.launch {
+                        pagerState.animateScrollToPage(
+                            page = index,
+                            animationSpec = spring(
+                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                stiffness = 280f
                             )
-                        }
+                        )
                     }
+                }
             )
         }
     }

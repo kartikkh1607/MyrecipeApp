@@ -31,6 +31,7 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Explore
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -47,7 +48,10 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.material3.SwipeToDismissBox
+import androidx.compose.material3.SwipeToDismissBoxValue
 import androidx.compose.material3.Text
+import androidx.compose.material3.rememberSwipeToDismissBoxState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -56,6 +60,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
@@ -66,11 +71,14 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import coil.compose.AsyncImage
+import com.example.myrecipeapp.domain.model.Recipe
 import com.example.myrecipeapp.ui.navigation.RecipeDetail
 import com.example.myrecipeapp.ui.navigation.Search
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FavoritesScreen(
     navController: NavHostController,
@@ -78,8 +86,8 @@ fun FavoritesScreen(
 ) {
     val favoriteRecipes by viewModel.favoriteRecipes
     val favoriteIds by viewModel.favoriteIds
+    val isGridMode by viewModel.favoritesGridMode          // ← hoisted to ViewModel — persists navigation
     val hapticFeedback = LocalHapticFeedback.current
-    var isGridMode by remember { mutableStateOf(false) }
 
     Column(
         modifier = Modifier
@@ -87,7 +95,7 @@ fun FavoritesScreen(
             .background(MaterialTheme.colorScheme.background)
             .padding(16.dp)
     ) {
-        // ── Standard header matching Search/Home ──────────────────────────────
+        // ── Header ────────────────────────────────────────────────────────────
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -111,11 +119,11 @@ fun FavoritesScreen(
                 }
             }
 
-            // Grid/List toggle
+            // Grid/List toggle — only shown when list is non-empty
             if (favoriteRecipes.isNotEmpty()) {
                 IconButton(
                     onClick = {
-                        isGridMode = !isGridMode
+                        viewModel.toggleFavoritesGridMode()
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                     },
                     colors = IconButtonDefaults.iconButtonColors(
@@ -131,12 +139,10 @@ fun FavoritesScreen(
             }
         }
 
-        // ── Content ────────────────────────────────────────────────────────────
+        // ── Content ──────────────────────────────────────────────────────────
         AnimatedContent(
             targetState = favoriteRecipes.isEmpty(),
-            transitionSpec = {
-                fadeIn(tween(300)) togetherWith fadeOut(tween(200))
-            },
+            transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
             label = "favorites_content"
         ) { isEmpty ->
             if (isEmpty) {
@@ -148,13 +154,11 @@ fun FavoritesScreen(
             } else {
                 AnimatedContent(
                     targetState = isGridMode,
-                    transitionSpec = {
-                        fadeIn(tween(250)) togetherWith fadeOut(tween(200))
-                    },
+                    transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(200)) },
                     label = "grid_list_toggle"
                 ) { grid ->
                     if (grid) {
-                        // Grid mode: 2-col
+                        // ── Grid mode: 2-col + long-press to delete ──────────
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(2),
                             modifier = Modifier.fillMaxSize(),
@@ -162,12 +166,12 @@ fun FavoritesScreen(
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             itemsIndexed(
-                                    favoriteRecipes,
-                                    key = { _, recipe -> recipe.id }
-                                ) { index, recipe ->
+                                favoriteRecipes,
+                                key = { _, recipe -> recipe.id }
+                            ) { index, recipe ->
                                 var visible by remember { mutableStateOf(false) }
-                                LaunchedEffect(recipe.id) {   // stable key — not index
-                                    delay(index * 50L)
+                                LaunchedEffect(recipe.id) {
+                                    delay(minOf(index, 5) * 50L)  // cap stagger — beyond 5 items, animate instantly
                                     visible = true
                                 }
                                 AnimatedVisibility(
@@ -184,7 +188,7 @@ fun FavoritesScreen(
                                         recipe = recipe,
                                         onFavoriteToggle = {
                                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            viewModel.toggleFavorite(recipe)
+                                            viewModel.removeFavorite(recipe.id)
                                         },
                                         onClick = {
                                             navController.navigate(RecipeDetail(recipeId = recipe.id))
@@ -194,18 +198,18 @@ fun FavoritesScreen(
                             }
                         }
                     } else {
-                        // List mode
+                        // ── List mode: swipe-to-delete ───────────────────────
                         LazyColumn(
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
                             itemsIndexed(
-                                    favoriteRecipes,
-                                    key = { _, recipe -> recipe.id }
-                                ) { index, recipe ->
+                                favoriteRecipes,
+                                key = { _, recipe -> recipe.id }
+                            ) { index, recipe ->
                                 var visible by remember { mutableStateOf(false) }
-                                LaunchedEffect(recipe.id) {   // stable key — not index
-                                    delay(index * 60L)
+                                LaunchedEffect(recipe.id) {
+                                    delay(minOf(index, 5) * 60L)  // cap stagger — beyond 5 items, animate instantly
                                     visible = true
                                 }
                                 AnimatedVisibility(
@@ -218,12 +222,16 @@ fun FavoritesScreen(
                                         )
                                     ) + fadeIn(tween(200))
                                 ) {
-                                    EnhancedRecipeCard(
+                                    SwipeToDeleteFavoriteCard(
                                         recipe = recipe,
                                         isFavorite = favoriteIds.contains(recipe.id),
+                                        onDelete = {
+                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.removeFavorite(recipe.id)
+                                        },
                                         onFavoriteToggle = {
                                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            viewModel.toggleFavorite(it)
+                                            viewModel.toggleFavorite(recipe)
                                         },
                                         onClick = {
                                             navController.navigate(RecipeDetail(recipeId = recipe.id)) {
@@ -241,20 +249,102 @@ fun FavoritesScreen(
     }
 }
 
+// ── Swipe-to-delete wrapper for list mode ─────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun SwipeToDeleteFavoriteCard(
+    recipe: Recipe,
+    isFavorite: Boolean,
+    onDelete: () -> Unit,
+    onFavoriteToggle: (Recipe) -> Unit,
+    onClick: () -> Unit
+) {
+    val dismissState = rememberSwipeToDismissBoxState(
+        confirmValueChange = { value ->
+            if (value == SwipeToDismissBoxValue.EndToStart ||
+                value == SwipeToDismissBoxValue.StartToEnd) {
+                onDelete()
+                true
+            } else false
+        },
+        positionalThreshold = { totalDistance -> totalDistance * 0.35f }  // 35% drag to confirm
+    )
+
+    SwipeToDismissBox(
+        state = dismissState,
+        backgroundContent = {
+            // Red delete background revealed on swipe
+            val isActive = dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart ||
+                    dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd
+            val bgColor = if (isActive)
+                MaterialTheme.colorScheme.errorContainer
+            else
+                MaterialTheme.colorScheme.surfaceVariant
+
+            val iconScale by animateFloatAsState(
+                targetValue = if (isActive) 1.2f else 0.85f,
+                animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium),
+                label = "delete_icon_scale"
+            )
+
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(16.dp))
+                    .background(bgColor),
+                contentAlignment = Alignment.CenterEnd
+            ) {
+                Column(
+                    modifier = Modifier.padding(end = 24.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier
+                            .size(28.dp)
+                            .scale(iconScale)
+                    )
+                    Spacer(modifier = Modifier.height(4.dp))
+                    Text(
+                        "Remove",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.error,
+                        fontWeight = FontWeight.Bold
+                    )
+                }
+            }
+        },
+        enableDismissFromStartToEnd = false,   // only swipe left-to-right is disabled
+        enableDismissFromEndToStart = true      // swipe right-to-left = delete
+    ) {
+        EnhancedRecipeCard(
+            recipe = recipe,
+            isFavorite = isFavorite,
+            onFavoriteToggle = onFavoriteToggle,
+            onClick = onClick
+        )
+    }
+}
+
 // ── Compact grid card ─────────────────────────────────────────────────────────
+// Tap the card → open recipe.  Tap the ❤ button → remove immediately (same as swipe-delete).
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CompactFavoriteCard(
-    recipe: com.example.myrecipeapp.domain.model.Recipe,
+    recipe: Recipe,
     onFavoriteToggle: () -> Unit,
     onClick: () -> Unit
 ) {
     var isPressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
+        targetValue = if (isPressed) 0.95f else 1f,
         animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 400f),
-        label = "card_scale"
+        label = "card_scale",
+        finishedListener = { isPressed = false }
     )
+
     Card(
         onClick = {
             isPressed = true
@@ -268,7 +358,7 @@ private fun CompactFavoriteCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            coil.compose.AsyncImage(
+            AsyncImage(
                 model = recipe.imageUrl,
                 contentDescription = recipe.name,
                 modifier = Modifier.fillMaxSize(),
@@ -284,7 +374,7 @@ private fun CompactFavoriteCard(
                         )
                     )
             )
-            // Fav button top-right
+            // ❤ button — tap to remove from favorites immediately (no dialog)
             IconButton(
                 onClick = onFavoriteToggle,
                 modifier = Modifier
@@ -300,7 +390,7 @@ private fun CompactFavoriteCard(
                     modifier = Modifier.size(16.dp)
                 )
             }
-            // Title bottom
+            // Title + meta at bottom
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)

@@ -99,6 +99,16 @@ class MainViewModel(
     private val _favoriteRecipes = mutableStateOf<List<Recipe>>(emptyList())
     val favoriteRecipes: State<List<Recipe>> = _favoriteRecipes
 
+    /** Persisted grid/list toggle — survives navigation (lives in ViewModel, not screen). */
+    private val _favoritesGridMode = mutableStateOf(false)
+    val favoritesGridMode: State<Boolean> = _favoritesGridMode
+
+    fun toggleFavoritesGridMode() { _favoritesGridMode.value = !_favoritesGridMode.value }
+
+    fun removeFavorite(recipeId: String) {
+        viewModelScope.launch { favoriteDao.delete(recipeId) }
+    }
+
     fun toggleFavorite(recipe: Recipe) {
         viewModelScope.launch {
             if (recipe.id in _favoriteIds.value) {

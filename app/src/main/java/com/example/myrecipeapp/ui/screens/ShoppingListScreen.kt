@@ -90,10 +90,22 @@ fun ShoppingListScreen(
     viewModel: MainViewModel
 ) {
     val allItems by viewModel.shoppingList
-    val checkedCount = allItems.count { it.isChecked }
-    val totalCount = allItems.size
-    val progressFraction = if (totalCount > 0) checkedCount.toFloat() / totalCount else 0f
-    val isAllDone = totalCount > 0 && checkedCount == totalCount
+    // derivedStateOf: each value only recomputes when shoppingList content actually changes,
+    // not on every parent recomposition (e.g., ripple animations, focus events)
+    val checkedCount by remember { derivedStateOf { viewModel.shoppingList.value.count { it.isChecked } } }
+    val totalCount   by remember { derivedStateOf { viewModel.shoppingList.value.size } }
+    val progressFraction by remember {
+        derivedStateOf {
+            val list = viewModel.shoppingList.value
+            if (list.isNotEmpty()) list.count { it.isChecked }.toFloat() / list.size else 0f
+        }
+    }
+    val isAllDone by remember {
+        derivedStateOf {
+            val list = viewModel.shoppingList.value
+            list.isNotEmpty() && list.all { it.isChecked }
+        }
+    }
     val clipboardManager = LocalClipboardManager.current
     val hapticFeedback = LocalHapticFeedback.current
 

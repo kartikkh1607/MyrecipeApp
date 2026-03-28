@@ -48,6 +48,7 @@ import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -320,6 +321,10 @@ fun SearchResults(
 
     val searchState by viewModel.searchState
 
+    // Hoisted above the list — same lambda instance across ALL recompositions,
+    // so no card recomposes just because the parent SearchResults recomposed.
+    val onFavToggle = remember { viewModel::toggleFavorite }
+
     Column {
         // Results header row
         Row(
@@ -433,9 +438,16 @@ fun SearchResults(
                         items = searchState.recipes,
                         key = { _, recipe -> recipe.id }
                     ) { index, recipe ->
+                        // derivedStateOf: only THIS card recomposes when its own favorite status changes
+                        val isFavorite by remember(recipe.id) {
+                            derivedStateOf { viewModel.favoriteIds.value.contains(recipe.id) }
+                        }
+                        // Stable per-recipe click — only recreated if recipe.id changes
+                        val onCardClick = remember(recipe.id) { { onRecipeClick(recipe.id) } }
+
                         var visible by remember { mutableStateOf(false) }
                         LaunchedEffect(recipe.id) {
-                            delay(index * 50L)
+                            delay(minOf(index, 5) * 50L)  // cap: max 250ms stagger, not 50*50ms
                             visible = true
                         }
                         AnimatedVisibility(
@@ -450,9 +462,9 @@ fun SearchResults(
                         ) {
                             EnhancedRecipeCard(
                                 recipe = recipe,
-                                isFavorite = favoriteIds.contains(recipe.id),
-                                onFavoriteToggle = { viewModel.toggleFavorite(it) },
-                                onClick = { onRecipeClick(recipe.id) }
+                                isFavorite = isFavorite,
+                                onFavoriteToggle = onFavToggle,
+                                onClick = onCardClick
                             )
                         }
                     }

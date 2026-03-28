@@ -26,6 +26,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -120,8 +121,11 @@ fun RecipeDetailScreen(
 
     var isCookingMode by remember { mutableStateOf(false) }
     val hapticFeedback = LocalHapticFeedback.current
-    val favoriteIds by viewModel.favoriteIds
-    val isFavorite = favoriteIds.contains(recipe.id)
+    // derivedStateOf: only THIS composable recomposes when isFavorite changes,
+    // not the whole RecipeDetailScreen — avoids re-rendering the hero + full scroll position reset
+    val isFavorite by remember(recipe.id) {
+        derivedStateOf { viewModel.favoriteIds.value.contains(recipe.id) }
+    }
 
     AnimatedContent(
         targetState = isCookingMode,
@@ -228,9 +232,32 @@ fun RecipeDetailScreen(
                     Spacer(modifier = Modifier.height(24.dp))
                 }
 
-                item {
-                    // Instructions Section
-                    InstructionsSection(instructions = recipe.instructions)
+                // Instructions header — its own lazy item
+                item(key = "instructions_header") {
+                    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp)) {
+                        Text(
+                            text = "Instructions",
+                            style = MaterialTheme.typography.headlineSmall,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.onBackground
+                        )
+                        Spacer(modifier = Modifier.height(16.dp))
+                    }
+                }
+                // Each step card is its own lazy item — only visible steps are composed
+                itemsIndexed(
+                    items = recipe.instructions,
+                    key = { _, step -> "step_${step.stepNumber}" }
+                ) { stepIndex, step ->
+                    InstructionStepCard(
+                        step = step,
+                        modifier = Modifier.padding(horizontal = 16.dp)
+                    )
+                    if (stepIndex < recipe.instructions.lastIndex) {
+                        Spacer(modifier = Modifier.height(12.dp))
+                    }
+                }
+                item(key = "instructions_end") {
                     Spacer(modifier = Modifier.height(24.dp))
                 }
 
@@ -612,9 +639,9 @@ fun InstructionsSection(instructions: List<RecipeStep>) {
 }
 
 @Composable
-fun InstructionStepCard(step: RecipeStep) {
+fun InstructionStepCard(step: RecipeStep, modifier: Modifier = Modifier) {
     Card(
-        modifier = Modifier.fillMaxWidth(),
+        modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
             containerColor = MaterialTheme.colorScheme.surface
         ),
