@@ -117,7 +117,7 @@ class RecipeRepositoryImpl(
         }
 
         return try {
-            val dto = apiService.getRecipeDetails(recipeId = numericId)
+            val dto = apiService.getRecipeDetails(recipeId = numericId, includeNutrition = true)
             val recipe = dto.toDomain()
             cachedRecipeDao.upsert(recipe.toCachedEntity())
             Log.d(TAG, "Cached recipe detail for id=$recipeId")
