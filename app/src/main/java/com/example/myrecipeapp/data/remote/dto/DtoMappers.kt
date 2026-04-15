@@ -18,7 +18,7 @@ fun SpoonacularRecipeDto.toDomain(): Recipe {
     val cookTime = (this.readyInMinutes * 0.6).toInt()
 
     // Strip HTML tags with regex — avoids android.text.Html allocation overhead
-    val cleanSummary = this.summary.take(500).replace(HTML_TAG_REGEX, "").trim()
+    val cleanSummary = this.summary.orEmpty().take(500).replace(HTML_TAG_REGEX, "").trim()
 
     val difficulty = when {
         this.readyInMinutes < 20 -> RecipeDifficulty.EASY
@@ -28,6 +28,9 @@ fun SpoonacularRecipeDto.toDomain(): Recipe {
 
     // Cache dishTypes once — used for both category and tags below
     val dishTypes = this.dishTypes.orEmpty()
+
+    // Map nutrition once — reused for both nutritionInfo and calories fields below
+    val nutrition = this.nutrition?.toDomain()
 
     return Recipe(
         id = this.id.toString(),
@@ -50,7 +53,9 @@ fun SpoonacularRecipeDto.toDomain(): Recipe {
         isVegetarian = this.isVegetarian,
         isVegan = this.isVegan,
         isGlutenFree = this.isGlutenFree,
-        isDairyFree = this.isDairyFree
+        isDairyFree = this.isDairyFree,
+        nutritionInfo = nutrition,
+        calories = nutrition?.calories
     )
 }
 
@@ -66,3 +71,28 @@ fun SpoonacularStepDto.toDomain(): RecipeStep = RecipeStep(
     stepNumber = this.number,
     instruction = this.step
 )
+
+// ── Nutrition mapping ─────────────────────────────────────────────────────────
+
+/**
+ * Maps the Spoonacular flat nutrient list → [NutritionInfo].
+ *
+ * The API returns a list like:
+ *   [{ name: "Calories", amount: 320, unit: "kcal" }, { name: "Protein", ... }, ...]
+ * We look up each nutrient by name (case-insensitive) and default to 0 if absent.
+ */
+fun SpoonacularNutritionDto.toDomain(): NutritionInfo {
+    val map = this.nutrients
+        ?.associate { it.name.lowercase() to it.amount }
+        ?: emptyMap()
+
+    return NutritionInfo(
+        calories = map["calories"]?.toInt() ?: 0,
+        protein  = map["protein"] ?: 0f,
+        carbs    = map["carbohydrates"] ?: 0f,
+        fat      = map["fat"] ?: 0f,
+        fiber    = map["fiber"] ?: 0f,
+        sugar    = map["sugar"] ?: 0f,
+        sodium   = map["sodium"] ?: 0f
+    )
+}

@@ -53,6 +53,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.painterResource
 import coil.compose.AsyncImage
 import com.example.myrecipeapp.domain.model.RecipeCategory
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
@@ -223,13 +224,20 @@ fun CategoryGridItem(
         shape = RoundedCornerShape(20.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            AsyncImage(
-                model = category.imageUrl, contentDescription = category.name,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(20.dp)),
-                contentScale = ContentScale.Crop
-            )
+            if (category.imageResId != 0) {
+                androidx.compose.foundation.Image(
+                    painter = painterResource(category.imageResId),
+                    contentDescription = category.name,
+                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                AsyncImage(
+                    model = category.imageUrl, contentDescription = category.name,
+                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)),
+                    contentScale = ContentScale.Crop
+                )
+            }
             Box(
                 modifier = Modifier
                     .fillMaxSize()

@@ -1,16 +1,11 @@
 package com.example.myrecipeapp.ui.screens
 
-import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -31,25 +26,17 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
-import androidx.compose.material.icons.filled.DeleteSweep
-import androidx.compose.material.icons.filled.Fastfood
-import androidx.compose.material.icons.filled.RemoveDone
-import androidx.compose.material.icons.filled.Share
-import androidx.compose.material3.Button
-import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.Checkbox
-import androidx.compose.material3.CheckboxDefaults
+import androidx.compose.material.icons.filled.ExpandLess
+import androidx.compose.material.icons.filled.ExpandMore
+import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.ShoppingBasket
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
@@ -60,19 +47,16 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
-import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
-import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.text.AnnotatedString
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextDecoration
@@ -84,6 +68,39 @@ import com.example.myrecipeapp.domain.model.ShoppingListItem
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 
+// ── Design tokens ─────────────────────────────────────────────────────────────
+private val SlBg = Color(0xFFF5F6F3)
+private val SlSurface = Color(0xFFFFFFFF)
+private val SlGreen = Color(0xFF006B1B)
+private val SlOrange = Color(0xFFB02E00)
+private val SlAmber = Color(0xFF7B5500)
+private val SlText = Color(0xFF1A1C1C)
+private val SlSubtext = Color(0xFF5A6358)
+private val SlOutline = Color(0xFFCDD5C9)
+private val SlCheckedBg = Color(0xFFEEF5EE)
+private val SlRed = Color(0xFFBA1A1A)
+
+private val sectionAccents = listOf(SlGreen, SlOrange, SlAmber)
+
+// ── Sealed list entries — flat structure for LazyColumn ───────────────────────
+private sealed class SlEntry {
+    data class SectionGap(val id: String) : SlEntry()
+    data class Header(
+        val recipeName: String,
+        val accent: Color,
+        val itemCount: Int,
+        val isCollapsed: Boolean
+    ) : SlEntry()
+
+    data class ItemRow(
+        val shopItem: ShoppingListItem,
+        val recipeName: String,
+        val isLast: Boolean,
+        val showDivider: Boolean
+    ) : SlEntry()
+}
+
+// ── Screen ────────────────────────────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ShoppingListScreen(
@@ -91,341 +108,262 @@ fun ShoppingListScreen(
     viewModel: MainViewModel
 ) {
     val allItems by viewModel.shoppingList
-    // derivedStateOf: each value only recomputes when shoppingList content actually changes,
-    // not on every parent recomposition (e.g., ripple animations, focus events)
     val checkedCount by remember { derivedStateOf { viewModel.shoppingList.value.count { it.isChecked } } }
-    val totalCount   by remember { derivedStateOf { viewModel.shoppingList.value.size } }
-    val progressFraction by remember {
-        derivedStateOf {
-            val list = viewModel.shoppingList.value
-            if (list.isNotEmpty()) list.count { it.isChecked }.toFloat() / list.size else 0f
-        }
-    }
-    val isAllDone by remember {
-        derivedStateOf {
-            val list = viewModel.shoppingList.value
-            list.isNotEmpty() && list.all { it.isChecked }
-        }
-    }
-    val clipboardManager = LocalClipboardManager.current
+    val totalCount by remember { derivedStateOf { viewModel.shoppingList.value.size } }
+    val remainingCount by remember { derivedStateOf { totalCount - checkedCount } }
     val hapticFeedback = LocalHapticFeedback.current
 
-    // Group once — key = recipeName, value = sorted (unchecked first)
+    // Read focus from ViewModel — set by addToShoppingList before navigation
+    val focusRecipeName by viewModel.lastAddedRecipeName
+
+    // false (absent) = expanded; true = collapsed
+    val collapsedSections = remember { mutableStateMapOf<String, Boolean>() }
+
+    // Group by recipe
     val grouped = remember(allItems) {
         allItems.groupBy { it.recipeName }
-            .mapValues { (_, items) ->
-                items.sortedWith(compareBy { it.isChecked })
-            }
+            .mapValues { (_, v) -> v.sortedWith(compareBy { it.isChecked }) }
     }
 
-    Scaffold(
-        containerColor = MaterialTheme.colorScheme.background,
-        topBar = {
-            Box(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .background(
-                        Brush.linearGradient(
-                            listOf(
-                                MaterialTheme.colorScheme.primary,
-                                MaterialTheme.colorScheme.primary.copy(alpha = 0.82f)
-                            )
-                        )
-                    )
-                    .statusBarsPadding()
-            ) {
-                Column(
-                    modifier = Modifier.padding(
-                        start = 4.dp,
-                        end = 16.dp,
-                        top = 8.dp,
-                        bottom = 20.dp
-                    )
-                ) {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.SpaceBetween
-                    ) {
-                        Row(
-                            verticalAlignment = Alignment.CenterVertically,
-                            modifier = Modifier.weight(1f)
-                        ) {
-                            IconButton(onClick = { navController.popBackStack() }) {
-                                Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
-                            }
-                            Column {
-                                Text(
-                                    "Shopping List",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White
-                                )
-                                AnimatedContent(
-                                    targetState = when {
-                                        totalCount == 0 -> "Add ingredients from a recipe"
-                                        isAllDone -> "🎉 All done! Great job!"
-                                        else -> "$checkedCount of $totalCount items"
-                                    },
-                                    transitionSpec = {
-                                        fadeIn(tween(300)) togetherWith fadeOut(
-                                            tween(
-                                                200
-                                            )
-                                        )
-                                    },
-                                    label = "subtitle"
-                                ) { subtitle ->
-                                    Text(
-                                        subtitle,
-                                        style = MaterialTheme.typography.bodySmall,
-                                        color = Color.White.copy(alpha = 0.85f)
-                                    )
-                                }
-                            }
-                        }
-                        Row {
-                            if (checkedCount > 0) {
-                                IconButton(onClick = {
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    viewModel.removeCheckedItems()
-                                }) {
-                                    Icon(
-                                        Icons.Default.RemoveDone,
-                                        "Remove checked",
-                                        tint = Color.White
-                                    )
-                                }
-                            }
-                            if (totalCount > 0) {
-                                IconButton(onClick = {
-                                    val text =
-                                        grouped.entries.joinToString("\n\n") { (recipe, ings) ->
-                                            "🍽 $recipe\n" + ings.joinToString("\n") { ing ->
-                                                val qty =
-                                                    ing.amount + if (ing.unit.isNotBlank()) " ${ing.unit}" else ""
-                                                "  ☐ $qty ${ing.ingredientName}"
-                                            }
-                                        }
-                                    clipboardManager.setText(
-                                        AnnotatedString(
-                                            "🛒 My Shopping List\n${
-                                                "─".repeat(
-                                                    30
-                                                )
-                                            }\n\n$text"
-                                        )
-                                    )
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                }) {
-                                    Icon(Icons.Default.Share, "Share", tint = Color.White)
-                                }
-                            }
-                        }
-                    }
+    // When a focusRecipeName is provided (came from a recipe), collapse all other sections
+    LaunchedEffect(focusRecipeName) {
+        val focus = focusRecipeName
+        if (focus != null && grouped.isNotEmpty()) {
+            grouped.keys.forEach { name ->
+                collapsedSections[name] = (name != focus)
+            }
+        }
+    }
 
-                    if (totalCount > 0) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(horizontal = 16.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            LinearProgressIndicator(
-                                progress = { progressFraction },
-                                modifier = Modifier
-                                    .weight(1f)
-                                    .height(8.dp)
-                                    .clip(CircleShape),
-                                color = Color.White,
-                                trackColor = Color.White.copy(alpha = 0.25f)
-                            )
-                            Surface(
-                                shape = RoundedCornerShape(20.dp),
-                                color = Color.White.copy(alpha = 0.2f)
-                            ) {
-                                Text(
-                                    "$checkedCount/$totalCount",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = Color.White,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+    // ── Flatten into a list of sealed entries ─────────────────────────────────
+    // Re-computed any time grouped changes OR collapsedSections changes.
+    val entries: List<SlEntry> by remember(grouped, collapsedSections.toMap()) {
+        derivedStateOf {
+            buildList {
+                grouped.entries.forEachIndexed { sectionIdx, (recipeName, recipeItems) ->
+                    val accent = sectionAccents[sectionIdx % sectionAccents.size]
+                    val isCollapsed = collapsedSections[recipeName] == true
+
+                    // Gap between sections
+                    if (sectionIdx > 0) add(SlEntry.SectionGap("gap_$sectionIdx"))
+
+                    // Section header
+                    add(SlEntry.Header(recipeName, accent, recipeItems.size, isCollapsed))
+
+                    // Item rows — only when expanded
+                    if (!isCollapsed) {
+                        recipeItems.forEachIndexed { itemIdx, item ->
+                            add(
+                                SlEntry.ItemRow(
+                                    shopItem = item,
+                                    recipeName = recipeName,
+                                    isLast = itemIdx == recipeItems.lastIndex,
+                                    showDivider = itemIdx < recipeItems.lastIndex
                                 )
-                            }
+                            )
                         }
                     }
                 }
             }
         }
-    ) { padding ->
-        if (allItems.isEmpty()) {
-            EmptyShoppingListState(
-                modifier = Modifier.padding(padding),
-                onGoToHome = { navController.popBackStack() }
-            )
-        } else {
-            // ── Lazy column: each row is a genuine item{} — no eager forEachIndexed ──
-            LazyColumn(
-                modifier = Modifier
-                    .padding(padding)
-                    .fillMaxSize(),
-                contentPadding = PaddingValues(
-                    top = 16.dp, bottom = 120.dp, start = 16.dp, end = 16.dp
-                )
-            ) {
-                // All-done celebration
-                if (isAllDone) {
-                    item(key = "celebration") {
-                        Card(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(bottom = 16.dp),
-                            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.primaryContainer),
-                            shape = RoundedCornerShape(20.dp)
-                        ) {
-                            Column(
-                                modifier = Modifier.padding(20.dp),
-                                horizontalAlignment = Alignment.CenterHorizontally
-                            ) {
-                                Text("🛍️", fontSize = 36.sp)
-                                Spacer(modifier = Modifier.height(6.dp))
-                                Text(
-                                    "All items collected!",
-                                    style = MaterialTheme.typography.titleMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer
-                                )
-                                Text(
-                                    "Time to start cooking 🍳",
-                                    style = MaterialTheme.typography.bodyMedium,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
-                                )
-                            }
-                        }
-                    }
-                }
+    }
 
-                grouped.forEach { (recipeName, recipeItems) ->
-                    // Sticky-style section header
-                    item(key = "hdr_$recipeName") {
-                        Row(
-                            modifier = Modifier
-                                .fillMaxWidth()
-                                .padding(top = 8.dp, bottom = 8.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.SpaceBetween
-                        ) {
-                            Row(
-                                verticalAlignment = Alignment.CenterVertically,
-                                modifier = Modifier.weight(1f)
-                            ) {
-                                Surface(
-                                    shape = CircleShape,
-                                    color = MaterialTheme.colorScheme.primaryContainer,
-                                    modifier = Modifier.size(32.dp)
-                                ) {
-                                    Box(contentAlignment = Alignment.Center) {
-                                        Text("🍽", fontSize = 16.sp)
-                                    }
-                                }
-                                Spacer(modifier = Modifier.width(10.dp))
-                                Text(
-                                    recipeName,
-                                    style = MaterialTheme.typography.titleSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onBackground,
-                                    maxLines = 1,
-                                    overflow = TextOverflow.Ellipsis
-                                )
-                            }
-                            val doneCount = recipeItems.count { it.isChecked }
-                            Surface(
-                                shape = RoundedCornerShape(20.dp),
-                                color = if (doneCount == recipeItems.size)
-                                    MaterialTheme.colorScheme.primary.copy(alpha = 0.15f)
-                                else MaterialTheme.colorScheme.primaryContainer
-                            ) {
-                                Text(
-                                    "$doneCount/${recipeItems.size}",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                                )
-                            }
-                        }
-                    }
+    Scaffold(containerColor = SlBg) { innerPadding ->
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(innerPadding),
+            contentPadding = PaddingValues(bottom = 48.dp)
+        ) {
 
-                    // Card wrapping all items of this recipe
-                    item(key = "card_start_$recipeName") {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(topStart = 18.dp, topEnd = 18.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 2.dp
-                        ) { Spacer(modifier = Modifier.height(6.dp)) }
+            // ── Top bar ───────────────────────────────────────────────────────
+            item(key = "topbar") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .background(SlBg)
+                        .statusBarsPadding()
+                        .padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 4.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    IconButton(onClick = { navController.popBackStack() }) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.ArrowBack, "Back",
+                            tint = SlText, modifier = Modifier.size(22.dp)
+                        )
                     }
-
-                    items(
-                        items = recipeItems,
-                        key = { it.key }
-                    ) { shopItem ->
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            color = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 2.dp
-                        ) {
-                            SwipeableShoppingItem(
-                                item = shopItem,
-                                onToggle = {
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    viewModel.toggleShoppingItem(shopItem.key)
-                                },
-                                onDelete = { viewModel.removeItem(shopItem.key) }
+                    Text(
+                        "Shopping List",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = SlText,
+                        modifier = Modifier.weight(1f)
+                    )
+                    if (checkedCount > 0) {
+                        IconButton(onClick = {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.removeCheckedItems()
+                        }) {
+                            Icon(
+                                Icons.Default.Delete,
+                                "Clear completed",
+                                tint = SlRed,
+                                modifier = Modifier.size(20.dp)
                             )
                         }
-                        HorizontalDivider(
-                            modifier = Modifier
-                                .background(MaterialTheme.colorScheme.surface)
-                                .padding(start = 56.dp, end = 16.dp),
-                            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.08f)
-                        )
-                    }
-
-                    item(key = "card_end_$recipeName") {
-                        Surface(
-                            modifier = Modifier.fillMaxWidth(),
-                            shape = RoundedCornerShape(bottomStart = 18.dp, bottomEnd = 18.dp),
-                            color = MaterialTheme.colorScheme.surface,
-                            tonalElevation = 2.dp
-                        ) { Spacer(modifier = Modifier.height(6.dp)) }
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-                }
-
-                // Clear all button
-                item(key = "clear_all") {
-                    OutlinedButton(
-                        onClick = {
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.clearShoppingList()
-                        },
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(48.dp),
-                        shape = RoundedCornerShape(14.dp),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.error
-                        )
-                    ) {
-                        Icon(Icons.Default.DeleteSweep, null, modifier = Modifier.size(18.dp))
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text("Clear All Items", fontWeight = FontWeight.Medium)
                     }
                 }
             }
+
+            // ── Summary strip ─────────────────────────────────────────────────
+            item(key = "summary") {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 20.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Text(
+                        text = when {
+                            totalCount == 0 -> "No items yet"
+                            remainingCount == 0 -> "All items checked ✓"
+                            else -> "$remainingCount of $totalCount items remaining"
+                        },
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (remainingCount == 0 && totalCount > 0) SlGreen else SlSubtext,
+                        fontWeight = if (remainingCount == 0 && totalCount > 0) FontWeight.SemiBold else FontWeight.Normal
+                    )
+                    if (checkedCount > 0) {
+                        Surface(
+                            shape = RoundedCornerShape(20.dp),
+                            color = SlRed.copy(alpha = 0.08f)
+                        ) {
+                            Text(
+                                "$checkedCount done",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = SlRed,
+                                fontWeight = FontWeight.Medium,
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
+            }
+
+            // ── Empty state ───────────────────────────────────────────────────
+            if (allItems.isEmpty()) {
+                item(key = "empty") { SlEmptyState(onBrowse = { navController.popBackStack() }) }
+                return@LazyColumn
+            }
+
+            // ── Single items() call over the flat sealed list ─────────────────
+            items(
+                items = entries,
+                key = { entry ->
+                    when (entry) {
+                        is SlEntry.SectionGap -> entry.id
+                        is SlEntry.Header -> "hdr_${entry.recipeName}"
+                        is SlEntry.ItemRow -> "item_${entry.recipeName}_${entry.shopItem.key}"
+                    }
+                }
+            ) { entry ->
+                when (entry) {
+                    is SlEntry.SectionGap -> Spacer(Modifier.height(12.dp))
+
+                    is SlEntry.Header -> SlSectionHeader(
+                        recipeName = entry.recipeName,
+                        accent = entry.accent,
+                        itemCount = entry.itemCount,
+                        isCollapsed = entry.isCollapsed,
+                        onToggle = {
+                            collapsedSections[entry.recipeName] = !entry.isCollapsed
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                    )
+
+                    is SlEntry.ItemRow -> SlSwipeableItemRow(
+                        item = entry.shopItem,
+                        isLast = entry.isLast,
+                        showDivider = entry.showDivider,
+                        onToggle = {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.toggleShoppingItem(entry.shopItem.key)
+                        },
+                        onDelete = { viewModel.removeItem(entry.shopItem.key) }
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── Section header ────────────────────────────────────────────────────────────
+@Composable
+private fun SlSectionHeader(
+    recipeName: String,
+    accent: Color,
+    itemCount: Int,
+    isCollapsed: Boolean,
+    onToggle: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp)
+            .clip(
+                if (isCollapsed) RoundedCornerShape(16.dp)
+                else RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
+            )
+            .clickable { onToggle() },
+        color = SlSurface,
+        shadowElevation = 1.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp, vertical = 16.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(width = 4.dp, height = 26.dp)
+                    .background(accent, RoundedCornerShape(2.dp))
+            )
+            Spacer(Modifier.width(14.dp))
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    "FOR",
+                    style = MaterialTheme.typography.labelSmall,
+                    color = SlSubtext,
+                    letterSpacing = 1.sp,
+                    fontSize = 9.sp
+                )
+                Spacer(Modifier.height(2.dp))
+                Text(
+                    recipeName,
+                    style = MaterialTheme.typography.bodyLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = SlText,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+            }
+            Spacer(Modifier.width(12.dp))
+            Surface(shape = CircleShape, color = accent.copy(alpha = 0.10f)) {
+                Text(
+                    "$itemCount",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = accent,
+                    modifier = Modifier.padding(horizontal = 9.dp, vertical = 5.dp)
+                )
+            }
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                if (isCollapsed) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
+                null, tint = SlSubtext, modifier = Modifier.size(22.dp)
+            )
         }
     }
 }
@@ -433,100 +371,127 @@ fun ShoppingListScreen(
 // ── Swipeable item row ────────────────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SwipeableShoppingItem(
+private fun SlSwipeableItemRow(
     item: ShoppingListItem,
+    isLast: Boolean,
+    showDivider: Boolean,
     onToggle: () -> Unit,
     onDelete: () -> Unit
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
-        confirmValueChange = { value ->
-            if (value == SwipeToDismissBoxValue.EndToStart) {
+        confirmValueChange = { v ->
+            if (v == SwipeToDismissBoxValue.EndToStart) {
                 onDelete(); true
             } else false
         }
     )
+    val bottomShape = if (isLast)
+        RoundedCornerShape(bottomStart = 16.dp, bottomEnd = 16.dp)
+    else
+        RoundedCornerShape(0.dp)
 
     SwipeToDismissBox(
         state = dismissState,
         backgroundContent = {
-            val fraction = dismissState.progress.coerceIn(0f, 1f)
-            val bgAlpha =
-                if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart) fraction else 0f
+            val alpha = if (dismissState.targetValue == SwipeToDismissBoxValue.EndToStart)
+                dismissState.progress.coerceIn(0f, 1f) else 0f
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = bgAlpha)),
+                    .padding(horizontal = 16.dp)
+                    .clip(bottomShape)
+                    .background(Color(0xFFFFDAD6).copy(alpha = alpha)),
                 contentAlignment = Alignment.CenterEnd
             ) {
                 Icon(
                     Icons.Default.Delete,
-                    contentDescription = "Delete",
-                    tint = MaterialTheme.colorScheme.onErrorContainer,
-                    modifier = Modifier.padding(end = 20.dp)
+                    null,
+                    tint = SlRed,
+                    modifier = Modifier.padding(end = 24.dp)
                 )
             }
         },
         enableDismissFromStartToEnd = false,
         enableDismissFromEndToStart = true
     ) {
-        ShoppingItemRow(item = item, onToggle = onToggle)
-    }
-}
+        val rowBg = if (item.isChecked) SlCheckedBg else SlSurface
+        val qty = item.amount + if (item.unit.isNotBlank()) " ${item.unit}" else ""
 
-@Composable
-private fun ShoppingItemRow(
-    item: ShoppingListItem,
-    onToggle: () -> Unit
-) {
-    val checkScale by animateFloatAsState(
-        targetValue = if (item.isChecked) 1.1f else 1f,
-        animationSpec = spring(Spring.DampingRatioMediumBouncy, 500f),
-        label = "check_scale"
-    )
-    val textAlpha = if (item.isChecked) 0.4f else 1f
-    val qty = item.amount + if (item.unit.isNotBlank()) " ${item.unit}" else ""
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable { onToggle() }
-            .padding(horizontal = 12.dp, vertical = 13.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(10.dp)
-    ) {
-        Checkbox(
-            checked = item.isChecked,
-            onCheckedChange = { onToggle() },
-            modifier = Modifier.scale(checkScale),
-            colors = CheckboxDefaults.colors(
-                checkedColor = MaterialTheme.colorScheme.primary,
-                uncheckedColor = MaterialTheme.colorScheme.outline
-            )
-        )
-        Text(
-            text = item.ingredientName,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = if (item.isChecked) FontWeight.Normal else FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface.copy(alpha = textAlpha),
-            textDecoration = if (item.isChecked) TextDecoration.LineThrough else TextDecoration.None,
-            modifier = Modifier.weight(1f),
-            maxLines = 2
-        )
-        if (qty.isNotBlank()) {
-            Surface(
-                shape = RoundedCornerShape(20.dp),
-                color = if (item.isChecked)
-                    MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
-                else MaterialTheme.colorScheme.primaryContainer
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp)
+                .clip(bottomShape)
+                .background(rowBg)
+                .clickable { onToggle() }
+        ) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 18.dp, vertical = 18.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                Text(
-                    text = qty,
-                    style = MaterialTheme.typography.labelMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = if (item.isChecked)
-                        MaterialTheme.colorScheme.onSurface.copy(alpha = 0.38f)
-                    else MaterialTheme.colorScheme.onPrimaryContainer,
-                    modifier = Modifier.padding(horizontal = 10.dp, vertical = 5.dp)
+                // Checkbox
+                val checkBg = if (item.isChecked) SlGreen else rowBg
+                Box(
+                    modifier = Modifier
+                        .size(24.dp)
+                        .clip(RoundedCornerShape(7.dp))
+                        .background(checkBg)
+                        .then(
+                            if (!item.isChecked)
+                                Modifier
+                                    .padding(1.5.dp)
+                                    .clip(RoundedCornerShape(6.dp))
+                                    .background(SlOutline)
+                                    .padding(1.5.dp)
+                                    .clip(RoundedCornerShape(4.dp))
+                                    .background(rowBg)
+                            else Modifier
+                        ),
+                    contentAlignment = Alignment.Center
+                ) {
+                    if (item.isChecked) {
+                        Icon(
+                            Icons.Default.Check,
+                            null,
+                            tint = Color.White,
+                            modifier = Modifier.size(14.dp)
+                        )
+                    }
+                }
+
+                Spacer(Modifier.width(16.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.ingredientName,
+                        style = MaterialTheme.typography.bodyLarge,
+                        fontWeight = if (item.isChecked) FontWeight.Normal else FontWeight.SemiBold,
+                        color = if (item.isChecked) SlSubtext.copy(alpha = 0.45f) else SlText,
+                        textDecoration = if (item.isChecked) TextDecoration.LineThrough else TextDecoration.None,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    if (qty.isNotBlank()) {
+                        Spacer(Modifier.height(3.dp))
+                        Text(
+                            text = qty.uppercase(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = SlSubtext.copy(alpha = if (item.isChecked) 0.35f else 0.6f),
+                            letterSpacing = 0.9.sp
+                        )
+                    }
+                }
+            }
+
+            if (showDivider) {
+                Box(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(0.5.dp)
+                        .padding(start = 58.dp, end = 18.dp)
+                        .background(SlOutline.copy(alpha = 0.5f))
                 )
             }
         }
@@ -535,70 +500,82 @@ private fun ShoppingItemRow(
 
 // ── Empty state ───────────────────────────────────────────────────────────────
 @Composable
-private fun EmptyShoppingListState(
-    modifier: Modifier = Modifier,
-    onGoToHome: () -> Unit
-) {
+private fun SlEmptyState(onBrowse: () -> Unit) {
     var iconVisible by remember { mutableStateOf(false) }
     var textVisible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) { delay(120); iconVisible = true; delay(180); textVisible = true }
+    LaunchedEffect(Unit) { delay(100); iconVisible = true; delay(200); textVisible = true }
 
     Column(
-        modifier = modifier
-            .fillMaxSize()
-            .padding(32.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.Center
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 40.dp, vertical = 64.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
         AnimatedVisibility(
             visible = iconVisible,
             enter = scaleIn(
                 initialScale = 0.6f,
-                animationSpec = spring(Spring.DampingRatioLowBouncy, 280f)
+                animationSpec = spring(Spring.DampingRatioLowBouncy, 260f)
             ) + fadeIn()
         ) {
             Surface(
-                modifier = Modifier.size(120.dp),
                 shape = CircleShape,
-                color = MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.6f)
+                color = SlGreen.copy(alpha = 0.08f),
+                modifier = Modifier.size(100.dp)
             ) {
-                Box(contentAlignment = Alignment.Center) { Text("🛒", fontSize = 52.sp) }
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        Icons.Default.ShoppingBasket,
+                        null,
+                        tint = SlGreen.copy(alpha = 0.4f),
+                        modifier = Modifier.size(48.dp)
+                    )
+                }
             }
         }
-        Spacer(modifier = Modifier.height(28.dp))
+        Spacer(Modifier.height(28.dp))
         AnimatedVisibility(
             visible = textVisible,
             enter = slideInVertically(
-                initialOffsetY = { 30 },
+                initialOffsetY = { 24 },
                 animationSpec = spring(stiffness = 300f)
             ) + fadeIn()
         ) {
             Column(horizontalAlignment = Alignment.CenterHorizontally) {
                 Text(
-                    "Your cart is empty",
+                    "Your list is empty",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
+                    color = SlText
                 )
-                Spacer(modifier = Modifier.height(8.dp))
+                Spacer(Modifier.height(10.dp))
                 Text(
-                    "Open any recipe, tap\n\"Shopping List\" to add ingredients.",
+                    "Open a recipe and tap\n\"Add to Shopping List\" to get started.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    color = SlSubtext,
                     textAlign = TextAlign.Center,
                     lineHeight = 22.sp
                 )
-                Spacer(modifier = Modifier.height(32.dp))
-                Button(
-                    onClick = onGoToHome,
-                    shape = RoundedCornerShape(14.dp),
-                    modifier = Modifier
-                        .fillMaxWidth(0.6f)
-                        .height(48.dp)
-                ) {
-                    Icon(Icons.Default.Fastfood, null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text("Browse Recipes", fontWeight = FontWeight.SemiBold)
+                Spacer(Modifier.height(36.dp))
+                Surface(onClick = onBrowse, shape = RoundedCornerShape(14.dp), color = SlGreen) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 28.dp, vertical = 15.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Icon(
+                            Icons.Default.Restaurant,
+                            null,
+                            tint = Color.White,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Spacer(Modifier.width(10.dp))
+                        Text(
+                            "Browse Recipes",
+                            fontWeight = FontWeight.SemiBold,
+                            color = Color.White,
+                            style = MaterialTheme.typography.bodyMedium
+                        )
+                    }
                 }
             }
         }

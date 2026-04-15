@@ -2,6 +2,7 @@ package com.example.myrecipeapp.di
 
 import com.example.myrecipeapp.MyRecipeApplication
 import com.example.myrecipeapp.data.local.AppDatabase
+import com.example.myrecipeapp.data.local.ThemePreferences
 import com.example.myrecipeapp.data.remote.NetworkModule
 import com.example.myrecipeapp.data.repository.RecipeRepositoryImpl
 import com.example.myrecipeapp.domain.repository.RecipeRepository
@@ -24,20 +25,21 @@ object AppContainer {
         AppDatabase.getInstance(MyRecipeApplication.instance)
     }
 
-    val favoriteDao by lazy { database.favoriteDao() }
-    val shoppingDao by lazy { database.shoppingDao() }
+    val favoriteDao    by lazy { database.favoriteDao() }
+    val shoppingDao    by lazy { database.shoppingDao() }
+    val cachedRecipeDao by lazy { database.cachedRecipeDao() }
 
     // ── Data layer ────────────────────────────────────────────────────────────
     private val apiService by lazy { NetworkModule.provideApiService() }
 
     val repository: RecipeRepository by lazy {
-        RecipeRepositoryImpl(apiService)
+        RecipeRepositoryImpl(apiService, cachedRecipeDao)
     }
 
     // ── Use cases ─────────────────────────────────────────────────────────────
-    val getFeaturedRecipesUseCase by lazy { GetFeaturedRecipesUseCase(repository) }
-    val searchRecipesUseCase by lazy { SearchRecipesUseCase(repository) }
-    val getRecipeDetailsUseCase by lazy { GetRecipeDetailsUseCase(repository) }
-    val getCategoriesUseCase by lazy { GetCategoriesUseCase(repository) }
+    val getFeaturedRecipesUseCase   by lazy { GetFeaturedRecipesUseCase(repository) }
+    val searchRecipesUseCase        by lazy { SearchRecipesUseCase(repository) }
+    val getRecipeDetailsUseCase     by lazy { GetRecipeDetailsUseCase(repository) }
+    val getCategoriesUseCase        by lazy { GetCategoriesUseCase(repository) }
     val getRecipesByCategoryUseCase by lazy { GetRecipesByCategoryUseCase(repository) }
 }

@@ -314,7 +314,6 @@ fun SearchResults(
 
     LaunchedEffect(searchText) {
         if (searchText.isNotEmpty()) {
-            delay(300) // debounce
             viewModel.searchRecipes(searchText)
         }
     }
@@ -466,6 +465,35 @@ fun SearchResults(
                                 onFavoriteToggle = onFavToggle,
                                 onClick = onCardClick
                             )
+                        }
+                    }
+
+                    if (searchState.recipes.size < searchState.totalResults) {
+                        item {
+                            Box(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(vertical = 16.dp),
+                                contentAlignment = Alignment.Center
+                            ) {
+                                if (searchState.loadingMore) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(32.dp),
+                                        color = MaterialTheme.colorScheme.primary,
+                                        strokeWidth = 3.dp
+                                    )
+                                } else {
+                                    androidx.compose.material3.OutlinedButton(
+                                        onClick = { viewModel.loadMoreSearchResults() }
+                                    ) {
+                                        Text(
+                                            "Load More",
+                                            fontWeight = FontWeight.SemiBold,
+                                            color = MaterialTheme.colorScheme.primary
+                                        )
+                                    }
+                                }
+                            }
                         }
                     }
                 }

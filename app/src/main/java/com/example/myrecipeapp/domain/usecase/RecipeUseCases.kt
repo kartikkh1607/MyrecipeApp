@@ -31,7 +31,7 @@ class GetRecipeDetailsUseCase(private val repository: RecipeRepository) {
 
 class GetRecipesByCategoryUseCase(
     private val repository: RecipeRepository,
-    private val defaultLimit: Int = 50  // 50 results = 1 API call; 1000 = 10 calls/tap (quota killer)
+    private val defaultLimit: Int = 20  // 20 = 1 fast API call; 50 was wasteful
 ) {
     suspend operator fun invoke(
         categoryId: String,

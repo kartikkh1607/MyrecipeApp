@@ -55,9 +55,28 @@ import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 fun MainScreen(viewModel: MainViewModel) {
     val navController = rememberNavController()
 
+    // Only show the bottom nav on the 5 main tab destinations.
+    // Any detail / full-screen route gets a hidden nav bar.
+    val navBackStackEntry by navController.currentBackStackEntryAsState()
+    val currentDestination = navBackStackEntry?.destination
+    val tabRoutes = remember {
+        listOf(
+            com.example.myrecipeapp.ui.navigation.Home::class,
+            com.example.myrecipeapp.ui.navigation.Categories::class,
+            com.example.myrecipeapp.ui.navigation.Search::class,
+            com.example.myrecipeapp.ui.navigation.Favorites::class,
+            com.example.myrecipeapp.ui.navigation.Settings::class,
+        )
+    }
+    val showBottomBar = tabRoutes.any { routeClass ->
+        currentDestination?.hasRoute(routeClass) == true
+    }
+
     Scaffold(
         bottomBar = {
-            BottomNavigationBar(navController = navController)
+            if (showBottomBar) {
+                BottomNavigationBar(navController = navController)
+            }
         },
         modifier = Modifier
             .fillMaxSize()
@@ -67,7 +86,10 @@ fun MainScreen(viewModel: MainViewModel) {
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .padding(paddingValues)
+                .padding(
+                    top = paddingValues.calculateTopPadding(),
+                    bottom = if (showBottomBar) paddingValues.calculateBottomPadding() else 0.dp
+                )
         ) {
             Navigation(navController = navController, viewModel = viewModel)
         }
@@ -95,7 +117,7 @@ fun BottomNavigationBar(navController: NavHostController) {
     // prevents stack accumulation when switching between tabs repeatedly.
     fun navigateToTab(route: Any) {
         navController.navigate(route) {
-            popUpTo<Home> { inclusive = true }
+            popUpTo<Home> { inclusive = false }  // false keeps Home on the stack as root
             launchSingleTop = true
         }
     }

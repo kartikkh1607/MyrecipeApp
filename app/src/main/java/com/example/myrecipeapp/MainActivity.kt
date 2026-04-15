@@ -4,11 +4,15 @@ import android.os.Bundle
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
+import com.example.myrecipeapp.domain.model.ThemeMode
 import com.example.myrecipeapp.ui.screens.MainScreen
 import com.example.myrecipeapp.ui.theme.MyrecipeAppTheme
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
@@ -19,7 +23,16 @@ class MainActivity : ComponentActivity() {
         enableEdgeToEdge()
         setContent {
             val recipeViewModel: MainViewModel = viewModel(factory = MainViewModel.Factory())
+            val themeMode by recipeViewModel.themeMode.collectAsStateWithLifecycle()
+            val systemDark = isSystemInDarkTheme()
+            val darkTheme = when (themeMode) {
+                ThemeMode.LIGHT -> false
+                ThemeMode.DARK -> true
+                ThemeMode.SYSTEM -> systemDark
+            }
+
             MyrecipeAppTheme(
+                darkTheme = darkTheme,
                 dynamicColor = false
             ) {
                 Surface(
@@ -32,4 +45,3 @@ class MainActivity : ComponentActivity() {
         }
     }
 }
-

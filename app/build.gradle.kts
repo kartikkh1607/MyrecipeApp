@@ -9,6 +9,10 @@ plugins {
     id("com.google.devtools.ksp") version "2.0.21-1.0.28"
 }
 
+ksp {
+    arg("room.schemaLocation", "$projectDir/schemas")
+}
+
 // Load local.properties
 val localPropertiesFile = rootProject.file("local.properties")
 val localProperties = Properties()
@@ -38,7 +42,7 @@ android {
         multiDexEnabled = true
 
         // This line reads the property from local.properties and creates a field in BuildConfig
-        val apiKey = localProperties.getProperty("spoonacular.api.key") ?: "null"
+        val apiKey = localProperties.getProperty("spoonacular.api.key") ?: ""
         buildConfigField("String", "SPOONACULAR_API_KEY", "\"$apiKey\"")
     }
 
@@ -85,6 +89,9 @@ dependencies {
 
     // Material 3 Extended Icons
     implementation("androidx.compose.material:material-icons-extended")
+
+    // DataStore Preferences (theme persistence)
+    implementation("androidx.datastore:datastore-preferences:1.1.1")
 
     // Navigation
     implementation("androidx.navigation:navigation-compose:$nav_version")

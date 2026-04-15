@@ -56,6 +56,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.myrecipeapp.domain.model.DietaryFilter
 import com.example.myrecipeapp.domain.model.Recipe
@@ -118,12 +119,21 @@ fun CategoryDetailScreen(
                 .fillMaxWidth()
                 .height(250.dp)
         ) {
-            AsyncImage(
-                model = category.imageUrl,
-                contentDescription = category.name,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
+            if (category.imageResId != 0) {
+                androidx.compose.foundation.Image(
+                    painter = androidx.compose.ui.res.painterResource(category.imageResId),
+                    contentDescription = category.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                AsyncImage(
+                    model = category.imageUrl,
+                    contentDescription = category.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
 
             // Gradient overlay
             Box(
@@ -276,7 +286,7 @@ fun CategoryDetailScreen(
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                             )
                             Text(
-                                text = "Fetching up to 50 recipes",
+                                text = "Fetching up to 20 recipes",
                                 style = MaterialTheme.typography.bodySmall,
                                 color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
                             )
@@ -587,20 +597,18 @@ fun EnhancedRecipeCard(
                         )
                     }
 
-                    // Cuisine type if available
-                    if (recipe.cuisine.isNotEmpty()) {
-                        Card(
-                            colors = CardDefaults.cardColors(
-                                containerColor = MaterialTheme.colorScheme.secondaryContainer
-                            ),
-                            shape = RoundedCornerShape(8.dp)
+                    // Calories
+                    if (recipe.calories != null && recipe.calories > 0) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
+                            Text("🔥", fontSize = 12.sp)
                             Text(
-                                text = recipe.cuisine,
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.onSecondaryContainer,
+                                text = "${recipe.calories} kcal",
+                                style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
                             )
                         }
                     }

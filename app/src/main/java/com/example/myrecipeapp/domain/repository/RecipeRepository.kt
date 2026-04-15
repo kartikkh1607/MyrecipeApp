@@ -21,7 +21,7 @@ interface RecipeRepository {
      * Returns a page of search results for [query].
      * Falls back to filtered sample data when the API is unavailable.
      */
-    suspend fun searchRecipes(query: String, offset: Int = 0, limit: Int = 100): SearchResult
+    suspend fun searchRecipes(query: String, offset: Int = 0, limit: Int = 20): SearchResult
 
     /**
      * Returns detailed information for a single recipe identified by [recipeId].
@@ -37,5 +37,5 @@ interface RecipeRepository {
     /**
      * Returns recipes belonging to [categoryId] up to [limit] results.
      */
-    suspend fun getRecipesByCategory(categoryId: String, limit: Int = 50): List<Recipe>
+    suspend fun getRecipesByCategory(categoryId: String, limit: Int = 20): List<Recipe>
 }

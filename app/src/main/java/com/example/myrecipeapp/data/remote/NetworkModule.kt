@@ -41,7 +41,7 @@ object NetworkModule {
         val request = chain.request()
         try {
             chain.proceed(request)
-        } catch (e: Exception) {
+        } catch (e: java.io.IOException) {
             val cacheRequest = request.newBuilder()
                 .header("Cache-Control", "public, only-if-cached, max-stale=${60 * 60 * 24}")
                 .build()
@@ -50,8 +50,10 @@ object NetworkModule {
     }
 
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
+        // BODY logs the entire JSON response (~100 KB per call) to Logcat — big CPU hit.
+        // HEADERS is enough for debugging: shows URL, status code, and timing.
         level = if (BuildConfig.DEBUG)
-            HttpLoggingInterceptor.Level.BODY
+            HttpLoggingInterceptor.Level.HEADERS
         else
             HttpLoggingInterceptor.Level.NONE
     }

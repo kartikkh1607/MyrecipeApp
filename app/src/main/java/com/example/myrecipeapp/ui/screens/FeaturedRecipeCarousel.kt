@@ -188,7 +188,6 @@ fun FeaturedRecipeCard(
     modifier: Modifier = Modifier
 ) {
     var isPressed by remember { mutableStateOf(false) }
-    // Cache parsed color — parseColor() does string parsing and should not run every frame
     val badgeColor = remember(featuredRecipe.gradientColors) {
         parseColor(featuredRecipe.gradientColors.firstOrNull() ?: "#FF6B6B").copy(alpha = 0.9f)
     }

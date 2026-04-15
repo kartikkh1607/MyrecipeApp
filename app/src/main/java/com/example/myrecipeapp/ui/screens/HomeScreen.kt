@@ -58,6 +58,7 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -81,7 +82,7 @@ fun HomeScreen(
     val hapticFeedback = LocalHapticFeedback.current
     val categoriesState by viewModel.recipeCategoriesState
     val homeRecipeState by viewModel.homeRecipeState
-    var selectedCategory by remember { mutableStateOf<RecipeCategory?>(null) }
+    val selectedCategoryId by viewModel.selectedCategoryId
 
     Column(
         modifier = Modifier
@@ -225,9 +226,9 @@ fun HomeScreen(
                             ) {
                                 CategoryImageCard(
                                     category = category,
-                                    isSelected = selectedCategory == category,
+                                    isSelected = selectedCategoryId == category.id,
                                     onClick = {
-                                        selectedCategory = category
+                                        viewModel.selectCategory(category.id)
                                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                         navController.navigate(CategoryDetail(categoryId = category.id)) {
                                             launchSingleTop = true
@@ -397,13 +398,22 @@ fun CategoryImageCard(
         else null
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Category image
-            AsyncImage(
-                model = category.imageUrl,
-                contentDescription = category.name,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = ContentScale.Crop
-            )
+            // Category image — local drawable when available, URL fallback otherwise
+            if (category.imageResId != 0) {
+                androidx.compose.foundation.Image(
+                    painter = painterResource(category.imageResId),
+                    contentDescription = category.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            } else {
+                AsyncImage(
+                    model = category.imageUrl,
+                    contentDescription = category.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+            }
             // Gradient overlay
             Box(
                 modifier = Modifier

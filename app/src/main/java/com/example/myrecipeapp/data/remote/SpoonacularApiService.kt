@@ -25,9 +25,12 @@ interface SpoonacularApiService {
         @Query("query") query: String,
         @Query("type") type: String? = null,
         @Query("cuisine") cuisine: String? = null,
-        @Query("number") number: Int = 50,
+        @Query("diet") diet: String? = null,
+        @Query("number") number: Int = 20,
         @Query("offset") offset: Int = 0,
-        @Query("addRecipeInformation") addRecipeInformation: Boolean = true
+        @Query("addRecipeInformation") addRecipeInformation: Boolean = true,
+        @Query("addRecipeNutrition") addRecipeNutrition: Boolean = true,
+        @Query("instructionsRequired") instructionsRequired: Boolean = true
     ): SpoonacularSearchResponse
 
     /**
@@ -37,7 +40,9 @@ interface SpoonacularApiService {
     @GET("recipes/{id}/information")
     suspend fun getRecipeDetails(
         @Path("id") recipeId: Int,
-        @Query("includeNutrition") includeNutrition: Boolean = true
+        // Nutrition breakdown triples the JSON size — only fetch if you render it
+        @Query("includeNutrition") includeNutrition: Boolean = false,
+        @Query("fillIngredients") fillIngredients: Boolean = true
     ): SpoonacularRecipeDto
 
     /**
@@ -47,6 +52,8 @@ interface SpoonacularApiService {
     @GET("recipes/random")
     suspend fun getRandomRecipes(
         @Query("number") number: Int = 5,
-        @Query("tags") tags: String? = null
+        @Query("tags") tags: String? = null,
+        // Only return recipes that have cooking steps — prevents empty CookingModeScreen
+        @Query("instructionsRequired") instructionsRequired: Boolean = true
     ): SpoonacularGetRecipesResponse
 }

@@ -99,7 +99,7 @@ object SampleDataSource {
                 tags = listOf("Healthy", "Vegetarian", "Mediterranean", "Quick"),
                 isVegetarian = true, isVegan = false, isGlutenFree = true
             ),
-            type = FeaturedType.HEALTHY_CHOICES,
+            type = FeaturedType.RECIPE_OF_THE_DAY,
             subtitle = "Nutritious & Delicious",
             badgeText = "💚 HEALTHY",
             gradientColors = listOf("#4ECDC4", "#44A08D")
@@ -180,7 +180,7 @@ object SampleDataSource {
                 tags = listOf("Indian", "Spicy", "Creamy", "Main Course"),
                 isVegetarian = false, isVegan = false
             ),
-            type = FeaturedType.COMFORT_FOOD,
+            type = FeaturedType.POPULAR_THIS_WEEK,
             subtitle = "Authentic Indian",
             badgeText = "🍛 INDIAN",
             gradientColors = listOf("#FF9A56", "#FFAD56")
@@ -223,7 +223,7 @@ object SampleDataSource {
                 tags = listOf("Italian", "Comfort Food", "Cheesy", "Baked"),
                 isVegetarian = false, isVegan = false
             ),
-            type = FeaturedType.COMFORT_FOOD,
+            type = FeaturedType.POPULAR_THIS_WEEK,
             subtitle = "Italian Classic",
             badgeText = "🇮🇹 ITALIAN",
             gradientColors = listOf("#56C596", "#56C5C5")
@@ -258,7 +258,7 @@ object SampleDataSource {
                 tags = listOf("Indian", "Vegetarian", "Creamy", "Healthy"),
                 isVegetarian = true, isVegan = false
             ),
-            type = FeaturedType.HEALTHY_CHOICES,
+            type = FeaturedType.RECIPE_OF_THE_DAY,
             subtitle = "Vegetarian Delight",
             badgeText = "🌿 VEGETARIAN",
             gradientColors = listOf("#4CAF50", "#66BB6A")
@@ -293,7 +293,7 @@ object SampleDataSource {
                 tags = listOf("Indian", "Festive", "Aromatic", "Special"),
                 isVegetarian = false, isVegan = false
             ),
-            type = FeaturedType.TRENDING_NOW,
+            type = FeaturedType.POPULAR_THIS_WEEK,
             subtitle = "Royal Feast",
             badgeText = "👑 ROYAL",
             gradientColors = listOf("#FFD700", "#FFA500")
@@ -368,7 +368,7 @@ object SampleDataSource {
                 tags = listOf("Italian", "Creamy", "Luxurious", "Comfort Food"),
                 isVegetarian = true, isVegan = false
             ),
-            type = FeaturedType.COMFORT_FOOD,
+            type = FeaturedType.POPULAR_THIS_WEEK,
 
             subtitle = "Milanese Gold",
             badgeText = "🏅 PREMIUM",

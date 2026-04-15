@@ -2,12 +2,15 @@ package com.example.myrecipeapp.data.repository
 
 import android.util.Log
 import com.example.myrecipeapp.BuildConfig
+import com.example.myrecipeapp.data.local.CachedRecipeDao
+import com.example.myrecipeapp.data.local.CachedRecipeEntity
+import com.example.myrecipeapp.data.local.toCachedEntity
+import com.example.myrecipeapp.data.local.toRecipe
 import com.example.myrecipeapp.data.remote.SpoonacularApiService
-import com.example.myrecipeapp.data.remote.dto.SpoonacularRecipeDto
 import com.example.myrecipeapp.data.remote.dto.toDomain
 import com.example.myrecipeapp.data.source.CategoryDataSource
 import com.example.myrecipeapp.data.source.SampleDataSource
-import com.example.myrecipeapp.domain.model.CuisineType
+import com.example.myrecipeapp.domain.model.CategoryKind
 import com.example.myrecipeapp.domain.model.FeaturedRecipe
 import com.example.myrecipeapp.domain.model.FeaturedType
 import com.example.myrecipeapp.domain.model.Recipe
@@ -20,9 +23,13 @@ import com.example.myrecipeapp.domain.repository.RecipeRepository
  *
  * All "try API → fallback to sample data" logic that previously lived
  * inside MainViewModel now lives here — in the data layer where it belongs.
+ *
+ * Issue #7 fix: [getRecipeDetails] now caches successful API responses in Room
+ * and serves them from cache when offline, so the detail screen never shows up empty.
  */
 class RecipeRepositoryImpl(
-    private val apiService: SpoonacularApiService
+    private val apiService: SpoonacularApiService,
+    private val cachedRecipeDao: CachedRecipeDao
 ) : RecipeRepository {
 
     // Only needed to decide whether to call the API or fall back to sample data.
@@ -97,22 +104,47 @@ class RecipeRepositoryImpl(
     }
 
     // ─────────────────────────────────────────────────────────────────────────
-    // Recipe Details
+    // Recipe Details  (Issue #7 — cache on success, serve cache on failure)
     // ─────────────────────────────────────────────────────────────────────────
 
     override suspend fun getRecipeDetails(recipeId: String): Recipe? {
         if (!apiConfigured) return sampleRecipeById(recipeId)
+
         val numericId = recipeId.toIntOrNull()
         if (numericId == null) {
             Log.w(TAG, "getRecipeDetails: non-integer ID \"$recipeId\", falling back to sample")
             return sampleRecipeById(recipeId)
         }
+
         return try {
             val dto = apiService.getRecipeDetails(recipeId = numericId)
-            dto.toDomain()
+            val recipe = dto.toDomain()
+            cachedRecipeDao.upsert(recipe.toCachedEntity())
+            Log.d(TAG, "Cached recipe detail for id=$recipeId")
+            recipe
         } catch (e: Exception) {
-            Log.w(TAG, "Recipe details API failed, using sample: ${e.message}")
-            sampleRecipeById(recipeId)
+            Log.w(TAG, "Recipe details API failed for id=$recipeId: ${e.message}")
+            val cached = cachedRecipeDao.getById(recipeId)
+            when {
+                cached != null && !cached.isExpired() -> {
+                    Log.d(TAG, "Serving $recipeId from fresh offline cache")
+                    cached.toRecipe()
+                }
+
+                cached != null -> {
+                    // Cache exists but is stale — serve it anyway (better than nothing offline)
+                    Log.w(
+                        TAG,
+                        "Serving $recipeId from STALE cache (>${CachedRecipeEntity.CACHE_MAX_AGE_MS / 3_600_000}h old)"
+                    )
+                    cached.toRecipe()
+                }
+
+                else -> {
+                    Log.w(TAG, "No offline cache for $recipeId — using sample fallback")
+                    sampleRecipeById(recipeId)
+                }
+            }
         }
     }
 
@@ -139,35 +171,32 @@ class RecipeRepositoryImpl(
         if (!apiConfigured) return sampleRecipesForCategory(category, limit)
 
         return try {
-            val aggregated = mutableListOf<SpoonacularRecipeDto>()
-            var offset = 0
-            var total = Int.MAX_VALUE
-
-            while (aggregated.size < total && aggregated.size < limit) {
-                // Request exactly what's still needed — never fetch more than required
-                val batchSize = minOf(limit - aggregated.size, PAGE_SIZE)
-                val resp = if (category.cuisineType == CuisineType.INTERNATIONAL)
-                    apiService.searchRecipes(
-                        query = "",
-                        type = category.spoonacularTag,
-                        number = batchSize,
-                        offset = offset
-                    )
-                else
-                    apiService.searchRecipes(
-                        query = "",
-                        cuisine = category.spoonacularTag,
-                        number = batchSize,
-                        offset = offset
-                    )
-
-                if (total == Int.MAX_VALUE) total = resp.totalResults
-                if (resp.results.isEmpty()) break
-                aggregated += resp.results
-                offset += PAGE_SIZE
+            // Route the spoonacularTag to the correct API parameter based on category kind:
+            //  CUISINE   → cuisine=  (e.g. "indian", "italian")
+            //  DISH_TYPE → type=     (e.g. "breakfast", "dessert", "snack,fingerfood")
+            //  DIETARY   → diet=     (e.g. "vegan", "vegetarian", "ketogenic")
+            //
+            // category.apiQuery is a supplementary keyword used to narrow results when the
+            // type alone is too broad (e.g. Dinner vs Lunch both use type="main course").
+            val resp = when (category.kind) {
+                CategoryKind.CUISINE   -> apiService.searchRecipes(
+                    query   = category.apiQuery,
+                    cuisine = category.spoonacularTag,
+                    number  = limit
+                )
+                CategoryKind.DISH_TYPE -> apiService.searchRecipes(
+                    query  = category.apiQuery,
+                    type   = category.spoonacularTag,
+                    number = limit
+                )
+                CategoryKind.DIETARY   -> apiService.searchRecipes(
+                    query  = category.apiQuery,
+                    diet   = category.spoonacularTag,
+                    number = limit
+                )
             }
 
-            val recipes = aggregated.take(minOf(total, limit)).map { it.toDomain() }
+            val recipes = resp.results.map { it.toDomain() }
             Log.d(TAG, "Fetched ${recipes.size} recipes for category: ${category.name}")
             recipes
         } catch (e: Exception) {
@@ -176,16 +205,34 @@ class RecipeRepositoryImpl(
         }
     }
 
-    private fun sampleRecipesForCategory(category: RecipeCategory, limit: Int): List<Recipe> =
-        sampleRecipes
-            .filter {
-                it.category.equals(category.name, ignoreCase = true) ||
-                        it.cuisine.equals(category.name, ignoreCase = true)
+    private fun sampleRecipesForCategory(category: RecipeCategory, limit: Int): List<Recipe> {
+        return sampleRecipes.filter { recipe ->
+            when (category.kind) {
+                CategoryKind.CUISINE -> 
+                    recipe.cuisine.equals(category.spoonacularTag, ignoreCase = true) ||
+                    recipe.tags.any { it.equals(category.spoonacularTag, ignoreCase = true) }
+                    
+                CategoryKind.DISH_TYPE -> 
+                    recipe.category.equals(category.spoonacularTag, ignoreCase = true) || 
+                    recipe.tags.any { it.equals(category.spoonacularTag, ignoreCase = true) } ||
+                    recipe.category.equals(category.name, ignoreCase = true)
+                    
+                CategoryKind.DIETARY -> {
+                    when (category.spoonacularTag.lowercase()) {
+                        "vegetarian" -> recipe.isVegetarian
+                        "vegan" -> recipe.isVegan
+                        "gluten free" -> recipe.isGlutenFree
+                        "dairy free" -> recipe.isDairyFree
+                        "ketogenic" -> recipe.isKeto
+                        "low carb" -> recipe.isLowCarb
+                        else -> false
+                    }
+                }
             }
-            .take(limit)
+        }.take(limit)
+    }
 
     companion object {
         private const val TAG = "RecipeRepositoryImpl"
-        private const val PAGE_SIZE = 50  // matches GetRecipesByCategoryUseCase.defaultLimit
     }
 }

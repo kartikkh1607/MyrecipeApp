@@ -38,8 +38,7 @@ data class Ingredient(
     val amount: String,
     val unit: String = "",
     val notes: String = "",
-    val isOptional: Boolean = false,
-    val isCompleted: Boolean = false
+    val isOptional: Boolean = false
 ) : Parcelable
 
 @Parcelize
@@ -49,8 +48,7 @@ data class RecipeStep(
     val duration: Int? = null,
     val temperature: String? = null,
     val imageUrl: String? = null,
-    val tips: String? = null,
-    val isCompleted: Boolean = false
+    val tips: String? = null
 ) : Parcelable
 
 @Parcelize
@@ -84,10 +82,7 @@ enum class RecipeDifficulty {
 enum class FeaturedType {
     RECIPE_OF_THE_DAY,
     POPULAR_THIS_WEEK,
-    TRENDING_NOW,
-    QUICK_MEALS,
-    HEALTHY_CHOICES,
-    COMFORT_FOOD
+    QUICK_MEALS
 }
 
 @Parcelize
@@ -99,31 +94,9 @@ data class FeaturedRecipe(
     val gradientColors: List<String> = emptyList()
 ) : Parcelable
 
-// Filter models
-data class RecipeFilters(
-    val categories: List<String> = emptyList(),
-    val cuisines: List<String> = emptyList(),
-    val difficulties: List<RecipeDifficulty> = emptyList(),
-    val maxPrepTime: Int? = null,
-    val maxCookTime: Int? = null,
-    val maxCalories: Int? = null,
-    val dietaryRestrictions: DietaryRestrictions = DietaryRestrictions(),
-    val ingredients: List<String> = emptyList()
-)
-
-data class DietaryRestrictions(
-    val vegetarian: Boolean = false,
-    val vegan: Boolean = false,
-    val glutenFree: Boolean = false,
-    val dairyFree: Boolean = false,
-    val keto: Boolean = false,
-    val lowCarb: Boolean = false,
-    val lowSodium: Boolean = false,
-    val sugarFree: Boolean = false
-)
-
 /** Wraps paged search results from the API */
 data class SearchResult(
     val recipes: List<Recipe>,
     val totalResults: Int
 )
+

@@ -27,7 +27,7 @@ data class SpoonacularRecipeDto(
     @SerializedName("readyInMinutes") val readyInMinutes: Int,
     @SerializedName("healthScore") val healthScore: Float,
     @SerializedName("spoonacularScore") val spoonacularScore: Float,
-    @SerializedName("summary") val summary: String,
+    @SerializedName("summary") val summary: String?,   // nullable — not guaranteed by API
     @SerializedName("dishTypes") val dishTypes: List<String>?,
     @SerializedName("cuisines") val cuisines: List<String>?,
     @SerializedName("vegetarian") val isVegetarian: Boolean,
@@ -35,7 +35,9 @@ data class SpoonacularRecipeDto(
     @SerializedName("glutenFree") val isGlutenFree: Boolean,
     @SerializedName("dairyFree") val isDairyFree: Boolean,
     @SerializedName("extendedIngredients") val ingredients: List<SpoonacularIngredientDto>? = emptyList(),
-    @SerializedName("analyzedInstructions") val instructions: List<SpoonacularInstructionDto>? = emptyList()
+    @SerializedName("analyzedInstructions") val instructions: List<SpoonacularInstructionDto>? = emptyList(),
+    // Nutrition data — populated when includeNutrition=true is passed to getRecipeDetails
+    @SerializedName("nutrition") val nutrition: SpoonacularNutritionDto? = null
 )
 
 data class SpoonacularIngredientDto(
@@ -54,4 +56,20 @@ data class SpoonacularInstructionDto(
 data class SpoonacularStepDto(
     @SerializedName("number") val number: Int,
     @SerializedName("step") val step: String
+)
+
+// ── Nutrition DTOs ────────────────────────────────────────────────────────────
+
+/**
+ * Top-level nutrition object returned by Spoonacular when includeNutrition=true.
+ * The API returns a flat list of named nutrients rather than named fields.
+ */
+data class SpoonacularNutritionDto(
+    @SerializedName("nutrients") val nutrients: List<SpoonacularNutrientDto>?
+)
+
+data class SpoonacularNutrientDto(
+    @SerializedName("name") val name: String,
+    @SerializedName("amount") val amount: Float,
+    @SerializedName("unit") val unit: String
 )

@@ -1,8 +1,10 @@
 package com.example.myrecipeapp.ui.screens
 
 import androidx.activity.compose.BackHandler
-import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Animatable
+import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -11,7 +13,6 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
-import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -23,7 +24,6 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.itemsIndexed
@@ -31,7 +31,8 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocalFireDepartment
@@ -39,7 +40,7 @@ import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -53,12 +54,16 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -79,6 +84,10 @@ import com.example.myrecipeapp.domain.model.Recipe
 import com.example.myrecipeapp.domain.model.RecipeStep
 import com.example.myrecipeapp.ui.navigation.ShoppingList
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
+import kotlin.math.cos
+import kotlin.math.sin
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -95,13 +104,15 @@ fun RecipeDetailScreen(
         viewModel.fetchRecipeDetails(recipeId)
     }
 
-    // Only block the screen when there is NO recipe to show at all.
-    // If a previous recipe is already loaded, keep it visible while the new one loads
-    // (avoids a blank spinner with no back button trapping the user).
-    val recipe = recipeDetailState.recipe
+    // ── Stale-state guard ─────────────────────────────────────────────────────
+    // LaunchedEffect runs AFTER the first composition frame, so without this guard
+    // the previous recipe would flash on screen for one frame before being cleared.
+    // takeIf ensures we only render a recipe whose ID matches what was requested.
+    val recipe = recipeDetailState.recipe?.takeIf { it.id == recipeId }
+
     if (recipe == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-            if (recipeDetailState.error != null) {
+            if (recipeDetailState.error != null && !recipeDetailState.loading) {
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
                     Text(
                         "Failed to load recipe",
@@ -120,164 +131,170 @@ fun RecipeDetailScreen(
     }
 
     var isCookingMode by remember { mutableStateOf(false) }
+    var showReplaceListDialog by remember { mutableStateOf(false) }
     val hapticFeedback = LocalHapticFeedback.current
-    // derivedStateOf: only THIS composable recomposes when isFavorite changes,
-    // not the whole RecipeDetailScreen — avoids re-rendering the hero + full scroll position reset
     val isFavorite by remember(recipe.id) {
         derivedStateOf { viewModel.favoriteIds.value.contains(recipe.id) }
     }
+    val hasShoppingItems by remember {
+        derivedStateOf { viewModel.shoppingList.value.isNotEmpty() }
+    }
 
-    AnimatedContent(
-        targetState = isCookingMode,
-        transitionSpec = {
-            if (targetState) {
-                // Entering cooking mode: slide up from bottom + fade in
-                (slideInVertically(
-                    initialOffsetY = { it },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = 320f
-                    )
-                ) + fadeIn(tween(220))) togetherWith
-                        (slideOutVertically(
-                            targetOffsetY = { -it / 4 },
-                            animationSpec = tween(200)
-                        ) + fadeOut(tween(180)))
-            } else {
-                // Exiting cooking mode: slide back down + fade in recipe detail
-                (slideInVertically(
-                    initialOffsetY = { -it / 4 },
-                    animationSpec = tween(220)
-                ) + fadeIn(tween(220))) togetherWith
-                        (slideOutVertically(
-                            targetOffsetY = { it },
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = 320f
-                            )
-                        ) + fadeOut(tween(180)))
+    // ── Replace list confirmation dialog ──────────────────────────────
+    if (showReplaceListDialog) {
+        AlertDialog(
+            onDismissRequest = { showReplaceListDialog = false },
+            title = { Text("Replace Shopping List?") },
+            text  = {
+                Text("This will replace your current list with \"${recipe.name}\"'s ingredients.")
+            },
+            confirmButton = {
+                Button(onClick = {
+                    showReplaceListDialog = false
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    viewModel.addToShoppingList(recipe)
+                    navController.navigate(ShoppingList) { launchSingleTop = true }
+                }) { Text("Replace") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showReplaceListDialog = false }) { Text("Cancel") }
             }
-        },
-        label = "cooking_mode_transition"
-    ) { inCookingMode ->
-        if (inCookingMode) {
-            BackHandler {
+        )
+    }
+
+    // Box: cooking mode full-screen overlay sits on TOP of MainScreen's bottom nav
+    Box(modifier = Modifier.fillMaxSize()) {
+
+        // ── Recipe Detail content (always underneath) ─────────────────────────
+        val listState = rememberLazyListState()
+        val parallaxOffset by remember {
+            derivedStateOf {
+                if (listState.firstVisibleItemIndex == 0)
+                    listState.firstVisibleItemScrollOffset * 0.4f
+                else 300f
+            }
+        }
+
+        LazyColumn(
+            state = listState,
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+        ) {
+            item {
+                RecipeHeroSection(
+                    recipe = recipe,
+                    isFavorite = isFavorite,
+                    parallaxOffsetPx = parallaxOffset,
+                    onBackClick = { navController.popBackStack() },
+                    onFavoriteClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.toggleFavorite(recipe)
+                    }
+                )
+            }
+
+            item {
+                RecipeOverviewSection(recipe = recipe)
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            item {
+                CookingActionButtons(
+                    onStartCooking = {
+                        isCookingMode = true
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    },
+                    onAddToShoppingList = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        if (hasShoppingItems) {
+                            showReplaceListDialog = true
+                        } else {
+                            viewModel.addToShoppingList(recipe)
+                            navController.navigate(ShoppingList) { launchSingleTop = true }
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            item {
+                IngredientsSection(ingredients = recipe.ingredients)
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            item(key = "instructions_header") {
+                Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp)) {
+                    Text(
+                        text = "Instructions",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(modifier = Modifier.height(16.dp))
+                }
+            }
+            itemsIndexed(
+                items = recipe.instructions,
+                key = { _, step -> "step_${step.stepNumber}" }
+            ) { stepIndex, step ->
+                InstructionStepCard(
+                    step = step,
+                    modifier = Modifier.padding(horizontal = 16.dp)
+                )
+                if (stepIndex < recipe.instructions.lastIndex) {
+                    Spacer(modifier = Modifier.height(12.dp))
+                }
+            }
+            item(key = "instructions_end") {
+                Spacer(modifier = Modifier.height(24.dp))
+            }
+
+            item {
+                recipe.nutritionInfo?.let { nutrition ->
+                    NutritionSection(nutritionInfo = nutrition)
+                    Spacer(modifier = Modifier.height(24.dp))
+                }
+            }
+
+            item {
+                TagsSection(tags = recipe.tags)
+                Spacer(modifier = Modifier.height(100.dp))
+            }
+        }
+
+        // ── Cooking Mode: true full-screen overlay covering the bottom nav ────
+        AnimatedVisibility(
+            visible = isCookingMode,
+            enter = slideInVertically(
+                initialOffsetY = { it },
+                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 320f)
+            ) + fadeIn(tween(220)),
+            exit = slideOutVertically(
+                targetOffsetY = { it },
+                animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 320f)
+            ) + fadeOut(tween(200))
+        ) {
+            BackHandler(enabled = isCookingMode) {
                 isCookingMode = false
                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
             }
-            CookingModeScreen(
-                recipe = recipe,
-                onExitCookingMode = {
-                    isCookingMode = false
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                }
-            )
-        } else {
-            val listState = rememberLazyListState()
-            // Parallax: hero image translates at 40% of scroll speed
-            val parallaxOffset by remember {
-                derivedStateOf {
-                    if (listState.firstVisibleItemIndex == 0)
-                        listState.firstVisibleItemScrollOffset * 0.4f
-                    else 300f  // hero fully scrolled away
-                }
-            }
-
-            LazyColumn(
-                state = listState,
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
                     .background(MaterialTheme.colorScheme.background)
             ) {
-                item {
-                    RecipeHeroSection(
-                        recipe = recipe,
-                        isFavorite = isFavorite,
-                        parallaxOffsetPx = parallaxOffset,
-                        onBackClick = { navController.popBackStack() },
-                        onFavoriteClick = {
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.toggleFavorite(recipe)
-                        }
-                    )
-                }
-
-                item {
-                    // Recipe Overview
-                    RecipeOverviewSection(recipe = recipe)
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-
-                item {
-                    // Cooking Action Buttons
-                    CookingActionButtons(
-                        onStartCooking = {
-                            isCookingMode = true
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        },
-                        onAddToShoppingList = {
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                            viewModel.addToShoppingList(recipe)
-                            navController.navigate(ShoppingList) {
-                                launchSingleTop = true
-                            }
-                        }
-                    )
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-
-                item {
-                    // Ingredients Section
-                    IngredientsSection(ingredients = recipe.ingredients)
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-
-                // Instructions header — its own lazy item
-                item(key = "instructions_header") {
-                    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 0.dp)) {
-                        Text(
-                            text = "Instructions",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
+                CookingModeScreen(
+                    recipe = recipe,
+                    onExitCookingMode = {
+                        isCookingMode = false
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                     }
-                }
-                // Each step card is its own lazy item — only visible steps are composed
-                itemsIndexed(
-                    items = recipe.instructions,
-                    key = { _, step -> "step_${step.stepNumber}" }
-                ) { stepIndex, step ->
-                    InstructionStepCard(
-                        step = step,
-                        modifier = Modifier.padding(horizontal = 16.dp)
-                    )
-                    if (stepIndex < recipe.instructions.lastIndex) {
-                        Spacer(modifier = Modifier.height(12.dp))
-                    }
-                }
-                item(key = "instructions_end") {
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-
-                item {
-                    // Nutrition Info (if available)
-                    recipe.nutritionInfo?.let { nutrition ->
-                        NutritionSection(nutritionInfo = nutrition)
-                        Spacer(modifier = Modifier.height(24.dp))
-                    }
-                }
-
-                item {
-                    // Tags
-                    TagsSection(tags = recipe.tags)
-                    Spacer(modifier = Modifier.height(100.dp)) // Bottom padding
-                }
-            }       // end LazyColumn
-        }       // end else (recipe detail view)
-    }           // end AnimatedContent lambda
-}               // end RecipeDetailScreen
+                )
+            }
+        }
+    }
+}
 
 
 @Composable
@@ -302,6 +319,14 @@ fun RecipeHeroSection(
         animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 400f),
         label = "favorite_color"
     )
+
+    // Burst trigger — increments only when recipe transitions false→true (add, not remove)
+    var burstTrigger by remember { mutableIntStateOf(0) }
+    val wasFavorite = remember { mutableStateOf(isFavorite) }
+    LaunchedEffect(isFavorite) {
+        if (isFavorite && !wasFavorite.value) burstTrigger++
+        wasFavorite.value = isFavorite
+    }
 
     Box(
         modifier = Modifier
@@ -337,8 +362,7 @@ fun RecipeHeroSection(
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(12.dp)
-                .statusBarsPadding(),
+                .padding(12.dp),
             horizontalArrangement = Arrangement.SpaceBetween
         ) {
             IconButton(
@@ -346,22 +370,34 @@ fun RecipeHeroSection(
                 modifier = Modifier
                     .background(Color.Black.copy(alpha = 0.35f), CircleShape)
             ) {
-                Icon(Icons.Default.ArrowBack, "Back", tint = Color.White)
+                Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
             }
 
-            IconButton(
-                onClick = onFavoriteClick,
-                modifier = Modifier
-                    .background(Color.Black.copy(alpha = 0.35f), CircleShape)
-                    .scale(favoriteScale)
-            ) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (isFavorite) "Remove" else "Favorite",
-                    tint = favoriteColor
-                )
+            // Favorite button — wrapped in Box so the heart burst overlay can float above it
+            Box(contentAlignment = Alignment.Center) {
+                HeartBurstOverlay(trigger = burstTrigger)
+                IconButton(
+                    onClick = onFavoriteClick,
+                    modifier = Modifier
+                        .background(Color.Black.copy(alpha = 0.35f), CircleShape)
+                        .scale(favoriteScale)
+                ) {
+                    Icon(
+                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (isFavorite) "Remove" else "Favorite",
+                        tint = favoriteColor
+                    )
+                }
             }
         }
+
+        // "Saved!" pill — slides in from below the top bar when recipe is added to favorites
+        FavoriteAddedLabel(
+            trigger = burstTrigger,
+            modifier = Modifier
+                .align(Alignment.TopEnd)
+                .padding(end = 16.dp, top = 64.dp)
+        )
 
         // Recipe Title
         Column(
@@ -419,7 +455,7 @@ fun RecipeOverviewSection(recipe: Recipe) {
             )
 
             RecipeInfoItem(
-                icon = Icons.Default.TrendingUp,
+                icon = Icons.AutoMirrored.Filled.TrendingUp,
                 label = "Difficulty",
                 value = recipe.difficulty.displayName()
             )
@@ -617,26 +653,6 @@ fun IngredientItem(
     }
 }
 
-@Composable
-fun InstructionsSection(instructions: List<RecipeStep>) {
-    Column(
-        modifier = Modifier.padding(horizontal = 16.dp)
-    ) {
-        Text(
-            text = "Instructions",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        instructions.forEach { step ->
-            InstructionStepCard(step = step)
-            Spacer(modifier = Modifier.height(12.dp))
-        }
-    }
-}
 
 @Composable
 fun InstructionStepCard(step: RecipeStep, modifier: Modifier = Modifier) {
@@ -818,4 +834,103 @@ fun TagsSection(tags: List<String>) {
     }
 }
 
-// CookingActionButtons function moved to avoid duplication
+// ── Heart burst effect ────────────────────────────────────────────────────────
+@Composable
+private fun HeartBurstOverlay(trigger: Int) {
+    val particles = remember {
+        (0 until 8).map { i ->
+            val rad = Math.toRadians(i * 45.0 + 22.5)
+            Triple(cos(rad).toFloat(), sin(rad).toFloat(), (i * 55L) % 180L)
+        }
+    }
+    Box(contentAlignment = Alignment.Center, modifier = Modifier.size(80.dp)) {
+        particles.forEach { (dx, dy, delayMs) ->
+            key(trigger) {
+                if (trigger > 0) FloatingHeart(dx = dx, dy = dy, delayMs = delayMs)
+            }
+        }
+    }
+}
+
+@Composable
+private fun FloatingHeart(dx: Float, dy: Float, delayMs: Long) {
+    val progress = remember { Animatable(0f) }
+    val alpha = remember { Animatable(0f) }
+    val scope = rememberCoroutineScope()
+
+    LaunchedEffect(Unit) {
+        delay(delayMs)
+        scope.launch { progress.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) }
+        alpha.animateTo(1f, tween(100))
+        delay(350)
+        alpha.animateTo(0f, tween(350))
+    }
+
+    Icon(
+        imageVector = Icons.Default.Favorite,
+        contentDescription = null,
+        tint = Color(0xFFFF4E6A),
+        modifier = Modifier
+            .size(18.dp)
+            .graphicsLayer {
+                val maxPx = 55.dp.toPx()
+                translationX = dx * maxPx * progress.value
+                translationY = dy * maxPx * progress.value
+                this.alpha = alpha.value
+                scaleX = 0.3f + progress.value * 0.7f
+                scaleY = 0.3f + progress.value * 0.7f
+            }
+    )
+}
+
+// ── "Saved!" pill label ───────────────────────────────────────────────────────
+@Composable
+private fun FavoriteAddedLabel(trigger: Int, modifier: Modifier = Modifier) {
+    var visible by remember { mutableStateOf(false) }
+
+    LaunchedEffect(trigger) {
+        if (trigger == 0) return@LaunchedEffect
+        visible = true
+        delay(1_500)
+        visible = false
+    }
+
+    AnimatedVisibility(
+        visible = visible,
+        modifier = modifier,
+        enter = slideInVertically(initialOffsetY = { 16 }, animationSpec = tween(250)) +
+                fadeIn(tween(200)),
+        exit = slideOutVertically(targetOffsetY = { -16 }, animationSpec = tween(250)) +
+                fadeOut(tween(200))
+    ) {
+        Surface(
+            color = Color(0xFFFF4E6A),
+            shape = RoundedCornerShape(24.dp),
+            shadowElevation = 6.dp
+        ) {
+            Row(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Icon(
+                    Icons.Default.Favorite,
+                    null,
+                    tint = Color.White,
+                    modifier = Modifier.size(14.dp)
+                )
+                Text(
+                    "Saved!",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+        }
+    }
+}
+
+
+
+
+

@@ -45,6 +45,13 @@ private val iosNavSpringFloat = spring<Float>(
     stiffness = 380f
 )
 
+// ── Search zoom-in/out spring specs ──────────────────────────────────────────
+// Extracted to avoid 4 identical copy-pasted blocks in the composable below.
+private val searchSpring = spring<Float>(
+    dampingRatio = Spring.DampingRatioNoBouncy,
+    stiffness = Spring.StiffnessMedium
+)
+
 @Composable
 fun Navigation(
     navController: NavHostController,
@@ -101,42 +108,10 @@ fun Navigation(
 
         composable<Search>(
             // Search uses a zoom-in feel instead of a horizontal slide
-            enterTransition = {
-                scaleIn(
-                    initialScale = 0.92f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeIn(animationSpec = tween(300))
-            },
-            exitTransition = {
-                scaleOut(
-                    targetScale = 0.92f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeOut(animationSpec = tween(250))
-            },
-            popEnterTransition = {
-                scaleIn(
-                    initialScale = 0.92f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeIn(animationSpec = tween(300))
-            },
-            popExitTransition = {
-                scaleOut(
-                    targetScale = 0.92f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioNoBouncy,
-                        stiffness = Spring.StiffnessMedium
-                    )
-                ) + fadeOut(animationSpec = tween(250))
-            }
+            enterTransition    = { scaleIn(initialScale = 0.92f, animationSpec = searchSpring) + fadeIn(animationSpec = tween(300)) },
+            exitTransition     = { scaleOut(targetScale = 0.92f, animationSpec = searchSpring) + fadeOut(animationSpec = tween(250)) },
+            popEnterTransition = { scaleIn(initialScale = 0.92f, animationSpec = searchSpring) + fadeIn(animationSpec = tween(300)) },
+            popExitTransition  = { scaleOut(targetScale = 0.92f, animationSpec = searchSpring) + fadeOut(animationSpec = tween(250)) }
         ) {
             SearchScreen(navController = navController, viewModel = viewModel)
         }
@@ -146,7 +121,7 @@ fun Navigation(
         }
 
         composable<Settings> {
-            SettingsScreen(navController = navController)
+            SettingsScreen(navController = navController, viewModel = viewModel)
         }
 
         // ── Detail screens ─────────────────────────────────────────────────────────

@@ -1,8 +1,6 @@
 package com.example.myrecipeapp.ui.theme
 
-import android.app.Activity
 import android.os.Build
-import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
@@ -91,7 +89,6 @@ private val PremiumLightColorScheme = lightColorScheme(
 @Composable
 fun MyrecipeAppTheme(
     darkTheme: Boolean = false,
-    // DISABLED dynamic color to ensure consistent theming across all devices
     dynamicColor: Boolean = false,
     content: @Composable () -> Unit
 ) {

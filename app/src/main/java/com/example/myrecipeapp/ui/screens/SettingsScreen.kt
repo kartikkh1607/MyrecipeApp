@@ -36,7 +36,15 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
+import androidx.compose.foundation.selection.selectable
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.RadioButton
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
@@ -44,15 +52,21 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.example.myrecipeapp.domain.model.ThemeMode
 import com.example.myrecipeapp.ui.navigation.About
 import com.example.myrecipeapp.ui.navigation.Profile
+import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 
 @Composable
 fun SettingsScreen(
-    navController: NavHostController
+    navController: NavHostController,
+    viewModel: MainViewModel          // ✅ Issue #4: ViewModel needed for theme control
 ) {
     val hapticFeedback = LocalHapticFeedback.current
+    // ✅ Issue #4: observe current theme mode from DataStore
+    val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -68,11 +82,77 @@ fun SettingsScreen(
             modifier = Modifier.padding(bottom = 24.dp)
         )
 
+        var showThemeDialog by remember { mutableStateOf(false) }
+
+        // Theme picker AlertDialog
+        if (showThemeDialog) {
+            AlertDialog(
+                onDismissRequest = { showThemeDialog = false },
+                title = {
+                    Text(
+                        text = "Choose Theme",
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold
+                    )
+                },
+                text = {
+                    Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        ThemeMode.entries.forEach { mode ->
+                            Row(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .selectable(
+                                        selected = currentTheme == mode,
+                                        onClick = {
+                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                            viewModel.setThemeMode(mode)
+                                            showThemeDialog = false
+                                        }
+                                    )
+                                    .padding(vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically
+                            ) {
+                                RadioButton(
+                                    selected = currentTheme == mode,
+                                    onClick = {
+                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                        viewModel.setThemeMode(mode)
+                                        showThemeDialog = false
+                                    }
+                                )
+                                Spacer(modifier = Modifier.width(12.dp))
+                                Text(
+                                    text = "${mode.emoji()}  ${mode.label()}",
+                                    style = MaterialTheme.typography.bodyLarge,
+                                    color = if (currentTheme == mode)
+                                        MaterialTheme.colorScheme.primary
+                                    else
+                                        MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+                },
+                confirmButton = {},
+                dismissButton = {
+                    TextButton(onClick = { showThemeDialog = false }) {
+                        Text("Cancel")
+                    }
+                }
+            )
+        }
+
         LazyColumn(verticalArrangement = Arrangement.spacedBy(12.dp)) {
             item {
                 SettingsSection(title = "Preferences") {
-                    SettingsItem(Icons.Default.Palette, "Theme", "Light, Dark, or System") {
+                    // Theme row — tapping opens the AlertDialog picker
+                    SettingsItem(
+                        icon = Icons.Default.Palette,
+                        title = "Theme",
+                        subtitle = "${currentTheme.emoji()} ${currentTheme.label()}"
+                    ) {
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showThemeDialog = true
                     }
                     SettingsItem(
                         Icons.Default.Notifications,
@@ -126,6 +206,9 @@ fun SettingsScreen(
         }
     }
 }
+
+
+// ── Reusable components ───────────────────────────────────────────────────────
 
 @Composable
 fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) {
