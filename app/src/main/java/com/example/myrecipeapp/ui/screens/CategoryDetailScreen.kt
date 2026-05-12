@@ -81,7 +81,7 @@ fun CategoryDetailScreen(
     var selectedDietaryFilter by remember(category.id) {
         mutableStateOf(viewModel.getCategoryFilter(category.id))
     }
-    givar showFilterBottomSheet by remember { mutableStateOf(false) }
+    var showFilterBottomSheet by remember { mutableStateOf(false) }
     var sortByRating by remember { mutableStateOf(false) }
 
     // Persist filter change to ViewModel so it's restored on re-visit
