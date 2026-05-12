@@ -15,17 +15,19 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
@@ -47,6 +49,8 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.FilterChip
+import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
@@ -97,14 +101,14 @@ fun FavoritesScreen(
     viewModel: MainViewModel
 ) {
     val favoriteRecipes by viewModel.favoriteRecipes
+    val sortedFavorites by viewModel.sortedFavoriteRecipes
     val favoriteIds by viewModel.favoriteIds
     val isGridMode by viewModel.favoritesGridMode
+    val currentSort by viewModel.favoritesSortOrder
     val hapticFeedback = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
 
-    // Hoist both scroll states (grid + list view) so reselecting the Favorites
-    // tab smooth-scrolls whichever view is currently visible to the top.
     val gridState = rememberLazyGridState()
     val listState = rememberLazyListState()
     val tabReselectEvents = LocalTabReselectEvents.current
@@ -135,7 +139,7 @@ fun FavoritesScreen(
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 24.dp),
+                    .padding(top = 8.dp, bottom = 16.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
                 verticalAlignment = Alignment.CenterVertically
             ) {
@@ -155,7 +159,6 @@ fun FavoritesScreen(
                     }
                 }
 
-                // Grid/List toggle — only shown when list is non-empty
                 if (favoriteRecipes.isNotEmpty()) {
                     IconButton(
                         onClick = {
@@ -175,9 +178,19 @@ fun FavoritesScreen(
                 }
             }
 
-            // Stable method references — hoisted so list items skip recomposition
-            // when unrelated state (snackbar, scroll position) changes in the parent.
-            val onToggleFavorite = remember { viewModel::toggleFavorite }
+            // ── Sort chips row ─────────────────────────────────────────────────
+            if (favoriteRecipes.isNotEmpty()) {
+                FavoritesSortBar(
+                    currentSort = currentSort,
+                    onSortSelected = { order ->
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.setFavoritesSortOrder(order)
+                    }
+                )
+                Spacer(modifier = Modifier.height(14.dp))
+            }
+
+            // Stable method references hoisted to avoid recomposition of list items
             val onRemoveFavorite = remember { viewModel::removeFavorite }
             val onAddFavorite = remember { viewModel::addFavorite }
 
@@ -200,7 +213,6 @@ fun FavoritesScreen(
                         label = "grid_list_toggle"
                     ) { grid ->
                         if (grid) {
-                            // ── Grid mode: 2-col + long-press to delete ──────────
                             LazyVerticalGrid(
                                 columns = GridCells.Fixed(2),
                                 state = gridState,
@@ -209,7 +221,7 @@ fun FavoritesScreen(
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 itemsIndexed(
-                                    favoriteRecipes,
+                                    sortedFavorites,
                                     key = { _, recipe -> recipe.id }
                                 ) { index, recipe ->
                                     var visible by remember { mutableStateOf(false) }
@@ -223,7 +235,7 @@ fun FavoritesScreen(
                                             onRemoveFavorite(recipe.id)
                                             scope.launch {
                                                 val result = snackbarHostState.showSnackbar(
-                                                    message = "\"${recipe.name}\" removed",
+                                                    message = "${recipe.name} removed from favorites",
                                                     actionLabel = "Undo",
                                                     duration = androidx.compose.material3.SnackbarDuration.Short
                                                 )
@@ -256,14 +268,13 @@ fun FavoritesScreen(
                                 }
                             }
                         } else {
-                            // ── List mode: swipe-to-delete ───────────────────────
                             LazyColumn(
                                 state = listState,
                                 modifier = Modifier.fillMaxSize(),
                                 verticalArrangement = Arrangement.spacedBy(12.dp)
                             ) {
                                 itemsIndexed(
-                                    favoriteRecipes,
+                                    sortedFavorites,
                                     key = { _, recipe -> recipe.id }
                                 ) { index, recipe ->
                                     var visible by remember { mutableStateOf(false) }
@@ -277,7 +288,7 @@ fun FavoritesScreen(
                                             onRemoveFavorite(recipe.id)
                                             scope.launch {
                                                 val result = snackbarHostState.showSnackbar(
-                                                    message = "\"${recipe.name}\" removed",
+                                                    message = "${recipe.name} removed from favorites",
                                                     actionLabel = "Undo",
                                                     duration = androidx.compose.material3.SnackbarDuration.Short
                                                 )
@@ -309,7 +320,6 @@ fun FavoritesScreen(
                                             recipe = recipe,
                                             isFavorite = favoriteIds.contains(recipe.id),
                                             onDelete = onDelete,
-                                            onFavoriteToggle = onToggleFavorite,
                                             onClick = onListClick
                                         )
                                     }
@@ -320,7 +330,54 @@ fun FavoritesScreen(
                 }
             }
         }
-    } // end Scaffold
+    }
+}
+
+// ── Sort chips row ────────────────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FavoritesSortBar(
+    currentSort: MainViewModel.FavoritesSortOrder,
+    onSortSelected: (MainViewModel.FavoritesSortOrder) -> Unit
+) {
+    val sortOptions = remember { MainViewModel.FavoritesSortOrder.values().toList() }
+    val sortEmojis = remember {
+        mapOf(
+            MainViewModel.FavoritesSortOrder.RECENTLY_ADDED to "🕐",
+            MainViewModel.FavoritesSortOrder.NAME_AZ to "🔤",
+            MainViewModel.FavoritesSortOrder.NAME_ZA to "🔡",
+            MainViewModel.FavoritesSortOrder.RATING to "★",
+            MainViewModel.FavoritesSortOrder.COOK_TIME to "⏱",
+            MainViewModel.FavoritesSortOrder.DIFFICULTY to "💪"
+        )
+    }
+
+    LazyRow(
+        horizontalArrangement = Arrangement.spacedBy(8.dp),
+        contentPadding = PaddingValues(0.dp)
+    ) {
+        items(sortOptions.size) { index ->
+            val option = sortOptions[index]
+            val isSelected = currentSort == option
+            val emoji = sortEmojis[option] ?: ""
+            FilterChip(
+                selected = isSelected,
+                onClick = { onSortSelected(option) },
+                label = {
+                    Text(
+                        text = "$emoji ${option.label}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = if (isSelected) FontWeight.Bold else FontWeight.Normal
+                    )
+                },
+                colors = FilterChipDefaults.filterChipColors(
+                    selectedContainerColor = MaterialTheme.colorScheme.primary,
+                    selectedLabelColor = MaterialTheme.colorScheme.onPrimary
+                ),
+                shape = RoundedCornerShape(20.dp)
+            )
+        }
+    }
 }
 
 // ── Swipe-to-delete wrapper for list mode ─────────────────────────────────────
@@ -330,7 +387,6 @@ private fun SwipeToDeleteFavoriteCard(
     recipe: Recipe,
     isFavorite: Boolean,
     onDelete: () -> Unit,
-    onFavoriteToggle: (Recipe) -> Unit,
     onClick: () -> Unit
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
@@ -342,13 +398,12 @@ private fun SwipeToDeleteFavoriteCard(
                 true
             } else false
         },
-        positionalThreshold = { totalDistance -> totalDistance * 0.35f }  // 35% drag to confirm
+        positionalThreshold = { totalDistance -> totalDistance * 0.35f }
     )
 
     SwipeToDismissBox(
         state = dismissState,
         backgroundContent = {
-            // Red delete background revealed on swipe
             val isActive = dismissState.dismissDirection == SwipeToDismissBoxValue.EndToStart ||
                     dismissState.dismissDirection == SwipeToDismissBoxValue.StartToEnd
             val bgColor = if (isActive)
@@ -391,20 +446,19 @@ private fun SwipeToDeleteFavoriteCard(
                 }
             }
         },
-        enableDismissFromStartToEnd = false,   // only swipe left-to-right is disabled
-        enableDismissFromEndToStart = true      // swipe right-to-left = delete
+        enableDismissFromStartToEnd = false,
+        enableDismissFromEndToStart = true
     ) {
         EnhancedRecipeCard(
             recipe = recipe,
             isFavorite = isFavorite,
-            onFavoriteToggle = onFavoriteToggle,
+            onFavoriteToggle = { onDelete() },
             onClick = onClick
         )
     }
 }
 
 // ── Compact grid card ─────────────────────────────────────────────────────────
-// Tap the card → open recipe.  Tap the ❤ button → shows undo snackbar (same as swipe-delete).
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CompactFavoriteCard(
@@ -449,9 +503,7 @@ private fun CompactFavoriteCard(
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 )
             }
-            // Gradient overlay
             Box(modifier = Modifier.fillMaxSize().background(cardOverlay))
-            // ❤ button — tap shows undo snackbar (consistent with swipe-delete)
             IconButton(
                 onClick = onRemove,
                 modifier = Modifier
@@ -467,7 +519,6 @@ private fun CompactFavoriteCard(
                     modifier = Modifier.size(16.dp)
                 )
             }
-            // Title + meta at bottom
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)

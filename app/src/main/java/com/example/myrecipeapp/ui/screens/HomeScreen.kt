@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -69,6 +70,8 @@ import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
+import com.example.myrecipeapp.domain.model.FeaturedRecipe
+import com.example.myrecipeapp.domain.model.RecipeDifficulty
 import com.example.myrecipeapp.ui.components.FeaturedCarouselSkeleton
 import com.example.myrecipeapp.ui.navigation.Chat
 import com.example.myrecipeapp.ui.navigation.Home
@@ -442,11 +445,10 @@ fun HeroHeaderSection(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun TodaysPickCard(
-    featured: List<com.example.myrecipeapp.domain.model.FeaturedRecipe>,
+    featured: List<FeaturedRecipe>,
     onClick: (recipeId: String) -> Unit
 ) {
     val hour = remember { java.time.LocalDateTime.now().hour }
-    // (badge label, badge emoji, CTA copy) tuned to the time of day
     val mood = remember(hour) {
         when (hour) {
             in 5..10 -> Triple("Today's breakfast", "☀️", "Cook this morning")
@@ -458,11 +460,24 @@ private fun TodaysPickCard(
     }
     val (badgeLabel, badgeEmoji, ctaLabel) = mood
 
-    // Stable daily pick — same recipe across the whole day, rotates by day-of-year.
+    // Stable daily pick — same recipe all day, rotates by day-of-year
     val pick = remember(featured) {
         featured[java.time.LocalDate.now().dayOfYear % featured.size]
     }
     val recipe = pick.recipe
+
+    // Other featured recipes for the "More ideas" row (skip the daily pick)
+    val morePicks = remember(featured, pick) {
+        featured.filter { it != pick }.take(4)
+    }
+
+    val difficultyBgColor = remember(recipe.difficulty) {
+        when (recipe.difficulty) {
+            RecipeDifficulty.EASY -> Color(0xFF2E7D32)
+            RecipeDifficulty.MEDIUM -> Color(0xFFE65100)
+            RecipeDifficulty.HARD -> Color(0xFFC62828)
+        }
+    }
 
     var pressed by remember { mutableStateOf(false) }
     val scale by animateFloatAsState(
@@ -472,152 +487,217 @@ private fun TodaysPickCard(
         finishedListener = { pressed = false }
     )
 
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        // Section header (Playfair via headlineSmall)
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Text(
-                "Today's pick",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
+    // Entrance slide-up animation
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+
+    val heroGradient = remember {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.0f to Color.Transparent,
+                0.35f to Color.Transparent,
+                0.65f to Color.Black.copy(alpha = 0.4f),
+                1.0f to Color.Black.copy(alpha = 0.92f)
             )
-            Spacer(modifier = Modifier.width(6.dp))
-            Text("✨", fontSize = 16.sp)
+        )
+    }
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        // Section header with subtitle
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Column {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Text(
+                        "Today's pick",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
+                    )
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("✨", fontSize = 16.sp)
+                }
+                Text(
+                    text = "Curated for $badgeLabel",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.55f)
+                )
+            }
         }
         Spacer(modifier = Modifier.height(14.dp))
 
-        Card(
-            onClick = {
-                pressed = true
-                onClick(recipe.id)
-            },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(300.dp)
-                .scale(scale),
-            shape = RoundedCornerShape(24.dp),
-            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        AnimatedVisibility(
+            visible = visible,
+            enter = slideInVertically(
+                initialOffsetY = { 60 },
+                animationSpec = tween(500)
+            ) + fadeIn(animationSpec = tween(500))
         ) {
-            Box(modifier = Modifier.fillMaxSize()) {
-                AsyncImage(
-                    model = recipe.imageUrl,
-                    contentDescription = recipe.name,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-                val cardOverlay = remember {
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.25f),
-                            Color.Black.copy(alpha = 0.85f)
-                        )
-                    )
-                }
-                // Bottom-up dark gradient for legibility
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .background(cardOverlay)
-                )
-
-                // Top-left mood badge
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .padding(14.dp),
-                    shape = RoundedCornerShape(50),
-                    color = Color.White.copy(alpha = 0.9f)
-                ) {
-                    Row(
-                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(5.dp)
-                    ) {
-                        Text(badgeEmoji, fontSize = 12.sp)
-                        Text(
-                            badgeLabel,
-                            style = MaterialTheme.typography.labelMedium,
-                            color = ForestGreen,
-                            fontWeight = FontWeight.Bold
-                        )
-                    }
-                }
-
-                // Bottom content block
-                Column(
-                    modifier = Modifier
-                        .align(Alignment.BottomStart)
-                        .fillMaxWidth()
-                        .padding(20.dp)
-                ) {
-                    // Stat chips
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(8.dp)
-                    ) {
-                        if (recipe.rating > 0f) {
-                            PickStatChip("★", String.format(Locale.ROOT, "%.1f", recipe.rating))
-                        }
-                        val totalTime = recipe.prepTime + recipe.cookTime
-                        if (totalTime > 0) PickStatChip("⏱", "${totalTime}m")
-                        recipe.calories?.let { PickStatChip("🔥", "$it kcal") }
-                    }
-
-                    Spacer(modifier = Modifier.height(10.dp))
-
-                    // Title — Playfair via headlineMedium
-                    Text(
-                        text = recipe.name,
-                        style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.ExtraBold,
-                        color = Color.White,
-                        maxLines = 2,
-                        overflow = TextOverflow.Ellipsis,
-                        lineHeight = 30.sp
+            Card(
+                onClick = {
+                    pressed = true
+                    onClick(recipe.id)
+                },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(340.dp)
+                    .scale(scale),
+                shape = RoundedCornerShape(24.dp),
+                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
+            ) {
+                Box(modifier = Modifier.fillMaxSize()) {
+                    AsyncImage(
+                        model = recipe.imageUrl,
+                        contentDescription = recipe.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop
                     )
 
-                    if (recipe.description.isNotBlank()) {
-                        Spacer(modifier = Modifier.height(4.dp))
-                        Text(
-                            text = recipe.description,
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = Color.White.copy(alpha = 0.85f),
-                            maxLines = 1,
-                            overflow = TextOverflow.Ellipsis
-                        )
-                    }
+                    // 4-stop gradient for strong bottom legibility
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .background(heroGradient)
+                    )
 
-                    Spacer(modifier = Modifier.height(14.dp))
-
-                    // CTA
+                    // Top-left: time-of-day mood badge
                     Surface(
-                        onClick = {
-                            pressed = true
-                            onClick(recipe.id)
-                        },
-                        shape = RoundedCornerShape(12.dp),
-                        color = Color.White
+                        modifier = Modifier
+                            .align(Alignment.TopStart)
+                            .padding(14.dp),
+                        shape = RoundedCornerShape(50),
+                        color = Color.White.copy(alpha = 0.92f)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(5.dp)
+                        ) {
+                            Text(badgeEmoji, fontSize = 12.sp)
+                            Text(
+                                badgeLabel,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = ForestGreen,
+                                fontWeight = FontWeight.Bold
+                            )
+                        }
+                    }
+
+                    // Top-right: difficulty badge
+                    Surface(
+                        modifier = Modifier
+                            .align(Alignment.TopEnd)
+                            .padding(14.dp),
+                        shape = RoundedCornerShape(50),
+                        color = difficultyBgColor.copy(alpha = 0.9f)
+                    ) {
+                        Text(
+                            text = "${recipe.difficulty.emoji()} ${recipe.difficulty.displayName()}",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
+                        )
+                    }
+
+                    // Bottom content block
+                    Column(
+                        modifier = Modifier
+                            .align(Alignment.BottomStart)
+                            .fillMaxWidth()
+                            .padding(20.dp)
+                    ) {
+                        // Stat chips — rating, time, servings, calories
+                        Row(
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(8.dp)
                         ) {
-                            Icon(
-                                Icons.Default.PlayArrow,
-                                contentDescription = null,
-                                tint = ForestGreen,
-                                modifier = Modifier.size(18.dp)
-                            )
+                            if (recipe.rating > 0f) {
+                                PickStatChip("★", String.format(Locale.ROOT, "%.1f", recipe.rating))
+                            }
+                            val totalTime = recipe.prepTime + recipe.cookTime
+                            if (totalTime > 0) PickStatChip("⏱", "${totalTime}m")
+                            if (recipe.servings > 0) PickStatChip("👤", "${recipe.servings}")
+                            recipe.calories?.let { PickStatChip("🔥", "$it kcal") }
+                        }
+
+                        Spacer(modifier = Modifier.height(10.dp))
+
+                        Text(
+                            text = recipe.name,
+                            style = MaterialTheme.typography.headlineMedium,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White,
+                            maxLines = 2,
+                            overflow = TextOverflow.Ellipsis,
+                            lineHeight = 30.sp
+                        )
+
+                        if (recipe.description.isNotBlank()) {
+                            Spacer(modifier = Modifier.height(4.dp))
                             Text(
-                                ctaLabel,
-                                style = MaterialTheme.typography.labelLarge,
-                                fontWeight = FontWeight.Bold,
-                                color = ForestGreen
+                                text = recipe.description,
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = Color.White.copy(alpha = 0.80f),
+                                maxLines = 2,
+                                overflow = TextOverflow.Ellipsis
                             )
                         }
+
+                        Spacer(modifier = Modifier.height(16.dp))
+
+                        // CTA — solid ForestGreen, white text (prominent on dark image)
+                        Surface(
+                            onClick = {
+                                pressed = true
+                                onClick(recipe.id)
+                            },
+                            shape = RoundedCornerShape(12.dp),
+                            color = ForestGreen
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 20.dp, vertical = 11.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.PlayArrow,
+                                    contentDescription = null,
+                                    tint = Color.White,
+                                    modifier = Modifier.size(18.dp)
+                                )
+                                Text(
+                                    ctaLabel,
+                                    style = MaterialTheme.typography.labelLarge,
+                                    fontWeight = FontWeight.Bold,
+                                    color = Color.White
+                                )
+                            }
+                        }
                     }
+                }
+            }
+        } // end AnimatedVisibility
+
+        // ── "More ideas" mini-card row ───────────────────────────────────────
+        if (morePicks.isNotEmpty()) {
+            Spacer(modifier = Modifier.height(22.dp))
+            Text(
+                "More ideas",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.height(10.dp))
+            LazyRow(
+                contentPadding = PaddingValues(0.dp),
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                items(morePicks, key = { it.recipe.id }) { featuredItem ->
+                    MiniPickCard(featured = featuredItem, onClick = onClick)
                 }
             }
         }
@@ -642,6 +722,65 @@ private fun PickStatChip(emoji: String, value: String) {
                 color = Color.White,
                 fontWeight = FontWeight.SemiBold
             )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun MiniPickCard(
+    featured: FeaturedRecipe,
+    onClick: (recipeId: String) -> Unit
+) {
+    val recipe = featured.recipe
+    val cardScrim = remember {
+        Brush.verticalGradient(
+            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.78f))
+        )
+    }
+
+    Card(
+        onClick = { onClick(recipe.id) },
+        modifier = Modifier
+            .width(150.dp)
+            .height(110.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = recipe.imageUrl,
+                contentDescription = recipe.name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(cardScrim)
+            )
+            Column(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            ) {
+                Text(
+                    text = recipe.name,
+                    style = MaterialTheme.typography.labelMedium,
+                    color = Color.White,
+                    fontWeight = FontWeight.Bold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis
+                )
+                if (recipe.cookTime > 0) {
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = "⏱ ${recipe.cookTime}m",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White.copy(alpha = 0.8f)
+                    )
+                }
+            }
         }
     }
 }

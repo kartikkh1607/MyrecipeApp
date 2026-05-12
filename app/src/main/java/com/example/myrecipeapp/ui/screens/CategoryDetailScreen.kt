@@ -21,6 +21,7 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -52,19 +53,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.myrecipeapp.domain.model.DietaryFilter
 import com.example.myrecipeapp.domain.model.Recipe
 import com.example.myrecipeapp.domain.model.RecipeCategory
+import com.example.myrecipeapp.domain.model.RecipeDifficulty
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 import java.util.Locale
 
@@ -80,11 +81,11 @@ fun CategoryDetailScreen(
     var selectedDietaryFilter by remember(category.id) {
         mutableStateOf(viewModel.getCategoryFilter(category.id))
     }
-    var showFilterBottomSheet by remember { mutableStateOf(false) }
+    givar showFilterBottomSheet by remember { mutableStateOf(false) }
     var sortByRating by remember { mutableStateOf(false) }
 
     // Persist filter change to ViewModel so it's restored on re-visit
-    val updateFilter = { newFilter: com.example.myrecipeapp.domain.model.DietaryFilter ->
+    val updateFilter = { newFilter: DietaryFilter ->
         selectedDietaryFilter = newFilter
         viewModel.setCategoryFilter(category.id, newFilter)
     }
@@ -266,7 +267,7 @@ fun CategoryDetailScreen(
             LazyColumn(
                 modifier = Modifier.fillMaxSize(),
                 contentPadding = PaddingValues(16.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                verticalArrangement = Arrangement.spacedBy(16.dp)
             ) {
                 // Active filter indicator
                 if (selectedDietaryFilter != DietaryFilter.ALL) {
@@ -418,7 +419,7 @@ fun CategoryDetailScreen(
                         Row(
                             modifier = Modifier
                                 .fillMaxWidth()
-                                .padding(vertical = 8.dp),
+                                .padding(vertical = 4.dp),
                             horizontalArrangement = Arrangement.SpaceBetween,
                             verticalAlignment = Alignment.CenterVertically
                         ) {
@@ -455,7 +456,7 @@ fun CategoryDetailScreen(
                     // Load More button
                     if (categoryRecipesState.hasMore && !categoryRecipesState.loading) {
                         item(key = "load_more") {
-                            Spacer(modifier = Modifier.height(8.dp))
+                            Spacer(modifier = Modifier.height(4.dp))
                             androidx.compose.material3.Button(
                                 onClick = { viewModel.loadMoreCategoryRecipes(category.id) },
                                 modifier = Modifier
@@ -501,6 +502,7 @@ fun CategoryDetailScreen(
 }
 
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun EnhancedRecipeCard(
     recipe: Recipe,
@@ -511,7 +513,7 @@ fun EnhancedRecipeCard(
     var isPressed by remember { mutableStateOf(false) }
 
     val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.98f else 1f,
+        targetValue = if (isPressed) 0.97f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioMediumBouncy,
             stiffness = Spring.StiffnessHigh
@@ -520,16 +522,13 @@ fun EnhancedRecipeCard(
     )
 
     val favoriteColor by animateColorAsState(
-        targetValue = if (isFavorite) Color(0xFFE91E63) else MaterialTheme.colorScheme.onSurface.copy(
-            alpha = 0.6f
-        ),
+        targetValue = if (isFavorite) Color(0xFFE91E63) else Color.White.copy(alpha = 0.9f),
         label = "favorite_color"
     )
 
-    // Heart bounce — pops on tap then snaps back with spring
     var heartBounce by remember { mutableStateOf(false) }
     val heartScale by animateFloatAsState(
-        targetValue = if (heartBounce) 1.45f else 1f,
+        targetValue = if (heartBounce) 1.4f else 1f,
         animationSpec = spring(
             dampingRatio = Spring.DampingRatioLowBouncy,
             stiffness = Spring.StiffnessHigh
@@ -537,6 +536,22 @@ fun EnhancedRecipeCard(
         label = "heart_scale",
         finishedListener = { heartBounce = false }
     )
+
+    val ratingText = remember(recipe.rating) {
+        String.format(Locale.ROOT, "%.1f", recipe.rating)
+    }
+    val difficultyBgColor = remember(recipe.difficulty) {
+        when (recipe.difficulty) {
+            RecipeDifficulty.EASY -> Color(0xFF2E7D32)
+            RecipeDifficulty.MEDIUM -> Color(0xFFE65100)
+            RecipeDifficulty.HARD -> Color(0xFFC62828)
+        }
+    }
+    val imageScrim = remember {
+        Brush.verticalGradient(
+            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.5f))
+        )
+    }
 
     Card(
         onClick = {
@@ -550,65 +565,51 @@ fun EnhancedRecipeCard(
             containerColor = MaterialTheme.colorScheme.surface
         ),
         elevation = CardDefaults.cardElevation(
-            defaultElevation = 2.dp,
+            defaultElevation = 3.dp,
             pressedElevation = 8.dp
         ),
         shape = RoundedCornerShape(16.dp)
     ) {
-        Row(
-            modifier = Modifier.padding(16.dp),
-            horizontalArrangement = Arrangement.spacedBy(16.dp)
-        ) {
-            // Enhanced image with overlay + badges
-            val ratingText = remember(recipe.rating) {
-                String.format(Locale.ROOT, "%.1f", recipe.rating)
-            }
-            val difficultyBgColor = remember(recipe.difficulty) {
-                when (recipe.difficulty) {
-                    com.example.myrecipeapp.domain.model.RecipeDifficulty.EASY ->
-                        Color(0xFF2E7D32)
-                    com.example.myrecipeapp.domain.model.RecipeDifficulty.MEDIUM ->
-                        Color(0xFFE65100)
-                    com.example.myrecipeapp.domain.model.RecipeDifficulty.HARD ->
-                        Color(0xFFC62828)
-                }
-            }
-            Box(modifier = Modifier.size(100.dp)) {
+        Column {
+            // Hero image section
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(180.dp)
+            ) {
+                AsyncImage(
+                    model = recipe.imageUrl,
+                    contentDescription = recipe.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+
+                // Bottom scrim so bottom badges stay readable
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(MaterialTheme.colorScheme.surfaceVariant)
-                ) {
-                    AsyncImage(
-                        model = recipe.imageUrl,
-                        contentDescription = recipe.name,
-                        modifier = Modifier.fillMaxSize(),
-                        contentScale = ContentScale.Crop,
-                    )
-                }
+                        .background(imageScrim)
+                )
 
-                // Rating badge — top end
+                // Rating badge — top start
                 if (recipe.rating > 0) {
-                    Card(
+                    Surface(
                         modifier = Modifier
-                            .align(Alignment.TopEnd)
-                            .padding(6.dp),
-                        colors = CardDefaults.cardColors(
-                            containerColor = Color.Black.copy(alpha = 0.7f)
-                        ),
-                        shape = RoundedCornerShape(8.dp)
+                            .align(Alignment.TopStart)
+                            .padding(10.dp),
+                        color = Color.Black.copy(alpha = 0.65f),
+                        shape = RoundedCornerShape(20.dp)
                     ) {
                         Row(
-                            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(2.dp)
+                            horizontalArrangement = Arrangement.spacedBy(3.dp)
                         ) {
                             Icon(
                                 imageVector = Icons.Default.Star,
                                 contentDescription = null,
-                                tint = MaterialTheme.colorScheme.tertiary,
-                                modifier = Modifier.size(12.dp)
+                                tint = Color(0xFFFFC107),
+                                modifier = Modifier.size(13.dp)
                             )
                             Text(
                                 text = ratingText,
@@ -620,125 +621,146 @@ fun EnhancedRecipeCard(
                     }
                 }
 
+                // Favorite button — top end
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(8.dp)
+                        .size(36.dp),
+                    shape = CircleShape,
+                    color = Color.Black.copy(alpha = 0.45f),
+                    onClick = {
+                        heartBounce = true
+                        onFavoriteToggle(recipe)
+                    }
+                ) {
+                    Box(contentAlignment = Alignment.Center) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = "Favorite",
+                            tint = favoriteColor,
+                            modifier = Modifier
+                                .size(18.dp)
+                                .scale(heartScale)
+                        )
+                    }
+                }
+
                 // Difficulty badge — bottom start
                 Surface(
                     modifier = Modifier
                         .align(Alignment.BottomStart)
-                        .padding(5.dp),
-                    color = difficultyBgColor.copy(alpha = 0.92f),
-                    shape = RoundedCornerShape(6.dp)
+                        .padding(10.dp),
+                    color = difficultyBgColor.copy(alpha = 0.9f),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
                     Text(
                         text = "${recipe.difficulty.emoji()} ${recipe.difficulty.displayName()}",
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
-                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp)
                     )
                 }
-            }
 
-            // Recipe information
-            Column(
-                modifier = Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                // Title and favorite button
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.Top
+                // Cook time badge — bottom end
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(10.dp),
+                    color = Color.Black.copy(alpha = 0.65f),
+                    shape = RoundedCornerShape(8.dp)
                 ) {
-                    Text(
-                        text = recipe.name,
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        maxLines = 2,
-                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis,
-                        modifier = Modifier
-                            .weight(1f)
-                            .padding(end = 8.dp)
-                    )
-
-                    IconButton(
-                        onClick = {
-                            heartBounce = true
-                            onFavoriteToggle(recipe)
-                        },
-                        modifier = Modifier.size(32.dp)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 7.dp, vertical = 3.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(3.dp)
                     ) {
                         Icon(
-                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                            contentDescription = "Favorite",
-                            tint = favoriteColor,
-                            modifier = Modifier
-                                .size(20.dp)
-                                .scale(heartScale)
+                            imageVector = Icons.Default.AccessTime,
+                            contentDescription = null,
+                            tint = Color.White,
+                            modifier = Modifier.size(12.dp)
+                        )
+                        Text(
+                            text = "${recipe.cookTime}m",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold
                         )
                     }
                 }
+            }
 
-                // Description
+            // Info section
+            Column(
+                modifier = Modifier.padding(horizontal = 14.dp, vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
                 Text(
-                    text = recipe.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                    text = recipe.name,
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
                     maxLines = 2,
-                    overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    overflow = TextOverflow.Ellipsis
                 )
 
-                Spacer(modifier = Modifier.weight(1f))
+                if (recipe.description.isNotBlank()) {
+                    Text(
+                        text = recipe.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.65f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
 
-                // Recipe metadata — styled chip pills
                 Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Cook time chip
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    if (recipe.cuisine.isNotBlank()) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.secondaryContainer,
+                            shape = RoundedCornerShape(20.dp)
                         ) {
-                            Icon(
-                                imageVector = Icons.Default.AccessTime,
-                                contentDescription = null,
-                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
-                                modifier = Modifier.size(12.dp)
-                            )
                             Text(
-                                text = "${recipe.cookTime}m",
+                                text = recipe.cuisine,
                                 style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onSecondaryContainer,
                                 fontWeight = FontWeight.SemiBold,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
                             )
                         }
                     }
 
-                    // Calories chip
+                    if (recipe.servings > 0) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.primaryContainer,
+                            shape = RoundedCornerShape(20.dp)
+                        ) {
+                            Text(
+                                text = "👤 ${recipe.servings}",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+
                     if (recipe.calories != null && recipe.calories > 0) {
                         Surface(
                             color = MaterialTheme.colorScheme.tertiaryContainer,
-                            shape = RoundedCornerShape(8.dp)
+                            shape = RoundedCornerShape(20.dp)
                         ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(3.dp)
-                            ) {
-                                Text("🔥", fontSize = 10.sp)
-                                Text(
-                                    text = "${recipe.calories} kcal",
-                                    style = MaterialTheme.typography.labelSmall,
-                                    fontWeight = FontWeight.SemiBold,
-                                    color = MaterialTheme.colorScheme.onTertiaryContainer
-                                )
-                            }
+                            Text(
+                                text = "🔥 ${recipe.calories} kcal",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.onTertiaryContainer,
+                                fontWeight = FontWeight.SemiBold,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
                         }
                     }
                 }
@@ -746,7 +768,6 @@ fun EnhancedRecipeCard(
         }
     }
 
-    // Reset pressed state after animation
     LaunchedEffect(isPressed) {
         if (isPressed) {
             kotlinx.coroutines.delay(100)
@@ -796,5 +817,3 @@ fun DietaryFilterBottomSheet(
         Spacer(modifier = Modifier.height(16.dp))
     }
 }
-
-

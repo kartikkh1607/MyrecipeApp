@@ -178,6 +178,35 @@ class MainViewModel(
         _favoritesGridMode.value = !_favoritesGridMode.value
     }
 
+    // ── Favorites Sort Order ─────────────────────────────────────────────────
+    enum class FavoritesSortOrder(val label: String) {
+        RECENTLY_ADDED("Recent"),
+        NAME_AZ("A → Z"),
+        NAME_ZA("Z → A"),
+        RATING("Top Rated"),
+        COOK_TIME("Quickest"),
+        DIFFICULTY("Easiest")
+    }
+
+    private val _favoritesSortOrder = mutableStateOf(FavoritesSortOrder.RECENTLY_ADDED)
+    val favoritesSortOrder: State<FavoritesSortOrder> = _favoritesSortOrder
+
+    val sortedFavoriteRecipes: State<List<Recipe>> = derivedStateOf {
+        val recipes = _favoriteRecipes.value
+        when (_favoritesSortOrder.value) {
+            FavoritesSortOrder.RECENTLY_ADDED -> recipes
+            FavoritesSortOrder.NAME_AZ -> recipes.sortedBy { it.name.lowercase() }
+            FavoritesSortOrder.NAME_ZA -> recipes.sortedByDescending { it.name.lowercase() }
+            FavoritesSortOrder.RATING -> recipes.sortedByDescending { it.rating }
+            FavoritesSortOrder.COOK_TIME -> recipes.sortedBy { it.prepTime + it.cookTime }
+            FavoritesSortOrder.DIFFICULTY -> recipes.sortedBy { it.difficulty.ordinal }
+        }
+    }
+
+    fun setFavoritesSortOrder(order: FavoritesSortOrder) {
+        _favoritesSortOrder.value = order
+    }
+
     fun removeFavorite(recipeId: String) {
         viewModelScope.launch { favoriteDao.delete(recipeId) }
     }
