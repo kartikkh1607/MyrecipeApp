@@ -4,6 +4,8 @@ import android.util.Log
 import com.example.myrecipeapp.BuildConfig
 import com.example.myrecipeapp.data.local.CachedRecipeDao
 import com.example.myrecipeapp.data.local.CachedRecipeEntity
+import com.example.myrecipeapp.data.local.FeaturedCacheDao
+import com.example.myrecipeapp.data.local.FeaturedCacheEntity
 import com.example.myrecipeapp.data.local.toCachedEntity
 import com.example.myrecipeapp.data.local.toRecipe
 import com.example.myrecipeapp.data.remote.SpoonacularApiService
@@ -29,7 +31,8 @@ import com.example.myrecipeapp.domain.repository.RecipeRepository
  */
 class RecipeRepositoryImpl(
     private val apiService: SpoonacularApiService,
-    private val cachedRecipeDao: CachedRecipeDao
+    private val cachedRecipeDao: CachedRecipeDao,
+    private val featuredCacheDao: FeaturedCacheDao
 ) : RecipeRepository {
 
     // Only needed to decide whether to call the API or fall back to sample data.
@@ -37,7 +40,11 @@ class RecipeRepositoryImpl(
     private val apiKey: String = BuildConfig.SPOONACULAR_API_KEY
     private val apiConfigured: Boolean = apiKey.isNotEmpty() && apiKey != "null"
 
-    // Cached once — maps from the SampleDataSource.featuredRecipes val (also built once)
+    // Sample data is a debug-only fallback so release builds don't quietly ship
+    // demo recipes when the network is unavailable. In release, network failures
+    // propagate as empty results and the UI shows its error state.
+    private val sampleFallbackEnabled = BuildConfig.DEBUG
+
     private val sampleRecipes: List<Recipe> by lazy {
         SampleDataSource.featuredRecipes.map { it.recipe }
     }
@@ -46,15 +53,25 @@ class RecipeRepositoryImpl(
     // Featured Recipes
     // ─────────────────────────────────────────────────────────────────────────
 
-    override suspend fun getFeaturedRecipes(): List<FeaturedRecipe> {
+    override suspend fun getFeaturedRecipes(forceRefresh: Boolean): List<FeaturedRecipe> {
         if (!apiConfigured) {
             Log.d(TAG, "API not configured — using sample featured recipes")
-            return SampleDataSource.featuredRecipes
+            return if (sampleFallbackEnabled) SampleDataSource.featuredRecipes else emptyList()
         }
+
+        // Cache-first: avoid the 5-pt random-recipes call when fresh data exists.
+        if (!forceRefresh) {
+            val cached = featuredCacheDao.get()
+            if (cached != null && !cached.isExpired()) {
+                Log.d(TAG, "Serving featured recipes from cache (no API call)")
+                return FeaturedCacheEntity.toList(cached)
+            }
+        }
+
         return try {
             Log.d(TAG, "Fetching featured recipes from Spoonacular")
             val response = apiService.getRandomRecipes(number = 5)  // 5 pts vs 10 pts per open
-            response.recipes.mapIndexed { index, dto ->
+            val featured = response.recipes.mapIndexed { index, dto ->
                 val recipe = dto.toDomain()
                 FeaturedRecipe(
                     recipe = recipe,
@@ -68,9 +85,17 @@ class RecipeRepositoryImpl(
                     gradientColors = listOf("#FF6B6B", "#FF8E53")
                 )
             }
+            featuredCacheDao.upsert(FeaturedCacheEntity.fromList(featured))
+            featured
         } catch (e: Exception) {
-            Log.w(TAG, "Featured recipes API failed, using sample data: ${e.message}")
-            SampleDataSource.featuredRecipes
+            Log.w(TAG, "Featured recipes API failed: ${e.message}")
+            // Network failure — serve stale cache if any, then sample as last resort.
+            val cached = featuredCacheDao.get()
+            if (cached != null) {
+                Log.w(TAG, "Serving featured recipes from STALE cache after API failure")
+                return FeaturedCacheEntity.toList(cached)
+            }
+            if (sampleFallbackEnabled) SampleDataSource.featuredRecipes else emptyList()
         }
     }
 
@@ -80,6 +105,7 @@ class RecipeRepositoryImpl(
 
     override suspend fun searchRecipes(query: String, offset: Int, limit: Int): SearchResult {
         if (!apiConfigured || query.isBlank()) {
+            if (!sampleFallbackEnabled) return SearchResult(emptyList(), 0)
             val filtered = sampleRecipes.filter {
                 it.name.contains(query, ignoreCase = true) ||
                         it.category.contains(query, ignoreCase = true) ||
@@ -116,6 +142,13 @@ class RecipeRepositoryImpl(
             return sampleRecipeById(recipeId)
         }
 
+        // Cache-first: revisits within 24 h cost zero API points.
+        val cached = cachedRecipeDao.getById(recipeId)
+        if (cached != null && !cached.isExpired()) {
+            Log.d(TAG, "Serving $recipeId from fresh cache (no API call)")
+            return cached.toRecipe()
+        }
+
         return try {
             val dto = apiService.getRecipeDetails(recipeId = numericId, includeNutrition = true)
             val recipe = dto.toDomain()
@@ -124,31 +157,22 @@ class RecipeRepositoryImpl(
             recipe
         } catch (e: Exception) {
             Log.w(TAG, "Recipe details API failed for id=$recipeId: ${e.message}")
-            val cached = cachedRecipeDao.getById(recipeId)
-            when {
-                cached != null && !cached.isExpired() -> {
-                    Log.d(TAG, "Serving $recipeId from fresh offline cache")
-                    cached.toRecipe()
-                }
-
-                cached != null -> {
-                    // Cache exists but is stale — serve it anyway (better than nothing offline)
-                    Log.w(
-                        TAG,
-                        "Serving $recipeId from STALE cache (>${CachedRecipeEntity.CACHE_MAX_AGE_MS / 3_600_000}h old)"
-                    )
-                    cached.toRecipe()
-                }
-
-                else -> {
-                    Log.w(TAG, "No offline cache for $recipeId — using sample fallback")
-                    sampleRecipeById(recipeId)
-                }
+            // API failed — serve stale cache if we have one, else fall through to sample.
+            if (cached != null) {
+                Log.w(
+                    TAG,
+                    "Serving $recipeId from STALE cache (>${CachedRecipeEntity.CACHE_MAX_AGE_MS / 3_600_000}h old)"
+                )
+                cached.toRecipe()
+            } else {
+                Log.w(TAG, "No offline cache for $recipeId — using sample fallback")
+                sampleRecipeById(recipeId)
             }
         }
     }
 
-    private fun sampleRecipeById(id: String): Recipe? = sampleRecipes.find { it.id == id }
+    private fun sampleRecipeById(id: String): Recipe? =
+        if (sampleFallbackEnabled) sampleRecipes.find { it.id == id } else null
 
     // ─────────────────────────────────────────────────────────────────────────
     // Categories
@@ -178,21 +202,25 @@ class RecipeRepositoryImpl(
             //
             // category.apiQuery is a supplementary keyword used to narrow results when the
             // type alone is too broad (e.g. Dinner vs Lunch both use type="main course").
+            // Category cards display calories — opt in to nutrition for this path only.
             val resp = when (category.kind) {
                 CategoryKind.CUISINE   -> apiService.searchRecipes(
                     query   = category.apiQuery,
                     cuisine = category.spoonacularTag,
-                    number  = limit
+                    number  = limit,
+                    addRecipeNutrition = true
                 )
                 CategoryKind.DISH_TYPE -> apiService.searchRecipes(
                     query  = category.apiQuery,
                     type   = category.spoonacularTag,
-                    number = limit
+                    number = limit,
+                    addRecipeNutrition = true
                 )
                 CategoryKind.DIETARY   -> apiService.searchRecipes(
                     query  = category.apiQuery,
                     diet   = category.spoonacularTag,
-                    number = limit
+                    number = limit,
+                    addRecipeNutrition = true
                 )
             }
 
@@ -206,6 +234,7 @@ class RecipeRepositoryImpl(
     }
 
     private fun sampleRecipesForCategory(category: RecipeCategory, limit: Int): List<Recipe> {
+        if (!sampleFallbackEnabled) return emptyList()
         return sampleRecipes.filter { recipe ->
             when (category.kind) {
                 CategoryKind.CUISINE -> 

@@ -22,12 +22,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -47,6 +50,11 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -73,10 +81,15 @@ import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.myrecipeapp.domain.model.Recipe
+import com.example.myrecipeapp.ui.components.BrandedSnackbarHost
+import com.example.myrecipeapp.ui.navigation.Favorites
+import com.example.myrecipeapp.ui.navigation.LocalTabReselectEvents
 import com.example.myrecipeapp.ui.navigation.RecipeDetail
 import com.example.myrecipeapp.ui.navigation.Search
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -86,14 +99,37 @@ fun FavoritesScreen(
 ) {
     val favoriteRecipes by viewModel.favoriteRecipes
     val favoriteIds by viewModel.favoriteIds
-    val isGridMode by viewModel.favoritesGridMode          // ← hoisted to ViewModel — persists navigation
+    val isGridMode by viewModel.favoritesGridMode
     val hapticFeedback = LocalHapticFeedback.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
+    // Hoist both scroll states (grid + list view) so reselecting the Favorites
+    // tab smooth-scrolls whichever view is currently visible to the top.
+    val gridState = rememberLazyGridState()
+    val listState = rememberLazyListState()
+    val tabReselectEvents = LocalTabReselectEvents.current
+    LaunchedEffect(tabReselectEvents) {
+        tabReselectEvents.events.filter { it is Favorites }.collect {
+            if (isGridMode) {
+                if (gridState.layoutInfo.totalItemsCount > 0) gridState.animateScrollToItem(0)
+            } else {
+                if (listState.layoutInfo.totalItemsCount > 0) listState.animateScrollToItem(0)
+            }
+        }
+    }
+
+    Scaffold(
+        snackbarHost = { BrandedSnackbarHost(snackbarHostState) },
+        containerColor = MaterialTheme.colorScheme.background
+    ) { innerPadding ->
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .padding(16.dp)
+            .padding(innerPadding)
+            .statusBarsPadding()
+            .padding(horizontal = 16.dp)
     ) {
         // ── Header ────────────────────────────────────────────────────────────
         Row(
@@ -161,6 +197,7 @@ fun FavoritesScreen(
                         // ── Grid mode: 2-col + long-press to delete ──────────
                         LazyVerticalGrid(
                             columns = GridCells.Fixed(2),
+                            state = gridState,
                             modifier = Modifier.fillMaxSize(),
                             horizontalArrangement = Arrangement.spacedBy(12.dp),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
@@ -200,6 +237,7 @@ fun FavoritesScreen(
                     } else {
                         // ── List mode: swipe-to-delete ───────────────────────
                         LazyColumn(
+                            state = listState,
                             modifier = Modifier.fillMaxSize(),
                             verticalArrangement = Arrangement.spacedBy(12.dp)
                         ) {
@@ -228,6 +266,16 @@ fun FavoritesScreen(
                                         onDelete = {
                                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                                             viewModel.removeFavorite(recipe.id)
+                                            scope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message = "\"${recipe.name}\" removed",
+                                                    actionLabel = "Undo",
+                                                    duration = androidx.compose.material3.SnackbarDuration.Short
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    viewModel.addFavorite(recipe)
+                                                }
+                                            }
                                         },
                                         onFavoriteToggle = {
                                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -247,6 +295,7 @@ fun FavoritesScreen(
             }
         }
     }
+    } // end Scaffold
 }
 
 // ── Swipe-to-delete wrapper for list mode ─────────────────────────────────────

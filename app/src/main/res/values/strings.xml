@@ -1,3 +1,23 @@
 <resources>
     <string name="app_name">MyrecipeApp</string>
+
+    <!-- Popular search tags shown on the Search idle state and as "Try instead" suggestions. -->
+    <string-array name="search_popular_tags" translatable="false">
+        <item>🍝 Pasta</item>
+        <item>🍛 Curry</item>
+        <item>🥗 Salad</item>
+        <item>🍕 Pizza</item>
+        <item>🍜 Noodles</item>
+        <item>🥩 Grilled</item>
+        <item>🥞 Breakfast</item>
+        <item>🍰 Dessert</item>
+    </string-array>
+
+    <string-array name="search_fallback_suggestions" translatable="false">
+        <item>🍕 Pizza</item>
+        <item>🍲 Pasta</item>
+        <item>🍣 Sushi</item>
+        <item>🌮 Tacos</item>
+        <item>🥗 Salad</item>
+    </string-array>
 </resources>

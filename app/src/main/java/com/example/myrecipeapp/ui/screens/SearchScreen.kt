@@ -24,10 +24,13 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.itemsIndexed
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -53,26 +56,35 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.runtime.snapshotFlow
+import kotlinx.coroutines.FlowPreview
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
+import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
+import com.example.myrecipeapp.R
+import com.example.myrecipeapp.ui.navigation.LocalTabReselectEvents
 import com.example.myrecipeapp.ui.navigation.RecipeDetail
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import com.example.myrecipeapp.ui.navigation.Search as SearchRoute
 
-// Popular search tags shown when the search box is empty
-private val popularTags = listOf(
-    "🍝 Pasta", "🍛 Curry", "🥗 Salad", "🍕 Pizza",
-    "🍜 Noodles", "🥩 Grilled", "🥞 Breakfast", "🍰 Dessert"
-)
+// Popular search tags now live in res/values/strings.xml (search_popular_tags,
+// search_fallback_suggestions) so they can be edited without a code change.
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalMaterial3Api::class, FlowPreview::class)
 @Composable
 fun SearchScreen(
     navController: NavHostController,
@@ -80,11 +92,44 @@ fun SearchScreen(
 ) {
     var searchText by remember { mutableStateOf(viewModel.searchState.value.query) }
     val hapticFeedback = LocalHapticFeedback.current
+    val focusRequester = remember { FocusRequester() }
+    val keyboard = LocalSoftwareKeyboardController.current
+    // Focus + show keyboard on first entry only — if the user has already typed
+    // a query in this session, don't steal focus back when they navigate here again.
+    LaunchedEffect(Unit) {
+        if (searchText.isEmpty()) {
+            focusRequester.requestFocus()
+            keyboard?.show()
+        }
+    }
+
+    // Debounce search queries in the UI layer — 300 ms of inactivity before we
+    // fire the use case. Keeps the ViewModel free of timing concerns.
+    LaunchedEffect(Unit) {
+        snapshotFlow { searchText }
+            .debounce(300)
+            .distinctUntilChanged()
+            .collect { q ->
+                if (q.isNotEmpty()) viewModel.searchRecipes(q)
+            }
+    }
+
+    // Hoist results list state so reselecting Search tab smooth-scrolls results to top.
+    val resultsListState = rememberLazyListState()
+    val tabReselectEvents = LocalTabReselectEvents.current
+    LaunchedEffect(tabReselectEvents) {
+        tabReselectEvents.events.filter { it is SearchRoute }.collect {
+            if (resultsListState.layoutInfo.totalItemsCount > 0) {
+                resultsListState.animateScrollToItem(0)
+            }
+        }
+    }
 
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
+            .statusBarsPadding()
             .padding(horizontal = 16.dp)
     ) {
         // ── Header ─────────────────────────────────────────────────────────────
@@ -119,7 +164,9 @@ fun SearchScreen(
                 TextField(
                     value = searchText,
                     onValueChange = { searchText = it },
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier
+                        .weight(1f)
+                        .focusRequester(focusRequester),
                     placeholder = {
                         Text(
                             "Recipes, ingredients, cuisines…",
@@ -175,6 +222,10 @@ fun SearchScreen(
                 SearchResults(
                     searchText = searchText,
                     viewModel = viewModel,
+                    listState = resultsListState,
+                    onTagClick = { tag ->
+                        searchText = tag.substringAfter(" ")
+                    },
                     onRecipeClick = { recipeId ->
                         navController.navigate(RecipeDetail(recipeId = recipeId)) {
                             launchSingleTop = true
@@ -189,6 +240,7 @@ fun SearchScreen(
 // ── Idle / empty state ────────────────────────────────────────────────────────
 @Composable
 private fun SearchIdleState(onTagClick: (String) -> Unit) {
+    val popularTags = stringArrayResource(R.array.search_popular_tags).toList()
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { delay(80); visible = true }
 
@@ -307,17 +359,11 @@ private fun SearchIdleState(onTagClick: (String) -> Unit) {
 fun SearchResults(
     searchText: String,
     viewModel: MainViewModel,
+    listState: androidx.compose.foundation.lazy.LazyListState = rememberLazyListState(),
+    onTagClick: (String) -> Unit = {},
     onRecipeClick: (String) -> Unit = {}
 ) {
-    // favoriteIds MUST be observed here (inside this composable) for proper recomposition
-    val favoriteIds by viewModel.favoriteIds
-
-    LaunchedEffect(searchText) {
-        if (searchText.isNotEmpty()) {
-            viewModel.searchRecipes(searchText)
-        }
-    }
-
+    // Searches are launched from SearchScreen via a debounced snapshotFlow.
     val searchState by viewModel.searchState
 
     // Hoisted above the list — same lambda instance across ALL recompositions,
@@ -406,30 +452,126 @@ fun SearchResults(
             }
 
             searchState.recipes.isEmpty() && !searchState.loading -> {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 48.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally
+                var noResultVisible by remember { mutableStateOf(false) }
+                LaunchedEffect(searchText) {
+                    noResultVisible = false; delay(80); noResultVisible = true
+                }
+
+                AnimatedVisibility(
+                    visible = noResultVisible,
+                    enter = slideInVertically(
+                        initialOffsetY = { it / 5 },
+                        animationSpec = spring(
+                            Spring.DampingRatioMediumBouncy,
+                            Spring.StiffnessMediumLow
+                        )
+                    ) + fadeIn(animationSpec = tween(300))
                 ) {
-                    Text("🔍", fontSize = 40.sp)
-                    Spacer(modifier = Modifier.height(12.dp))
-                    Text(
-                        "No recipes found",
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onBackground
-                    )
-                    Text(
-                        "Try different keywords",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 32.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Illustrated empty state card
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            shape = RoundedCornerShape(24.dp),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            elevation = CardDefaults.cardElevation(0.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(32.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                // Layered emoji illustration
+                                Box(contentAlignment = Alignment.Center) {
+                                    Text("🍽️", fontSize = 72.sp)
+                                    Surface(
+                                        modifier = Modifier
+                                            .align(Alignment.BottomEnd)
+                                            .size(32.dp),
+                                        shape = CircleShape,
+                                        color = MaterialTheme.colorScheme.errorContainer
+                                    ) {
+                                        Box(contentAlignment = Alignment.Center) {
+                                            Text("❌", fontSize = 14.sp)
+                                        }
+                                    }
+                                }
+
+                                Text(
+                                    text = "No recipes found",
+                                    style = MaterialTheme.typography.titleLarge,
+                                    fontWeight = FontWeight.ExtraBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                                Text(
+                                    text = "\"$searchText\" didn't match any recipes.\nTry a different ingredient or dish name.",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                    textAlign = TextAlign.Center,
+                                    lineHeight = 22.sp
+                                )
+                            }
+                        }
+
+                        // Quick-try suggestion chips
+                        Text(
+                            "Try instead:",
+                            style = MaterialTheme.typography.labelLarge,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        val fallbackSuggestions = stringArrayResource(R.array.search_fallback_suggestions).toList()
+                        LazyRow(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            contentPadding = PaddingValues(horizontal = 4.dp)
+                        ) {
+                            items(fallbackSuggestions, key = { it }) { suggestion ->
+                                SuggestionChip(
+                                    onClick = { onTagClick(suggestion.substringAfter(" ")) },
+                                    label = {
+                                        Text(
+                                            suggestion,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium
+                                        )
+                                    },
+                                    shape = RoundedCornerShape(20.dp),
+                                    colors = SuggestionChipDefaults.suggestionChipColors(
+                                        containerColor = MaterialTheme.colorScheme.primaryContainer,
+                                        labelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                                    )
+                                )
+                            }
+                        }
+                    }
                 }
             }
 
             else -> {
+                // Auto-paginate when the user scrolls within 3 items of the end.
+                LaunchedEffect(listState, searchState.recipes.size, searchState.totalResults) {
+                    snapshotFlow {
+                        val info = listState.layoutInfo
+                        val last = info.visibleItemsInfo.lastOrNull()?.index ?: -1
+                        last to info.totalItemsCount
+                    }.collect { (last, total) ->
+                        val hasMore = searchState.recipes.size < searchState.totalResults
+                        if (hasMore && !searchState.loadingMore && total > 0 && last >= total - 3) {
+                            viewModel.loadMoreSearchResults()
+                        }
+                    }
+                }
                 LazyColumn(
+                    state = listState,
                     verticalArrangement = Arrangement.spacedBy(12.dp),
                     contentPadding = PaddingValues(bottom = 80.dp)
                 ) {
@@ -470,6 +612,7 @@ fun SearchResults(
 
                     if (searchState.recipes.size < searchState.totalResults) {
                         item {
+                            // Footer spinner while auto-pagination loads the next page.
                             Box(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -482,16 +625,6 @@ fun SearchResults(
                                         color = MaterialTheme.colorScheme.primary,
                                         strokeWidth = 3.dp
                                     )
-                                } else {
-                                    androidx.compose.material3.OutlinedButton(
-                                        onClick = { viewModel.loadMoreSearchResults() }
-                                    ) {
-                                        Text(
-                                            "Load More",
-                                            fontWeight = FontWeight.SemiBold,
-                                            color = MaterialTheme.colorScheme.primary
-                                        )
-                                    }
                                 }
                             }
                         }

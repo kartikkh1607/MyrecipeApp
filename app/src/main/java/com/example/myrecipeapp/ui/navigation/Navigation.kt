@@ -183,7 +183,7 @@ fun Navigation(
         // ── Secondary screens ──────────────────────────────────────────────────────
 
         composable<Profile> {
-            ProfileScreen(navController = navController)
+            ProfileScreen(navController = navController, viewModel = viewModel)
         }
 
         composable<About> {

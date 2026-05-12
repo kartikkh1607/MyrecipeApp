@@ -37,7 +37,6 @@ data class Ingredient(
     val name: String,
     val amount: String,
     val unit: String = "",
-    val notes: String = "",
     val isOptional: Boolean = false
 ) : Parcelable
 
@@ -46,8 +45,6 @@ data class RecipeStep(
     val stepNumber: Int,
     val instruction: String,
     val duration: Int? = null,
-    val temperature: String? = null,
-    val imageUrl: String? = null,
     val tips: String? = null
 ) : Parcelable
 

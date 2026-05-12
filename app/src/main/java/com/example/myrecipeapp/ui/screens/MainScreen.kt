@@ -4,13 +4,12 @@ import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.height
-import androidx.compose.foundation.layout.navigationBarsPadding
+import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.List
@@ -30,6 +29,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -45,9 +45,11 @@ import androidx.navigation.compose.rememberNavController
 import com.example.myrecipeapp.ui.navigation.Categories
 import com.example.myrecipeapp.ui.navigation.Favorites
 import com.example.myrecipeapp.ui.navigation.Home
+import com.example.myrecipeapp.ui.navigation.LocalTabReselectEvents
 import com.example.myrecipeapp.ui.navigation.Navigation
 import com.example.myrecipeapp.ui.navigation.Search
 import com.example.myrecipeapp.ui.navigation.Settings
+import com.example.myrecipeapp.ui.navigation.TabReselectEvents
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -61,44 +63,54 @@ fun MainScreen(viewModel: MainViewModel) {
     val currentDestination = navBackStackEntry?.destination
     val tabRoutes = remember {
         listOf(
-            com.example.myrecipeapp.ui.navigation.Home::class,
-            com.example.myrecipeapp.ui.navigation.Categories::class,
-            com.example.myrecipeapp.ui.navigation.Search::class,
-            com.example.myrecipeapp.ui.navigation.Favorites::class,
-            com.example.myrecipeapp.ui.navigation.Settings::class,
+            Home::class,
+            Categories::class,
+            Search::class,
+            Favorites::class,
+            Settings::class,
         )
     }
     val showBottomBar = tabRoutes.any { routeClass ->
         currentDestination?.hasRoute(routeClass) == true
     }
 
-    Scaffold(
-        bottomBar = {
-            if (showBottomBar) {
-                BottomNavigationBar(navController = navController)
+    // Shared bus for "user tapped the already-selected tab" — tab screens
+    // listen via LocalTabReselectEvents and scroll-to-top in response.
+    val tabReselectEvents = remember { TabReselectEvents() }
+
+    CompositionLocalProvider(LocalTabReselectEvents provides tabReselectEvents) {
+        Scaffold(
+            bottomBar = {
+                if (showBottomBar) {
+                    BottomNavigationBar(
+                        navController = navController,
+                        onReselect = tabReselectEvents::emit
+                    )
+                }
+            },
+            modifier = Modifier.fillMaxSize()
+        ) { paddingValues ->
+            // Each screen owns its own status-bar inset (so heroes can paint behind it).
+            // Only reserve space for the bottom nav here.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(bottom = if (showBottomBar) paddingValues.calculateBottomPadding() else 0.dp)
+            ) {
+                Navigation(navController = navController, viewModel = viewModel)
             }
-        },
-        modifier = Modifier
-            .fillMaxSize()
-            .statusBarsPadding()
-            .navigationBarsPadding()
-    ) { paddingValues ->
-        Box(
-            modifier = Modifier
-                .fillMaxSize()
-                .padding(
-                    top = paddingValues.calculateTopPadding(),
-                    bottom = if (showBottomBar) paddingValues.calculateBottomPadding() else 0.dp
-                )
-        ) {
-            Navigation(navController = navController, viewModel = viewModel)
         }
     }
 }
 
 @Composable
-fun BottomNavigationBar(navController: NavHostController) {
+fun BottomNavigationBar(
+    navController: NavHostController,
+    onReselect: (Any) -> Unit = {}
+) {
     // Remembered so the list isn't rebuilt on every recomposition triggered by navigation
+    // Search FAB sits centered (index 2). "See all" on Home is a shortcut into
+    // the same Categories grid; both nav paths coexist.
     val items = remember {
         listOf(
             BottomNavItem("Home", Icons.Default.Home, Home),
@@ -113,15 +125,25 @@ fun BottomNavigationBar(navController: NavHostController) {
     val currentDestination = navBackStackEntry?.destination
     val hapticFeedback = LocalHapticFeedback.current
 
-    // Helper: navigate to a bottom-nav tab correctly — type-safe popUpTo<Home>
-    // prevents stack accumulation when switching between tabs repeatedly.
-    fun navigateToTab(route: Any) {
+    // Tapping the active tab → emit a reselect event (scroll-to-top, etc.) and
+    // skip navigation entirely so we never push a duplicate destination.
+    // Tapping any other tab → standard navigation, with popUpTo<Home> to keep
+    // the stack shallow as the user moves between tabs.
+    fun navigateToTab(route: Any, isSelected: Boolean) {
+        if (isSelected) {
+            onReselect(route)
+            return
+        }
         navController.navigate(route) {
             popUpTo<Home> { inclusive = false }  // false keeps Home on the stack as root
             launchSingleTop = true
         }
     }
 
+    // Let Material3 NavigationBar handle the system navigation inset itself: items
+    // stay centered in the 72dp content area and an extra `inset` of bar color is
+    // painted below them, hidden behind 3-button bars and sitting under the gesture
+    // pill. No fixed height — the bar grows by the inset so items are never crushed.
     Surface(
         modifier = Modifier.fillMaxWidth(),
         shadowElevation = 12.dp,
@@ -130,10 +152,10 @@ fun BottomNavigationBar(navController: NavHostController) {
         NavigationBar(
             containerColor = MaterialTheme.colorScheme.surface,
             contentColor = MaterialTheme.colorScheme.primary,
+            windowInsets = WindowInsets.navigationBars,
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 8.dp, vertical = 8.dp)
-                .height(72.dp)
+                .padding(horizontal = 8.dp)
         ) {
             items.forEach { item ->
                 val isSelected = currentDestination?.hasRoute(item.route::class) == true
@@ -162,7 +184,7 @@ fun BottomNavigationBar(navController: NavHostController) {
                     FloatingActionButton(
                         onClick = {
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                            navigateToTab(item.route)
+                            navigateToTab(item.route, isSelected)
                         },
                         modifier = Modifier
                             .scale(scale)
@@ -207,7 +229,7 @@ fun BottomNavigationBar(navController: NavHostController) {
                                 if (isSelected) HapticFeedbackType.TextHandleMove
                                 else HapticFeedbackType.LongPress
                             )
-                            navigateToTab(item.route)
+                            navigateToTab(item.route, isSelected)
                         },
                         modifier = Modifier.scale(scale * 0.95f),
                         colors = NavigationBarItemDefaults.colors(

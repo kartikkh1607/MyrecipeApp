@@ -63,8 +63,7 @@ fun SpoonacularIngredientDto.toDomain(): Ingredient = Ingredient(
     id = this.id.toString(),
     name = this.name ?: this.original,
     amount = String.format(Locale.ROOT, "%.1f", this.amount),  // Locale.ROOT avoids "1,50" in DE/FR
-    unit = this.unit,
-    notes = this.original
+    unit = this.unit
 )
 
 fun SpoonacularStepDto.toDomain(): RecipeStep = RecipeStep(

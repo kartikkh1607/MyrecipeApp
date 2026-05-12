@@ -38,6 +38,10 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.Snackbar
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
 import androidx.compose.material3.SwipeToDismissBox
 import androidx.compose.material3.SwipeToDismissBoxValue
@@ -55,6 +59,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
@@ -65,22 +70,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.example.myrecipeapp.domain.model.ShoppingListItem
+import com.example.myrecipeapp.ui.components.BrandedSnackbarHost
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
-// ── Design tokens ─────────────────────────────────────────────────────────────
-private val SlBg = Color(0xFFF5F6F3)
-private val SlSurface = Color(0xFFFFFFFF)
-private val SlGreen = Color(0xFF006B1B)
-private val SlOrange = Color(0xFFB02E00)
-private val SlAmber = Color(0xFF7B5500)
-private val SlText = Color(0xFF1A1C1C)
-private val SlSubtext = Color(0xFF5A6358)
-private val SlOutline = Color(0xFFCDD5C9)
-private val SlCheckedBg = Color(0xFFEEF5EE)
-private val SlRed = Color(0xFFBA1A1A)
-
-private val sectionAccents = listOf(SlGreen, SlOrange, SlAmber)
+// Semantic per-recipe section accents — independent of theme so each recipe stays
+// visually distinct in both light & dark mode.
+private val SectionGreen = Color(0xFF006B1B)
+private val SectionOrange = Color(0xFFB02E00)
+private val SectionAmber = Color(0xFF7B5500)
+private val sectionAccents = listOf(SectionGreen, SectionOrange, SectionAmber)
 
 // ── Sealed list entries — flat structure for LazyColumn ───────────────────────
 private sealed class SlEntry {
@@ -112,6 +112,8 @@ fun ShoppingListScreen(
     val totalCount by remember { derivedStateOf { viewModel.shoppingList.value.size } }
     val remainingCount by remember { derivedStateOf { totalCount - checkedCount } }
     val hapticFeedback = LocalHapticFeedback.current
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = androidx.compose.runtime.rememberCoroutineScope()
 
     // Read focus from ViewModel — set by addToShoppingList before navigation
     val focusRecipeName by viewModel.lastAddedRecipeName
@@ -168,7 +170,11 @@ fun ShoppingListScreen(
         }
     }
 
-    Scaffold(containerColor = SlBg) { innerPadding ->
+    Scaffold(
+        containerColor = MaterialTheme.colorScheme.background,
+        snackbarHost = { BrandedSnackbarHost(snackbarHostState) }
+    ) { innerPadding ->
+
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
@@ -181,7 +187,7 @@ fun ShoppingListScreen(
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .background(SlBg)
+                        .background(MaterialTheme.colorScheme.background)
                         .statusBarsPadding()
                         .padding(start = 4.dp, end = 4.dp, top = 8.dp, bottom = 4.dp),
                     verticalAlignment = Alignment.CenterVertically
@@ -189,14 +195,15 @@ fun ShoppingListScreen(
                     IconButton(onClick = { navController.popBackStack() }) {
                         Icon(
                             Icons.AutoMirrored.Filled.ArrowBack, "Back",
-                            tint = SlText, modifier = Modifier.size(22.dp)
+                            tint = MaterialTheme.colorScheme.onBackground,
+                            modifier = Modifier.size(22.dp)
                         )
                     }
                     Text(
                         "Shopping List",
                         style = MaterialTheme.typography.headlineSmall,
                         fontWeight = FontWeight.Bold,
-                        color = SlText,
+                        color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.weight(1f)
                     )
                     if (checkedCount > 0) {
@@ -207,7 +214,7 @@ fun ShoppingListScreen(
                             Icon(
                                 Icons.Default.Delete,
                                 "Clear completed",
-                                tint = SlRed,
+                                tint = MaterialTheme.colorScheme.error,
                                 modifier = Modifier.size(20.dp)
                             )
                         }
@@ -224,6 +231,7 @@ fun ShoppingListScreen(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.SpaceBetween
                 ) {
+                    val allDone = remainingCount == 0 && totalCount > 0
                     Text(
                         text = when {
                             totalCount == 0 -> "No items yet"
@@ -231,18 +239,18 @@ fun ShoppingListScreen(
                             else -> "$remainingCount of $totalCount items remaining"
                         },
                         style = MaterialTheme.typography.bodyMedium,
-                        color = if (remainingCount == 0 && totalCount > 0) SlGreen else SlSubtext,
-                        fontWeight = if (remainingCount == 0 && totalCount > 0) FontWeight.SemiBold else FontWeight.Normal
+                        color = if (allDone) SectionGreen else MaterialTheme.colorScheme.onSurfaceVariant,
+                        fontWeight = if (allDone) FontWeight.SemiBold else FontWeight.Normal
                     )
                     if (checkedCount > 0) {
                         Surface(
                             shape = RoundedCornerShape(20.dp),
-                            color = SlRed.copy(alpha = 0.08f)
+                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.08f)
                         ) {
                             Text(
                                 "$checkedCount done",
                                 style = MaterialTheme.typography.labelSmall,
-                                color = SlRed,
+                                color = MaterialTheme.colorScheme.error,
                                 fontWeight = FontWeight.Medium,
                                 modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
                             )
@@ -290,7 +298,20 @@ fun ShoppingListScreen(
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                             viewModel.toggleShoppingItem(entry.shopItem.key)
                         },
-                        onDelete = { viewModel.removeItem(entry.shopItem.key) }
+                        onDelete = {
+                            val deleted = entry.shopItem
+                            viewModel.removeItem(deleted.key)
+                            scope.launch {
+                                val result = snackbarHostState.showSnackbar(
+                                    message = "\"${deleted.ingredientName}\" removed",
+                                    actionLabel = "Undo",
+                                    duration = androidx.compose.material3.SnackbarDuration.Short
+                                )
+                                if (result == SnackbarResult.ActionPerformed) {
+                                    viewModel.restoreShoppingItem(deleted)
+                                }
+                            }
+                        }
                     )
                 }
             }
@@ -316,7 +337,7 @@ private fun SlSectionHeader(
                 else RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)
             )
             .clickable { onToggle() },
-        color = SlSurface,
+        color = MaterialTheme.colorScheme.surface,
         shadowElevation = 1.dp
     ) {
         Row(
@@ -335,7 +356,7 @@ private fun SlSectionHeader(
                 Text(
                     "FOR",
                     style = MaterialTheme.typography.labelSmall,
-                    color = SlSubtext,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     letterSpacing = 1.sp,
                     fontSize = 9.sp
                 )
@@ -344,7 +365,7 @@ private fun SlSectionHeader(
                     recipeName,
                     style = MaterialTheme.typography.bodyLarge,
                     fontWeight = FontWeight.Bold,
-                    color = SlText,
+                    color = MaterialTheme.colorScheme.onSurface,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -362,7 +383,9 @@ private fun SlSectionHeader(
             Spacer(Modifier.width(8.dp))
             Icon(
                 if (isCollapsed) Icons.Default.ExpandMore else Icons.Default.ExpandLess,
-                null, tint = SlSubtext, modifier = Modifier.size(22.dp)
+                null,
+                tint = MaterialTheme.colorScheme.onSurfaceVariant,
+                modifier = Modifier.size(22.dp)
             )
         }
     }
@@ -400,13 +423,13 @@ private fun SlSwipeableItemRow(
                     .fillMaxSize()
                     .padding(horizontal = 16.dp)
                     .clip(bottomShape)
-                    .background(Color(0xFFFFDAD6).copy(alpha = alpha)),
+                    .background(MaterialTheme.colorScheme.errorContainer.copy(alpha = alpha)),
                 contentAlignment = Alignment.CenterEnd
             ) {
                 Icon(
                     Icons.Default.Delete,
                     null,
-                    tint = SlRed,
+                    tint = MaterialTheme.colorScheme.error,
                     modifier = Modifier.padding(end = 24.dp)
                 )
             }
@@ -414,7 +437,12 @@ private fun SlSwipeableItemRow(
         enableDismissFromStartToEnd = false,
         enableDismissFromEndToStart = true
     ) {
-        val rowBg = if (item.isChecked) SlCheckedBg else SlSurface
+        val surface = MaterialTheme.colorScheme.surface
+        val onSurfaceVariant = MaterialTheme.colorScheme.onSurfaceVariant
+        val outline = MaterialTheme.colorScheme.outlineVariant
+        // Checked rows get a subtle green-tinted background; the tint reads on both light & dark surface.
+        val checkedBg = surface.compositeOver(SectionGreen.copy(alpha = 0.08f))
+        val rowBg = if (item.isChecked) checkedBg else surface
         val qty = item.amount + if (item.unit.isNotBlank()) " ${item.unit}" else ""
 
         Column(
@@ -432,7 +460,7 @@ private fun SlSwipeableItemRow(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 // Checkbox
-                val checkBg = if (item.isChecked) SlGreen else rowBg
+                val checkBg = if (item.isChecked) SectionGreen else rowBg
                 Box(
                     modifier = Modifier
                         .size(24.dp)
@@ -443,7 +471,7 @@ private fun SlSwipeableItemRow(
                                 Modifier
                                     .padding(1.5.dp)
                                     .clip(RoundedCornerShape(6.dp))
-                                    .background(SlOutline)
+                                    .background(outline)
                                     .padding(1.5.dp)
                                     .clip(RoundedCornerShape(4.dp))
                                     .background(rowBg)
@@ -468,7 +496,7 @@ private fun SlSwipeableItemRow(
                         text = item.ingredientName,
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = if (item.isChecked) FontWeight.Normal else FontWeight.SemiBold,
-                        color = if (item.isChecked) SlSubtext.copy(alpha = 0.45f) else SlText,
+                        color = if (item.isChecked) onSurfaceVariant.copy(alpha = 0.55f) else MaterialTheme.colorScheme.onSurface,
                         textDecoration = if (item.isChecked) TextDecoration.LineThrough else TextDecoration.None,
                         maxLines = 2,
                         overflow = TextOverflow.Ellipsis
@@ -478,7 +506,7 @@ private fun SlSwipeableItemRow(
                         Text(
                             text = qty.uppercase(),
                             style = MaterialTheme.typography.labelSmall,
-                            color = SlSubtext.copy(alpha = if (item.isChecked) 0.35f else 0.6f),
+                            color = onSurfaceVariant.copy(alpha = if (item.isChecked) 0.4f else 0.7f),
                             letterSpacing = 0.9.sp
                         )
                     }
@@ -491,7 +519,7 @@ private fun SlSwipeableItemRow(
                         .fillMaxWidth()
                         .height(0.5.dp)
                         .padding(start = 58.dp, end = 18.dp)
-                        .background(SlOutline.copy(alpha = 0.5f))
+                        .background(outline.copy(alpha = 0.5f))
                 )
             }
         }
@@ -499,6 +527,7 @@ private fun SlSwipeableItemRow(
 }
 
 // ── Empty state ───────────────────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun SlEmptyState(onBrowse: () -> Unit) {
     var iconVisible by remember { mutableStateOf(false) }
@@ -520,14 +549,14 @@ private fun SlEmptyState(onBrowse: () -> Unit) {
         ) {
             Surface(
                 shape = CircleShape,
-                color = SlGreen.copy(alpha = 0.08f),
+                color = MaterialTheme.colorScheme.primaryContainer,
                 modifier = Modifier.size(100.dp)
             ) {
                 Box(contentAlignment = Alignment.Center) {
                     Icon(
                         Icons.Default.ShoppingBasket,
                         null,
-                        tint = SlGreen.copy(alpha = 0.4f),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
                         modifier = Modifier.size(48.dp)
                     )
                 }
@@ -546,18 +575,22 @@ private fun SlEmptyState(onBrowse: () -> Unit) {
                     "Your list is empty",
                     style = MaterialTheme.typography.headlineSmall,
                     fontWeight = FontWeight.Bold,
-                    color = SlText
+                    color = MaterialTheme.colorScheme.onBackground
                 )
                 Spacer(Modifier.height(10.dp))
                 Text(
                     "Open a recipe and tap\n\"Add to Shopping List\" to get started.",
                     style = MaterialTheme.typography.bodyMedium,
-                    color = SlSubtext,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                     textAlign = TextAlign.Center,
                     lineHeight = 22.sp
                 )
                 Spacer(Modifier.height(36.dp))
-                Surface(onClick = onBrowse, shape = RoundedCornerShape(14.dp), color = SlGreen) {
+                Surface(
+                    onClick = onBrowse,
+                    shape = RoundedCornerShape(14.dp),
+                    color = MaterialTheme.colorScheme.primary
+                ) {
                     Row(
                         modifier = Modifier.padding(horizontal = 28.dp, vertical = 15.dp),
                         verticalAlignment = Alignment.CenterVertically
@@ -565,14 +598,14 @@ private fun SlEmptyState(onBrowse: () -> Unit) {
                         Icon(
                             Icons.Default.Restaurant,
                             null,
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onPrimary,
                             modifier = Modifier.size(18.dp)
                         )
                         Spacer(Modifier.width(10.dp))
                         Text(
                             "Browse Recipes",
                             fontWeight = FontWeight.SemiBold,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onPrimary,
                             style = MaterialTheme.typography.bodyMedium
                         )
                     }

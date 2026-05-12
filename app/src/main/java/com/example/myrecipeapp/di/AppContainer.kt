@@ -25,15 +25,16 @@ object AppContainer {
         AppDatabase.getInstance(MyRecipeApplication.instance)
     }
 
-    val favoriteDao    by lazy { database.favoriteDao() }
-    val shoppingDao    by lazy { database.shoppingDao() }
-    val cachedRecipeDao by lazy { database.cachedRecipeDao() }
+    val favoriteDao       by lazy { database.favoriteDao() }
+    val shoppingDao       by lazy { database.shoppingDao() }
+    val cachedRecipeDao   by lazy { database.cachedRecipeDao() }
+    val featuredCacheDao  by lazy { database.featuredCacheDao() }
 
     // ── Data layer ────────────────────────────────────────────────────────────
     private val apiService by lazy { NetworkModule.provideApiService() }
 
     val repository: RecipeRepository by lazy {
-        RecipeRepositoryImpl(apiService, cachedRecipeDao)
+        RecipeRepositoryImpl(apiService, cachedRecipeDao, featuredCacheDao)
     }
 
     // ── Use cases ─────────────────────────────────────────────────────────────

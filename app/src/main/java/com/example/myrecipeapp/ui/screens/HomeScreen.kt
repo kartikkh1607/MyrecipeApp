@@ -1,7 +1,6 @@
 package com.example.myrecipeapp.ui.screens
 
 import androidx.compose.animation.AnimatedVisibility
-import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
@@ -18,32 +17,34 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Shuffle
+import androidx.compose.material.icons.outlined.Person
+import androidx.compose.material.icons.outlined.Search
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -58,20 +59,26 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
-import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.platform.LocalView
+import androidx.core.view.WindowCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
-import com.example.myrecipeapp.domain.model.RecipeCategory
-import com.example.myrecipeapp.ui.navigation.CategoryDetail
+import com.example.myrecipeapp.ui.components.FeaturedCarouselSkeleton
+import com.example.myrecipeapp.ui.navigation.Home
+import com.example.myrecipeapp.ui.navigation.LocalTabReselectEvents
 import com.example.myrecipeapp.ui.navigation.Profile
 import com.example.myrecipeapp.ui.navigation.RecipeDetail
+import com.example.myrecipeapp.ui.navigation.Search
 import com.example.myrecipeapp.ui.navigation.ShoppingList
+import com.example.myrecipeapp.ui.theme.ForestGreen
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -82,41 +89,66 @@ fun HomeScreen(
     val hapticFeedback = LocalHapticFeedback.current
     val categoriesState by viewModel.recipeCategoriesState
     val homeRecipeState by viewModel.homeRecipeState
-    val selectedCategoryId by viewModel.selectedCategoryId
 
+    // Hero is dark green → force light status-bar icons while Home is visible.
+    val view = LocalView.current
+    DisposableEffect(Unit) {
+        val window = (view.context as android.app.Activity).window
+        val controller = WindowCompat.getInsetsController(window, view)
+        val previous = controller.isAppearanceLightStatusBars
+        controller.isAppearanceLightStatusBars = false
+        onDispose { controller.isAppearanceLightStatusBars = previous }
+    }
+
+    // Pull-to-refresh — track manual refresh locally so the indicator doesn't
+    // show during the initial load (which already has skeletons).
+    var manualRefresh by remember { mutableStateOf(false) }
+    val isRefreshing = manualRefresh && (homeRecipeState.loading || categoriesState.loading)
+    LaunchedEffect(homeRecipeState.loading, categoriesState.loading) {
+        if (!homeRecipeState.loading && !categoriesState.loading) manualRefresh = false
+    }
+
+    // Hoist scroll state so reselecting the Home tab can smooth-scroll us to top.
+    val scrollState = rememberScrollState()
+    val tabReselectEvents = LocalTabReselectEvents.current
+    LaunchedEffect(tabReselectEvents) {
+        tabReselectEvents.events.filter { it is Home }.collect {
+            scrollState.animateScrollTo(0)
+        }
+    }
+
+    PullToRefreshBox(
+        isRefreshing = isRefreshing,
+        onRefresh = {
+            manualRefresh = true
+            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+            viewModel.refreshFeaturedRecipes()
+            viewModel.refreshRecipeCategories()
+        },
+        modifier = Modifier.fillMaxSize()
+    ) {
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(rememberScrollState())
+            .verticalScroll(scrollState)
     ) {
         // ── Header ─────────────────────────────────────────────────────────────
-        ModernHeaderSection(
+        HeroHeaderSection(
             onProfileClick = {
                 hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                 navController.navigate(Profile)
+            },
+            onSearchClick = {
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                navController.navigate(Search) { launchSingleTop = true }
             }
         )
 
         // ── Featured Carousel ───────────────────────────────────────────────────
         when {
             homeRecipeState.loading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(280.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
-                        Spacer(modifier = Modifier.height(8.dp))
-                        Text(
-                            "Loading delicious recipes…",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                }
+                FeaturedCarouselSkeleton()
             }
 
             homeRecipeState.error != null -> {
@@ -156,138 +188,446 @@ fun HomeScreen(
 
         Spacer(modifier = Modifier.height(28.dp))
 
-        // ── Categories ─────────────────────────────────────────────────────────
-        when {
-            categoriesState.loading -> {
-                Box(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(130.dp),
-                    contentAlignment = Alignment.Center
+        // ── Today's Pick ───────────────────────────────────────────────────────
+        if (homeRecipeState.featuredRecipes.isNotEmpty()) {
+            TodaysPickCard(
+                featured = homeRecipeState.featuredRecipes,
+                onClick = { recipeId ->
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    navController.navigate(RecipeDetail(recipeId = recipeId)) {
+                        launchSingleTop = true
+                    }
+                }
+            )
+        }
+
+        Spacer(modifier = Modifier.height(100.dp))
+    }
+    } // end PullToRefreshBox
+}
+
+// ── Hero Header ────────────────────────────────────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+fun HeroHeaderSection(
+    onProfileClick: () -> Unit,
+    onSearchClick: () -> Unit
+) {
+
+    // ── Time-based greeting + date ────────────────────────────────────────────
+    val now = remember { java.time.LocalDateTime.now() }
+    val hour = now.hour
+
+    val greeting = remember(hour) {
+        when (hour) {
+            in 5..11 -> "Good Morning"
+            in 12..16 -> "Good Afternoon"
+            in 17..20 -> "Good Evening"
+            else -> "Good Night"
+        }
+    }
+    val greetingEmoji = remember(hour) {
+        when (hour) {
+            in 5..11 -> "🌅"
+            in 12..16 -> "☀️"
+            in 17..20 -> "🌆"
+            else -> "🌙"
+        }
+    }
+
+    val dateString = remember(now) {
+        // e.g. "Monday, May 11"
+        now.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, MMMM d", Locale.getDefault()))
+    }
+
+    // ── Entrance animation ────────────────────────────────────────────────────
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) { visible = true }
+
+    // Deep forest gradient — premium, theme-independent hero identity.
+    val heroBrush = Brush.verticalGradient(
+        colors = listOf(
+            ForestGreen,
+            Color(0xFF1F4040)
+        )
+    )
+
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(bottomStart = 32.dp, bottomEnd = 32.dp))
+            .background(heroBrush)
+    ) {
+        // ── Decorative orbs (depth without using blur, which needs API 31+) ──
+        Box(
+            modifier = Modifier
+                .size(240.dp)
+                .offset(x = (-90).dp, y = (-80).dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.07f))
+        )
+        Box(
+            modifier = Modifier
+                .size(170.dp)
+                .align(Alignment.BottomEnd)
+                .offset(x = 60.dp, y = 30.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.05f))
+        )
+
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .statusBarsPadding()
+                .padding(start = 20.dp, end = 20.dp, top = 16.dp, bottom = 22.dp)
+        ) {
+            // ── Top row: date chip + profile button ──────────────────────────
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                AnimatedVisibility(
+                    visible = visible,
+                    enter = slideInVertically(
+                        initialOffsetY = { -20 },
+                        animationSpec = tween(400)
+                    ) + fadeIn(animationSpec = tween(400))
                 ) {
-                    CircularProgressIndicator(color = MaterialTheme.colorScheme.primary)
+                    Surface(
+                        shape = RoundedCornerShape(50),
+                        color = Color.White.copy(alpha = 0.18f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            Color.White.copy(alpha = 0.25f)
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Box(
+                                modifier = Modifier
+                                    .size(6.dp)
+                                    .clip(CircleShape)
+                                    .background(Color.White)
+                            )
+                            Text(
+                                text = dateString,
+                                style = MaterialTheme.typography.labelMedium,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
+                }
+
+                AnimatedVisibility(
+                    visible = visible,
+                    enter = fadeIn(animationSpec = tween(500))
+                ) {
+                    Surface(
+                        onClick = onProfileClick,
+                        modifier = Modifier.size(44.dp),
+                        shape = CircleShape,
+                        color = Color.White.copy(alpha = 0.20f),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            Color.White.copy(alpha = 0.35f)
+                        )
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                imageVector = Icons.Outlined.Person,
+                                contentDescription = "Profile",
+                                tint = Color.White,
+                                modifier = Modifier.size(22.dp)
+                            )
+                        }
+                    }
                 }
             }
 
-            categoriesState.error != null -> {
-                ErrorSection(
-                    message = categoriesState.error ?: "Unknown error",
-                    onRetry = {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.refreshRecipeCategories()
+            Spacer(modifier = Modifier.height(22.dp))
+
+            // ── Greeting block ───────────────────────────────────────────────
+            AnimatedVisibility(
+                visible = visible,
+                enter = slideInVertically(
+                    initialOffsetY = { 30 },
+                    animationSpec = tween(500)
+                ) + fadeIn(animationSpec = tween(500))
+            ) {
+                Column {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = greeting,
+                            fontSize = 32.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            color = Color.White
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            text = greetingEmoji,
+                            fontSize = 30.sp
+                        )
                     }
-                )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Text(
+                        text = "What will you cook today?",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White.copy(alpha = 0.85f)
+                    )
+                }
             }
 
-            else -> {
-                Column {
-                    // Section header
+            Spacer(modifier = Modifier.height(22.dp))
+
+            // ── Floating search pill ─────────────────────────────────────────
+            AnimatedVisibility(
+                visible = visible,
+                enter = slideInVertically(
+                    initialOffsetY = { 40 },
+                    animationSpec = tween(600)
+                ) + fadeIn(animationSpec = tween(600))
+            ) {
+                Surface(
+                    onClick = onSearchClick,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(54.dp),
+                    shape = RoundedCornerShape(27.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 10.dp
+                ) {
                     Row(
                         modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
+                            .fillMaxSize()
+                            .padding(horizontal = 18.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        Text(
-                            "Categories",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onBackground
+                        Icon(
+                            imageVector = Icons.Outlined.Search,
+                            contentDescription = "Search",
+                            tint = MaterialTheme.colorScheme.primary,
+                            modifier = Modifier.size(20.dp)
                         )
                         Text(
-                            "${categoriesState.categories.size} types",
-                            style = MaterialTheme.typography.bodySmall,
+                            text = "Search recipes, ingredients…",
+                            style = MaterialTheme.typography.bodyMedium,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
+                }
+            }
+        }
+    }
+}
+
+// ── Today's Pick — magazine-style hero card ──────────────────────────────────
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun TodaysPickCard(
+    featured: List<com.example.myrecipeapp.domain.model.FeaturedRecipe>,
+    onClick: (recipeId: String) -> Unit
+) {
+    val hour = remember { java.time.LocalDateTime.now().hour }
+    // (badge label, badge emoji, CTA copy) tuned to the time of day
+    val mood = remember(hour) {
+        when (hour) {
+            in 5..10  -> Triple("Today's breakfast", "☀️", "Cook this morning")
+            in 11..14 -> Triple("Today's lunch", "🥗", "Make for lunch")
+            in 15..16 -> Triple("Afternoon bite", "🍪", "Snack time")
+            in 17..21 -> Triple("Tonight's special", "🌙", "Cook this tonight")
+            else      -> Triple("Late-night bite", "🌙", "Cook this now")
+        }
+    }
+    val (badgeLabel, badgeEmoji, ctaLabel) = mood
+
+    // Stable daily pick — same recipe across the whole day, rotates by day-of-year.
+    val pick = remember(featured) {
+        featured[java.time.LocalDate.now().dayOfYear % featured.size]
+    }
+    val recipe = pick.recipe
+
+    var pressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.98f else 1f,
+        animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessHigh),
+        label = "pick_scale",
+        finishedListener = { pressed = false }
+    )
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        // Section header (Playfair via headlineSmall)
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(
+                "Today's pick",
+                style = MaterialTheme.typography.headlineSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text("✨", fontSize = 16.sp)
+        }
+        Spacer(modifier = Modifier.height(14.dp))
+
+        Card(
+            onClick = {
+                pressed = true
+                onClick(recipe.id)
+            },
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(300.dp)
+                .scale(scale),
+            shape = RoundedCornerShape(24.dp),
+            elevation = CardDefaults.cardElevation(defaultElevation = 6.dp)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                AsyncImage(
+                    model = recipe.imageUrl,
+                    contentDescription = recipe.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                // Bottom-up dark gradient for legibility
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.25f),
+                                    Color.Black.copy(alpha = 0.85f)
+                                )
+                            )
+                        )
+                )
+
+                // Top-left mood badge
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(14.dp),
+                    shape = RoundedCornerShape(50),
+                    color = Color.White.copy(alpha = 0.9f)
+                ) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(5.dp)
+                    ) {
+                        Text(badgeEmoji, fontSize = 12.sp)
+                        Text(
+                            badgeLabel,
+                            style = MaterialTheme.typography.labelMedium,
+                            color = ForestGreen,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+
+                // Bottom content block
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .padding(20.dp)
+                ) {
+                    // Stat chips
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        if (recipe.rating > 0f) {
+                            PickStatChip("★", String.format(Locale.ROOT, "%.1f", recipe.rating))
+                        }
+                        val totalTime = recipe.prepTime + recipe.cookTime
+                        if (totalTime > 0) PickStatChip("⏱", "${totalTime}m")
+                        recipe.calories?.let { PickStatChip("🔥", "$it kcal") }
+                    }
+
+                    Spacer(modifier = Modifier.height(10.dp))
+
+                    // Title — Playfair via headlineMedium
+                    Text(
+                        text = recipe.name,
+                        style = MaterialTheme.typography.headlineMedium,
+                        fontWeight = FontWeight.ExtraBold,
+                        color = Color.White,
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 30.sp
+                    )
+
+                    if (recipe.description.isNotBlank()) {
+                        Spacer(modifier = Modifier.height(4.dp))
+                        Text(
+                            text = recipe.description,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = Color.White.copy(alpha = 0.85f),
+                            maxLines = 1,
+                            overflow = TextOverflow.Ellipsis
+                        )
+                    }
+
                     Spacer(modifier = Modifier.height(14.dp))
 
-                    // Image-backed category cards
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    // CTA
+                    Surface(
+                        onClick = {
+                            pressed = true
+                            onClick(recipe.id)
+                        },
+                        shape = RoundedCornerShape(12.dp),
+                        color = Color.White
                     ) {
-                        itemsIndexed(categoriesState.categories) { index, category ->
-                            var entered by remember { mutableStateOf(false) }
-                            LaunchedEffect(index) {
-                                delay(index * 55L)
-                                entered = true
-                            }
-                            AnimatedVisibility(
-                                visible = entered,
-                                enter = slideInVertically(
-                                    initialOffsetY = { 30 },
-                                    animationSpec = spring(
-                                        dampingRatio = Spring.DampingRatioNoBouncy,
-                                        stiffness = 280f
-                                    )
-                                ) + fadeIn(animationSpec = tween(200))
-                            ) {
-                                CategoryImageCard(
-                                    category = category,
-                                    isSelected = selectedCategoryId == category.id,
-                                    onClick = {
-                                        viewModel.selectCategory(category.id)
-                                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                        navController.navigate(CategoryDetail(categoryId = category.id)) {
-                                            launchSingleTop = true
-                                        }
-                                    }
-                                )
-                            }
+                        Row(
+                            modifier = Modifier.padding(horizontal = 18.dp, vertical = 10.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.PlayArrow,
+                                contentDescription = null,
+                                tint = ForestGreen,
+                                modifier = Modifier.size(18.dp)
+                            )
+                            Text(
+                                ctaLabel,
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = ForestGreen
+                            )
                         }
                     }
                 }
             }
         }
-
-        Spacer(modifier = Modifier.height(100.dp))
     }
 }
 
-// ── Header ─────────────────────────────────────────────────────────────────────
 @Composable
-fun ModernHeaderSection(onProfileClick: () -> Unit) {
-    val greeting = remember {
-        val hour = java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY)
-        when (hour) {
-            in 0..11 -> "Good Morning ☀️"
-            in 12..16 -> "Good Afternoon 🌤️"
-            else -> "Good Evening 🌙"
-        }
-    }
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(start = 16.dp, end = 16.dp, top = 24.dp, bottom = 16.dp),
-        verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.SpaceBetween
+private fun PickStatChip(emoji: String, value: String) {
+    Surface(
+        shape = RoundedCornerShape(50),
+        color = Color.Black.copy(alpha = 0.5f)
     ) {
-        Column {
-            Text(
-                text = greeting,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-            Text(
-                text = "What will you cook today?",
-                style = MaterialTheme.typography.headlineMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-        }
-        IconButton(
-            onClick = onProfileClick,
-            modifier = Modifier
-                .size(40.dp)
-                .clip(CircleShape)
-                .background(MaterialTheme.colorScheme.surfaceVariant)
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.Person,
-                contentDescription = "Profile",
-                tint = MaterialTheme.colorScheme.primary
+            Text(emoji, fontSize = 11.sp)
+            Text(
+                value,
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold
             )
         }
     }
@@ -359,100 +699,6 @@ private fun QuickActionsRow(
                 Icon(Icons.Default.ShoppingCart, null, modifier = Modifier.size(18.dp))
                 Spacer(modifier = Modifier.width(8.dp))
                 Text("Shopping List", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
-            }
-        }
-    }
-}
-
-// ── Category image card ────────────────────────────────────────────────────────
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-fun CategoryImageCard(
-    category: RecipeCategory,
-    isSelected: Boolean,
-    onClick: () -> Unit
-) {
-    val borderColor by animateColorAsState(
-        targetValue = if (isSelected) MaterialTheme.colorScheme.primary else Color.Transparent,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 300f),
-        label = "border"
-    )
-    var pressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (pressed) 0.95f else 1f,
-        animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessHigh),
-        label = "cat_scale",
-        finishedListener = { pressed = false }
-    )
-
-    Card(
-        onClick = { pressed = true; onClick() },
-        modifier = Modifier
-            .width(110.dp)
-            .height(130.dp)
-            .scale(scale),
-        shape = RoundedCornerShape(18.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = if (isSelected) 6.dp else 2.dp),
-        border = if (isSelected)
-            androidx.compose.foundation.BorderStroke(2.dp, borderColor)
-        else null
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            // Category image — local drawable when available, URL fallback otherwise
-            if (category.imageResId != 0) {
-                androidx.compose.foundation.Image(
-                    painter = painterResource(category.imageResId),
-                    contentDescription = category.name,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            } else {
-                AsyncImage(
-                    model = category.imageUrl,
-                    contentDescription = category.name,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = ContentScale.Crop
-                )
-            }
-            // Gradient overlay
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.65f)
-                            )
-                        )
-                    )
-            )
-            // Name at bottom
-            Text(
-                text = category.name,
-                style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.Bold,
-                color = Color.White,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(8.dp)
-            )
-            // Selected indicator
-            if (isSelected) {
-                Surface(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .padding(6.dp)
-                        .size(20.dp),
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.primary
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text("✓", fontSize = 11.sp, color = MaterialTheme.colorScheme.onPrimary)
-                    }
-                }
             }
         }
     }

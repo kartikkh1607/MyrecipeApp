@@ -16,13 +16,14 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AccessTime
-import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.FilterList
@@ -39,7 +40,9 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.Text
+import androidx.compose.material3.Surface
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -62,6 +65,7 @@ import com.example.myrecipeapp.domain.model.DietaryFilter
 import com.example.myrecipeapp.domain.model.Recipe
 import com.example.myrecipeapp.domain.model.RecipeCategory
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
+import java.util.Locale
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -107,6 +111,14 @@ fun CategoryDetailScreen(
             }
             if (sortByRating) base.sortedByDescending { it.rating } else base
         }
+
+    // Pull-to-refresh — guarded by manualRefresh so the indicator only shows
+    // when the user actually pulled (not during initial fetch).
+    var manualRefresh by remember { mutableStateOf(false) }
+    val isRefreshing = manualRefresh && categoryRecipesState.loading
+    LaunchedEffect(categoryRecipesState.loading) {
+        if (!categoryRecipesState.loading) manualRefresh = false
+    }
 
     Column(
         modifier = Modifier
@@ -154,10 +166,11 @@ fun CategoryDetailScreen(
                 onClick = onBackClick,
                 modifier = Modifier
                     .align(Alignment.TopStart)
+                    .statusBarsPadding()
                     .padding(16.dp)
             ) {
                 Icon(
-                    imageVector = Icons.Default.ArrowBack,
+                    imageVector = Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
                     tint = Color.White
                 )
@@ -168,6 +181,7 @@ fun CategoryDetailScreen(
                 onClick = { showFilterBottomSheet = true },
                 modifier = Modifier
                     .align(Alignment.TopEnd)
+                    .statusBarsPadding()
                     .padding(16.dp)
             ) {
                 Icon(
@@ -226,7 +240,15 @@ fun CategoryDetailScreen(
             }
         }
 
-        // Recipes list with lazy loading indicator
+        // Recipes list with lazy loading indicator + pull-to-refresh
+        PullToRefreshBox(
+            isRefreshing = isRefreshing,
+            onRefresh = {
+                manualRefresh = true
+                viewModel.refreshCategoryRecipes(category.id)
+            },
+            modifier = Modifier.fillMaxSize()
+        ) {
         LazyColumn(
             modifier = Modifier.fillMaxSize(),
             contentPadding = PaddingValues(16.dp),
@@ -406,7 +428,7 @@ fun CategoryDetailScreen(
                     }
                 }
 
-                items(filteredRecipes) { recipe ->
+                items(filteredRecipes, key = { it.id }) { recipe ->
                     EnhancedRecipeCard(
                         recipe = recipe,
                         isFavorite = favoriteIds.contains(recipe.id),
@@ -415,7 +437,8 @@ fun CategoryDetailScreen(
                     )
                 }
             }
-        }
+        } // end LazyColumn
+        } // end PullToRefreshBox
     }
 
     // Filter Bottom Sheet
@@ -461,6 +484,18 @@ fun EnhancedRecipeCard(
         label = "favorite_color"
     )
 
+    // Heart bounce — pops on tap then snaps back with spring
+    var heartBounce by remember { mutableStateOf(false) }
+    val heartScale by animateFloatAsState(
+        targetValue = if (heartBounce) 1.45f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessHigh
+        ),
+        label = "heart_scale",
+        finishedListener = { heartBounce = false }
+    )
+
     Card(
         onClick = {
             isPressed = true
@@ -482,7 +517,7 @@ fun EnhancedRecipeCard(
             modifier = Modifier.padding(16.dp),
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
-            // Enhanced image with overlay
+            // Enhanced image with overlay + badges
             Box {
                 AsyncImage(
                     model = recipe.imageUrl,
@@ -493,7 +528,7 @@ fun EnhancedRecipeCard(
                     contentScale = ContentScale.Crop
                 )
 
-                // Rating badge on image
+                // Rating badge — top end
                 if (recipe.rating > 0) {
                     Card(
                         modifier = Modifier
@@ -512,17 +547,42 @@ fun EnhancedRecipeCard(
                             Icon(
                                 imageVector = Icons.Default.Star,
                                 contentDescription = null,
-                                tint = Color(0xFFFFD700),
+                                tint = MaterialTheme.colorScheme.tertiary,
                                 modifier = Modifier.size(12.dp)
                             )
                             Text(
-                                text = String.format("%.1f", recipe.rating),
+                                text = String.format(Locale.ROOT, "%.1f", recipe.rating),
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
                             )
                         }
                     }
+                }
+
+                // Difficulty badge — bottom start
+                val difficultyBgColor = when (recipe.difficulty) {
+                    com.example.myrecipeapp.domain.model.RecipeDifficulty.EASY ->
+                        Color(0xFF2E7D32) // dark green
+                    com.example.myrecipeapp.domain.model.RecipeDifficulty.MEDIUM ->
+                        Color(0xFFE65100) // dark orange
+                    com.example.myrecipeapp.domain.model.RecipeDifficulty.HARD ->
+                        Color(0xFFC62828) // dark red
+                }
+                Surface(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .padding(5.dp),
+                    color = difficultyBgColor.copy(alpha = 0.92f),
+                    shape = RoundedCornerShape(6.dp)
+                ) {
+                    Text(
+                        text = "${recipe.difficulty.emoji()} ${recipe.difficulty.displayName()}",
+                        style = MaterialTheme.typography.labelSmall,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier.padding(horizontal = 5.dp, vertical = 2.dp)
+                    )
                 }
             }
 
@@ -549,14 +609,19 @@ fun EnhancedRecipeCard(
                     )
 
                     IconButton(
-                        onClick = { onFavoriteToggle(recipe) },
+                        onClick = {
+                            heartBounce = true
+                            onFavoriteToggle(recipe)
+                        },
                         modifier = Modifier.size(32.dp)
                     ) {
                         Icon(
                             imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
                             contentDescription = "Favorite",
                             tint = favoriteColor,
-                            modifier = Modifier.size(20.dp)
+                            modifier = Modifier
+                                .size(20.dp)
+                                .scale(heartScale)
                         )
                     }
                 }
@@ -572,44 +637,56 @@ fun EnhancedRecipeCard(
 
                 Spacer(modifier = Modifier.weight(1f))
 
-                // Recipe metadata with enhanced styling
+                // Recipe metadata — styled chip pills
                 Row(
                     modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.spacedBy(16.dp),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    // Cook time
-                    Row(
-                        verticalAlignment = Alignment.CenterVertically,
-                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    // Cook time chip
+                    Surface(
+                        color = MaterialTheme.colorScheme.primaryContainer,
+                        shape = RoundedCornerShape(8.dp)
                     ) {
-                        Icon(
-                            imageVector = Icons.Default.AccessTime,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Text(
-                            text = "${recipe.cookTime} min",
-                            style = MaterialTheme.typography.labelMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
-                        )
-                    }
-
-                    // Calories
-                    if (recipe.calories != null && recipe.calories > 0) {
                         Row(
+                            modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
                             verticalAlignment = Alignment.CenterVertically,
                             horizontalArrangement = Arrangement.spacedBy(4.dp)
                         ) {
-                            Text("🔥", fontSize = 12.sp)
-                            Text(
-                                text = "${recipe.calories} kcal",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.8f)
+                            Icon(
+                                imageVector = Icons.Default.AccessTime,
+                                contentDescription = null,
+                                tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                                modifier = Modifier.size(12.dp)
                             )
+                            Text(
+                                text = "${recipe.cookTime}m",
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onPrimaryContainer
+                            )
+                        }
+                    }
+
+                    // Calories chip
+                    if (recipe.calories != null && recipe.calories > 0) {
+                        Surface(
+                            color = MaterialTheme.colorScheme.tertiaryContainer,
+                            shape = RoundedCornerShape(8.dp)
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(3.dp)
+                            ) {
+                                Text("🔥", fontSize = 10.sp)
+                                Text(
+                                    text = "${recipe.calories} kcal",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onTertiaryContainer
+                                )
+                            }
                         }
                     }
                 }

@@ -12,9 +12,8 @@ import com.example.myrecipeapp.domain.repository.RecipeRepository
  */
 
 class GetFeaturedRecipesUseCase(private val repository: RecipeRepository) {
-    suspend operator fun invoke(): Result<List<FeaturedRecipe>> = runCatching {
-        repository.getFeaturedRecipes()
-    }
+    suspend operator fun invoke(forceRefresh: Boolean = false): Result<List<FeaturedRecipe>> =
+        runCatching { repository.getFeaturedRecipes(forceRefresh) }
 }
 
 class GetCategoriesUseCase(private val repository: RecipeRepository) {

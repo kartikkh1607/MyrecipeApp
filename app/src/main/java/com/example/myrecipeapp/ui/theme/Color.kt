@@ -19,22 +19,14 @@ val MutedGray = Color(0xFF7A7A7A)           // Text Secondary - Gentle gray
 val Teal = Color(0xFF66B5B5)                // Primary Accent - Vibrant teal for accents
 val DarkSurface = Color(0xFF24262B)         // Surfaces (Cards) - Lighter charcoal
 
-// Supporting Colors for States and Feedback
-val Success = Color(0xFF4CAF50)             // Success states
-val Warning = Color(0xFFFF9800)             // Warning states
-val Error = Color(0xFFF44336)               // Error states
-val Info = Color(0xFF2196F3)                // Informational states
+// Warm Amber / Saffron — ratings, calories, and food highlights
+val Amber          = Color(0xFFF59E0B)    // Core amber accent
+val AmberLight     = Color(0xFFFEF3C7)    // Light container (light theme)
+val AmberDark      = Color(0xFF92400E)    // Dark on-container text
+val AmberContainer = Color(0xFF3D2800)    // Dark theme container
 
-// Neutral Grays for Borders and Dividers
-val LightGray = Color(0xFFE5E5E5)           // Light borders
-val MediumGray = Color(0xFFBDBDBD)          // Medium borders
-val DarkGray = Color(0xFF616161)            // Dark borders
+// Error state — used by Theme.kt error color slot
+val Error = Color(0xFFF44336)
 
-// Legacy colors (keeping for compatibility)
-val Purple80 = Color(0xFFD0BCFF)
-val PurpleGrey80 = Color(0xFFCCC2DC)
-val Pink80 = Color(0xFFEFB8C8)
-
-val Purple40 = Color(0xFF6650a4)
-val PurpleGrey40 = Color(0xFF625b71)
-val Pink40 = Color(0xFF7D5260)
+// Light border color — used by Theme.kt outline slot
+val LightGray = Color(0xFFE5E5E5)

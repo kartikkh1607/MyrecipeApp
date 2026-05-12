@@ -2,6 +2,7 @@ package com.example.myrecipeapp.ui.viewmodel
 
 import android.util.Log
 import androidx.compose.runtime.State
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -18,6 +19,7 @@ import com.example.myrecipeapp.di.AppContainer
 import com.example.myrecipeapp.domain.model.FeaturedRecipe
 import com.example.myrecipeapp.domain.model.Recipe
 import com.example.myrecipeapp.domain.model.RecipeCategory
+import com.example.myrecipeapp.domain.model.SearchResult
 import com.example.myrecipeapp.domain.model.ShoppingListItem
 import com.example.myrecipeapp.domain.model.ThemeMode
 import com.example.myrecipeapp.domain.usecase.GetCategoriesUseCase
@@ -26,7 +28,6 @@ import com.example.myrecipeapp.domain.usecase.GetRecipeDetailsUseCase
 import com.example.myrecipeapp.domain.usecase.GetRecipesByCategoryUseCase
 import com.example.myrecipeapp.domain.usecase.SearchRecipesUseCase
 import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
@@ -134,11 +135,14 @@ class MainViewModel(
     )
 
     // ── Favorites State (Room-backed) ─────────────────────────────────────────
-    private val _favoriteIds = mutableStateOf<Set<String>>(emptySet())
-    val favoriteIds: State<Set<String>> = _favoriteIds
-
+    // Single source of truth — _favoriteRecipes. favoriteIds is derived so the
+    // two views can never disagree.
     private val _favoriteRecipes = mutableStateOf<List<Recipe>>(emptyList())
     val favoriteRecipes: State<List<Recipe>> = _favoriteRecipes
+
+    val favoriteIds: State<Set<String>> = derivedStateOf {
+        _favoriteRecipes.value.mapTo(mutableSetOf()) { it.id }
+    }
 
     /** Persisted grid/list toggle — survives navigation (lives in ViewModel, not screen). */
     private val _favoritesGridMode = mutableStateOf(false)
@@ -152,9 +156,18 @@ class MainViewModel(
         viewModelScope.launch { favoriteDao.delete(recipeId) }
     }
 
+    /** Restores a previously removed favorite (used by undo-snackbar). */
+    fun addFavorite(recipe: Recipe) {
+        viewModelScope.launch {
+            favoriteDao.insert(recipe.toFavoriteEntity())
+            cachedRecipeDao.upsert(recipe.toCachedEntity())
+        }
+    }
+
+
     fun toggleFavorite(recipe: Recipe) {
         viewModelScope.launch {
-            if (recipe.id in _favoriteIds.value) {
+            if (_favoriteRecipes.value.any { it.id == recipe.id }) {
                 favoriteDao.delete(recipe.id)
             } else {
                 favoriteDao.insert(recipe.toFavoriteEntity())
@@ -167,17 +180,16 @@ class MainViewModel(
     private val _shoppingList = mutableStateOf<List<ShoppingListItem>>(emptyList())
     val shoppingList: State<List<ShoppingListItem>> = _shoppingList
 
-    /** The last recipe name passed to [addToShoppingList]. Used by ShoppingListScreen to auto-focus that section. */
+    /** The last recipe name passed to [addToShoppingList]. Used by ShoppingListScreen to auto focus that section. */
     private val _lastAddedRecipeName = mutableStateOf<String?>(null)
     val lastAddedRecipeName: State<String?> = _lastAddedRecipeName
 
-    /** Replaces the shopping list with [recipe]'s ingredients.
-     *  Previous items are cleared first so the user always sees exactly
-     *  what they just selected — no accumulation of old recipes. */
+    /** Appends [recipe]'s ingredients to the shopping list.
+     *  Existing items are preserved; duplicate keys (same recipe+ingredient
+     *  added twice) are silently dropped by the DAO (OnConflictStrategy.IGNORE). */
     fun addToShoppingList(recipe: Recipe) {
         _lastAddedRecipeName.value = recipe.name
         viewModelScope.launch {
-            shoppingDao.deleteAll()   // clear previous recipe's items first
             recipe.ingredients.forEach { ing ->
                 val key = "${recipe.id}_${ing.id.ifEmpty { ing.name }}"
                 shoppingDao.insert(
@@ -208,6 +220,23 @@ class MainViewModel(
         viewModelScope.launch { shoppingDao.deleteByKey(key) }
     }
 
+    /** Restores a previously deleted shopping item (used by undo-snackbar). */
+    fun restoreShoppingItem(item: ShoppingListItem) {
+        viewModelScope.launch {
+            shoppingDao.insert(
+                ShoppingItemEntity(
+                    key = item.key,
+                    ingredientName = item.ingredientName,
+                    amount = item.amount,
+                    unit = item.unit,
+                    recipeName = item.recipeName,
+                    checked = item.isChecked
+                )
+            )
+        }
+    }
+
+
     fun clearShoppingList() {
         viewModelScope.launch { shoppingDao.deleteAll() }
     }
@@ -225,18 +254,39 @@ class MainViewModel(
     }
 
     // ── Category cache — keyed by categoryId, value = (recipes, cachedAt millis) ─
-    // Max 20 entries, entries expire after 24 h so stale data doesn't persist all day.
-    private val categoryCache = mutableMapOf<String, Pair<List<Recipe>, Long>>()
+    // Max 20 entries, entries expire after 24 h. accessOrder=true makes this a real LRU:
+    // reading an entry via get() moves it to the most-recently-used end, so eviction
+    // picks the entry whose last *access* (not insertion) was oldest.
     private val CACHE_TTL_MS = 24 * 60 * 60 * 1000L  // 24 hours
     private val CACHE_MAX_SIZE = 20
+    private val categoryCache = object : LinkedHashMap<String, Pair<List<Recipe>, Long>>(
+        16, 0.75f, /* accessOrder = */ true
+    ) {
+        override fun removeEldestEntry(eldest: Map.Entry<String, Pair<List<Recipe>, Long>>): Boolean =
+            size > CACHE_MAX_SIZE
+    }
+
+    // ── Search-result cache — keyed by "query|offset", value = (result, cachedAt) ─
+    // Saves API calls when the user types the same query twice (e.g. clears + retypes).
+    // 30-minute TTL keeps results fresh enough; 20-entry LRU bounds memory.
+    private val SEARCH_CACHE_TTL_MS = 30 * 60 * 1000L  // 30 minutes
+    private val SEARCH_CACHE_MAX_SIZE = 20
+    private val searchCache = object : LinkedHashMap<String, Pair<SearchResult, Long>>(
+        16, 0.75f, /* accessOrder = */ true
+    ) {
+        override fun removeEldestEntry(eldest: Map.Entry<String, Pair<SearchResult, Long>>): Boolean =
+            size > SEARCH_CACHE_MAX_SIZE
+    }
+
+    private fun searchCacheKey(query: String, offset: Int): String =
+        "${query.lowercase().trim()}|$offset"
 
     // ─────────────────────────────────────────────────────────────────────────
     init {
-        // Single Room query feeds both favorites state objects — no duplicate DB round-trip
+        // Single Room query — favoriteIds is derived from _favoriteRecipes.
         viewModelScope.launch {
             favoriteDao.getAllFlow().collect { entities ->
                 _favoriteRecipes.value = entities.map { it.toRecipe() }
-                _favoriteIds.value = entities.map { it.id }.toSet()
             }
         }
         viewModelScope.launch {
@@ -250,8 +300,14 @@ class MainViewModel(
 
     // ── Public API ────────────────────────────────────────────────────────────
 
-    fun refreshFeaturedRecipes() = loadFeaturedRecipes()
+    fun refreshFeaturedRecipes() = loadFeaturedRecipes(forceRefresh = true)
     fun refreshRecipeCategories() = loadCategories()
+
+    /** Force-refresh category recipes — bypasses the cache TTL (used by pull-to-refresh). */
+    fun refreshCategoryRecipes(categoryId: String) {
+        categoryCache.remove(categoryId)   // evict so getRecipesByCategory() hits the network
+        getRecipesByCategory(categoryId)
+    }
 
     fun fetchRecipeDetails(recipeId: String) {
         // Skip re-fetch only when the EXACT same recipe is already fully loaded.
@@ -281,12 +337,28 @@ class MainViewModel(
     private var searchJob: Job? = null
 
     /**
-     * Issue #6 fix: 300 ms debounce added before the API call.
-     * If the user types another character within 300 ms, the coroutine is cancelled
-     * and the previous call never reaches the network layer.
+     * Fires a search. Debouncing is the UI layer's job (SearchScreen uses
+     * snapshotFlow + debounce(300)); we still cancel any in-flight search so
+     * stale results can't overwrite fresh ones.
      */
     fun searchRecipes(query: String) {
-        searchJob?.cancel()   // cancel previous — prevents stale results overwriting fresh ones
+        searchJob?.cancel()
+
+        // Serve from in-memory LRU if a fresh result for this query exists.
+        // Saves an API call when the user clears and retypes the same word.
+        val key = searchCacheKey(query, 0)
+        val cached = searchCache[key]
+        if (cached != null && (System.currentTimeMillis() - cached.second) < SEARCH_CACHE_TTL_MS) {
+            _searchState.value = SearchState(
+                loading = false,
+                loadingMore = false,
+                recipes = cached.first.recipes,
+                totalResults = cached.first.totalResults,
+                query = query
+            )
+            return
+        }
+
         searchJob = viewModelScope.launch {
             _searchState.value =
                 _searchState.value.copy(
@@ -297,10 +369,10 @@ class MainViewModel(
                     totalResults = 0,
                     loadingMore = false
                 )
-            delay(300)  // ✅ Issue #6: debounce — rapid keystrokes cancel before this point
             searchUseCase(query, offset = 0)
                 .fold(
                     onSuccess = {
+                        searchCache[key] = it to System.currentTimeMillis()
                         _searchState.value =
                             SearchState(
                                 loading = false,
@@ -333,10 +405,23 @@ class MainViewModel(
 
         _searchState.value = currentState.copy(loadingMore = true, error = null)
 
+        val offset = currentState.recipes.size
+        val pageKey = searchCacheKey(currentState.query, offset)
+        val cachedPage = searchCache[pageKey]
+        if (cachedPage != null && (System.currentTimeMillis() - cachedPage.second) < SEARCH_CACHE_TTL_MS) {
+            _searchState.value = _searchState.value.copy(
+                loadingMore = false,
+                recipes = currentState.recipes + cachedPage.first.recipes,
+                totalResults = cachedPage.first.totalResults
+            )
+            return
+        }
+
         viewModelScope.launch {
-            searchUseCase(currentState.query, offset = currentState.recipes.size)
+            searchUseCase(currentState.query, offset = offset)
                 .fold(
                     onSuccess = { result ->
+                        searchCache[pageKey] = result to System.currentTimeMillis()
                         _searchState.value = _searchState.value.copy(
                             loadingMore = false,
                             recipes = currentState.recipes + result.recipes, // append
@@ -369,10 +454,7 @@ class MainViewModel(
             },
             call = { getByCategoryUseCase(categoryId) },
             onSuccess = {
-                // Evict oldest entry if at capacity
-                if (categoryCache.size >= CACHE_MAX_SIZE) {
-                    categoryCache.keys.firstOrNull()?.let { categoryCache.remove(it) }
-                }
+                // LinkedHashMap.removeEldestEntry handles eviction automatically.
                 categoryCache[categoryId] = Pair(it, System.currentTimeMillis())
                 _categoryRecipesState.value = CategoryRecipesState(loading = false, recipes = it)
             },
@@ -388,11 +470,11 @@ class MainViewModel(
 
     // ── Private helpers ───────────────────────────────────────────────────────
 
-    private fun loadFeaturedRecipes() = launchOp(
+    private fun loadFeaturedRecipes(forceRefresh: Boolean = false) = launchOp(
         onStart = {
             _homeRecipeState.value = _homeRecipeState.value.copy(loading = true, error = null)
         },
-        call = { getFeaturedRecipes() },
+        call = { getFeaturedRecipes(forceRefresh) },
         onSuccess = {
             _homeRecipeState.value = HomeRecipeState(loading = false, featuredRecipes = it)
         },

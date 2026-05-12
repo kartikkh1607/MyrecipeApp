@@ -2,11 +2,10 @@ import java.util.Properties
 
 plugins {
     alias(libs.plugins.android.application)
-    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     id("kotlin-parcelize")
-    id("com.google.devtools.ksp") version "2.0.21-1.0.28"
+    id("com.google.devtools.ksp") version "2.3.7"
 }
 
 ksp {
@@ -22,12 +21,12 @@ if (localPropertiesFile.exists()) {
 
 android {
     namespace = "com.example.myrecipeapp"
-    compileSdk = 35
+    compileSdk = 36
 
     defaultConfig {
         applicationId = "com.example.myrecipeapp"
         minSdk = 26
-        targetSdk = 35
+        targetSdk = 36
         versionCode = 1
         versionName = "1.0"
 
@@ -37,9 +36,6 @@ android {
         vectorDrawables {
             useSupportLibrary = true
         }
-
-        // Enable multidex for better compatibility
-        multiDexEnabled = true
 
         // This line reads the property from local.properties and creates a field in BuildConfig
         val apiKey = localProperties.getProperty("spoonacular.api.key") ?: ""
@@ -72,9 +68,6 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
-    kotlinOptions {
-        jvmTarget = "11"
-    }
     buildFeatures {
         compose = true
         buildConfig = true  // Enable BuildConfig for API keys
@@ -85,50 +78,53 @@ dependencies {
     val nav_version = "2.8.5"
 
     // Kotlinx Serialization (required for type-safe Navigation 2.8+)
-    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.7.3")
+    implementation(libs.kotlinx.serialization.json)
 
     // Material 3 Extended Icons
-    implementation("androidx.compose.material:material-icons-extended")
+    implementation(libs.androidx.compose.material.icons.extended)
+
+    // Google Fonts (Playfair Display for screen titles)
+    implementation(libs.androidx.compose.ui.text.google.fonts)
 
     // DataStore Preferences (theme persistence)
-    implementation("androidx.datastore:datastore-preferences:1.1.1")
+    implementation(libs.androidx.datastore.preferences)
 
     // Navigation
-    implementation("androidx.navigation:navigation-compose:$nav_version")
+    implementation(libs.androidx.navigation.compose)
 
     // HorizontalPager for Carousel
-    implementation("androidx.compose.foundation:foundation:1.7.5")
+    implementation(libs.androidx.compose.foundation)
 
 
 
     // compose viewModel
-    implementation("androidx.lifecycle:lifecycle-viewmodel-compose:2.9.1")
-    implementation("androidx.lifecycle:lifecycle-runtime-compose:2.8.0")
+    implementation(libs.androidx.lifecycle.viewmodel.compose)
+    implementation(libs.androidx.lifecycle.runtime.compose)
 
     // Network Calls
-    implementation("com.squareup.retrofit2:retrofit:3.0.0")
+    implementation(libs.retrofit)
 
     // json to kotlin object mapping
-    implementation("com.squareup.retrofit2:converter-gson:3.0.0")
+    implementation(libs.converter.gson)
     
     // HTTP logging interceptor for debugging
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    implementation(libs.logging.interceptor)
 
     // for image loading
-    implementation("io.coil-kt:coil-compose:2.7.0")
+    implementation(libs.coil.compose)
 
     // Room (local database for favorites + shopping list persistence)
     val room_version = "2.6.1"
-    implementation("androidx.room:room-runtime:$room_version")
-    implementation("androidx.room:room-ktx:$room_version")   // coroutines + Flow support
-    ksp("androidx.room:room-compiler:$room_version")
+    implementation(libs.androidx.room.runtime)
+    implementation(libs.androidx.room.ktx)   // coroutines + Flow support
+    ksp(libs.androidx.room.compiler)
 
     // Gson for TypeConverters
-    implementation("com.google.code.gson:gson:2.11.0")
+    implementation(libs.gson)
 
 
     // Baseline Profile
-    implementation("androidx.profileinstaller:profileinstaller:1.3.1")
+    implementation(libs.androidx.profileinstaller)
 
     // Core & Compose BOM
     implementation(libs.androidx.core.ktx)
@@ -142,17 +138,17 @@ dependencies {
 
     // Testing
     testImplementation(libs.junit)
-    testImplementation("org.mockito:mockito-core:5.7.0")
-    testImplementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.7.3")
-    testImplementation("org.robolectric:robolectric:4.10.3")
+    testImplementation(libs.mockito.core)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.robolectric)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
 
     // Baseline Profile
-    androidTestImplementation("androidx.benchmark:benchmark-macro-junit4:1.2.2")
-    androidTestImplementation("androidx.test.uiautomator:uiautomator:2.2.0")
+    androidTestImplementation(libs.androidx.benchmark.macro.junit4)
+    androidTestImplementation(libs.androidx.uiautomator)
 
     // Debugging
     debugImplementation(libs.androidx.ui.tooling)

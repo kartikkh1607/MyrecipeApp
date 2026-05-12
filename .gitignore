@@ -13,3 +13,12 @@
 .externalNativeBuild
 .cxx
 local.properties
+
+# Kotlin compiler error dumps
+.kotlin/
+
+# Ad-hoc build/error logs we never want committed
+build_error.txt
+*.log
+# Added by code-review-graph
+.code-review-graph/

@@ -1,5 +1,6 @@
 package com.example.myrecipeapp.ui.screens
 
+import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
@@ -34,14 +35,16 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
+import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Timer
-import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
@@ -74,8 +77,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
@@ -87,6 +92,7 @@ import com.example.myrecipeapp.ui.navigation.ShoppingList
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
+import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
 
@@ -120,7 +126,7 @@ fun RecipeDetailScreen(
                         style = MaterialTheme.typography.titleMedium
                     )
                     Spacer(modifier = Modifier.height(8.dp))
-                    androidx.compose.material3.TextButton(
+                    TextButton(
                         onClick = { navController.popBackStack() }
                     ) { Text("Go Back") }
                 }
@@ -132,35 +138,37 @@ fun RecipeDetailScreen(
     }
 
     var isCookingMode by remember { mutableStateOf(false) }
-    var showReplaceListDialog by remember { mutableStateOf(false) }
     val hapticFeedback = LocalHapticFeedback.current
+    val context = LocalContext.current
     val isFavorite by remember(recipe.id) {
         derivedStateOf { viewModel.favoriteIds.value.contains(recipe.id) }
     }
-    val hasShoppingItems by remember {
-        derivedStateOf { viewModel.shoppingList.value.isNotEmpty() }
-    }
 
-    // ── Replace list confirmation dialog ──────────────────────────────
-    if (showReplaceListDialog) {
-        AlertDialog(
-            onDismissRequest = { showReplaceListDialog = false },
-            title = { Text("Replace Shopping List?") },
-            text  = {
-                Text("This will replace your current list with \"${recipe.name}\"'s ingredients.")
-            },
-            confirmButton = {
-                Button(onClick = {
-                    showReplaceListDialog = false
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    viewModel.addToShoppingList(recipe)
-                    navController.navigate(ShoppingList) { launchSingleTop = true }
-                }) { Text("Replace") }
-            },
-            dismissButton = {
-                TextButton(onClick = { showReplaceListDialog = false }) { Text("Cancel") }
+    // ── Servings scaling ──────────────────────────────────────────────────────
+    val baseServings = recipe.servings.coerceAtLeast(1)
+    var currentServings by remember(recipe.id) { mutableIntStateOf(baseServings) }
+    val servingScale = currentServings.toFloat() / baseServings.toFloat()
+
+    fun shareCurrentRecipe() {
+        val body = buildString {
+            append(recipe.name)
+            if (recipe.description.isNotBlank()) append("\n\n").append(recipe.description)
+            if (recipe.ingredients.isNotEmpty()) {
+                append("\n\nIngredients:")
+                recipe.ingredients.forEach { ing ->
+                    append("\n- ")
+                    if (ing.amount.isNotBlank()) append(ing.amount).append(' ')
+                    if (ing.unit.isNotBlank()) append(ing.unit).append(' ')
+                    append(ing.name)
+                }
             }
-        )
+        }
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "text/plain"
+            putExtra(Intent.EXTRA_SUBJECT, recipe.name)
+            putExtra(Intent.EXTRA_TEXT, body)
+        }
+        context.startActivity(Intent.createChooser(send, "Share recipe"))
     }
 
     // Box: cooking mode full-screen overlay sits on TOP of MainScreen's bottom nav
@@ -191,6 +199,10 @@ fun RecipeDetailScreen(
                     onFavoriteClick = {
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                         viewModel.toggleFavorite(recipe)
+                    },
+                    onShareClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        shareCurrentRecipe()
                     }
                 )
             }
@@ -208,19 +220,29 @@ fun RecipeDetailScreen(
                     },
                     onAddToShoppingList = {
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        if (hasShoppingItems) {
-                            showReplaceListDialog = true
-                        } else {
-                            viewModel.addToShoppingList(recipe)
-                            navController.navigate(ShoppingList) { launchSingleTop = true }
-                        }
+                        val scaled = recipe.copy(
+                            servings = currentServings,
+                            ingredients = recipe.ingredients.map {
+                                it.copy(amount = scaleAmount(it.amount, servingScale))
+                            }
+                        )
+                        viewModel.addToShoppingList(scaled)
+                        navController.navigate(ShoppingList) { launchSingleTop = true }
                     }
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
             item {
-                IngredientsSection(ingredients = recipe.ingredients)
+                ServingsStepper(
+                    servings = currentServings,
+                    onChange = {
+                        currentServings = it
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                    }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                IngredientsSection(ingredients = recipe.ingredients, scale = servingScale)
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
@@ -304,7 +326,8 @@ fun RecipeHeroSection(
     isFavorite: Boolean,
     parallaxOffsetPx: Float = 0f,
     onBackClick: () -> Unit,
-    onFavoriteClick: () -> Unit
+    onFavoriteClick: () -> Unit,
+    onShareClick: () -> Unit = {}
 ) {
     // Favorite icon bounces with a spring when toggled
     val favoriteScale by animateFloatAsState(
@@ -376,20 +399,33 @@ fun RecipeHeroSection(
                 Icon(Icons.AutoMirrored.Filled.ArrowBack, "Back", tint = Color.White)
             }
 
-            // Favorite button — wrapped in Box so the heart burst overlay can float above it
-            Box(contentAlignment = Alignment.Center) {
-                HeartBurstOverlay(trigger = burstTrigger)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
                 IconButton(
-                    onClick = onFavoriteClick,
+                    onClick = onShareClick,
                     modifier = Modifier
                         .background(Color.Black.copy(alpha = 0.35f), CircleShape)
-                        .scale(favoriteScale)
                 ) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = if (isFavorite) "Remove" else "Favorite",
-                        tint = favoriteColor
-                    )
+                    Icon(Icons.Default.Share, "Share", tint = Color.White)
+                }
+
+                // Favorite button — wrapped in Box so the heart burst overlay can float above it
+                Box(contentAlignment = Alignment.Center) {
+                    HeartBurstOverlay(trigger = burstTrigger)
+                    IconButton(
+                        onClick = onFavoriteClick,
+                        modifier = Modifier
+                            .background(Color.Black.copy(alpha = 0.35f), CircleShape)
+                            .scale(favoriteScale)
+                    ) {
+                        Icon(
+                            imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                            contentDescription = if (isFavorite) "Remove" else "Favorite",
+                            tint = favoriteColor
+                        )
+                    }
                 }
             }
         }
@@ -560,7 +596,7 @@ fun CookingActionButtons(
 }
 
 @Composable
-fun IngredientsSection(ingredients: List<Ingredient>) {
+fun IngredientsSection(ingredients: List<Ingredient>, scale: Float = 1f) {
     Column(
         modifier = Modifier.padding(horizontal = 16.dp)
     ) {
@@ -587,6 +623,7 @@ fun IngredientsSection(ingredients: List<Ingredient>) {
                 ingredients.forEachIndexed { index, ingredient ->
                     IngredientItem(
                         ingredient = ingredient,
+                        scale = scale,
                         isLast = index == ingredients.lastIndex
                     )
                 }
@@ -595,16 +632,26 @@ fun IngredientsSection(ingredients: List<Ingredient>) {
     }
 }
 
+/**
+ * Scales a numeric amount string by [scale], preserving the original string for
+ * non-numeric values (e.g. "a pinch"). Whole numbers render without decimals;
+ * fractional values get up to two decimal places with trailing zeros stripped.
+ */
+private fun scaleAmount(original: String, scale: Float): String {
+    val d = original.toDoubleOrNull() ?: return original
+    val scaled = d * scale
+    if (scaled == kotlin.math.floor(scaled)) return scaled.toInt().toString()
+    return String.format(Locale.ROOT, "%.2f", scaled).trimEnd('0').trimEnd('.')
+}
+
 @Composable
 fun IngredientItem(
     ingredient: Ingredient,
+    scale: Float = 1f,
     isLast: Boolean
 ) {
-    // Format "4.0" → "4", "1.5" stays "1.5"
-    val amount = remember(ingredient.amount) {
-        val d = ingredient.amount.toDoubleOrNull()
-        if (d != null && d == kotlin.math.floor(d)) d.toInt().toString()
-        else ingredient.amount
+    val amount = remember(ingredient.amount, scale) {
+        scaleAmount(ingredient.amount, scale)
     }
     val amountLabel = if (ingredient.unit.isBlank()) amount else "$amount ${ingredient.unit}"
 
@@ -934,7 +981,61 @@ private fun FavoriteAddedLabel(trigger: Int, modifier: Modifier = Modifier) {
     }
 }
 
-
-
-
+// ── Servings stepper ──────────────────────────────────────────────────────────
+@Composable
+private fun ServingsStepper(
+    servings: Int,
+    onChange: (Int) -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.SpaceBetween
+    ) {
+        Text(
+            text = "Servings",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onBackground
+        )
+        Surface(
+            shape = RoundedCornerShape(24.dp),
+            color = MaterialTheme.colorScheme.surfaceVariant,
+            tonalElevation = 1.dp
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                IconButton(
+                    onClick = { if (servings > 1) onChange(servings - 1) },
+                    enabled = servings > 1
+                ) {
+                    Icon(
+                        Icons.Default.Remove,
+                        contentDescription = "Decrease servings",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+                Text(
+                    text = servings.toString(),
+                    style = MaterialTheme.typography.titleMedium,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.width(32.dp)
+                )
+                IconButton(
+                    onClick = { if (servings < 20) onChange(servings + 1) },
+                    enabled = servings < 20
+                ) {
+                    Icon(
+                        Icons.Default.Add,
+                        contentDescription = "Increase servings",
+                        tint = MaterialTheme.colorScheme.onSurface
+                    )
+                }
+            }
+        }
+    }
+}
 

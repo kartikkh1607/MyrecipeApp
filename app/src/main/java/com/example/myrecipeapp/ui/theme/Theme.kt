@@ -24,9 +24,11 @@ private val PremiumDarkColorScheme = darkColorScheme(
     secondaryContainer = Color(0xFF234848),   // Darker forest green
     onSecondaryContainer = Cream,
     
-    // Tertiary - Subtle accent
-    tertiary = MutedGray,
-    onTertiary = Cream,
+    // Tertiary — Warm Amber for ratings, calories, and food highlights
+    tertiary = Amber,
+    onTertiary = Midnight,
+    tertiaryContainer = AmberContainer,
+    onTertiaryContainer = Amber,
     
     // Backgrounds and surfaces
     background = Midnight,
@@ -62,9 +64,11 @@ private val PremiumLightColorScheme = lightColorScheme(
     secondaryContainer = Color(0xFFF0F8F8),   // Very light secondary container
     onSecondaryContainer = ForestGreen,
     
-    // Tertiary - Stone for subtle accents
-    tertiary = Stone,
+    // Tertiary — Warm Amber for ratings, calories, and food highlights
+    tertiary = Amber,
     onTertiary = White,
+    tertiaryContainer = AmberLight,
+    onTertiaryContainer = AmberDark,
     
     // Backgrounds and surfaces
     background = Linen,

@@ -1,10 +1,13 @@
 package com.example.myrecipeapp.ui.screens
 
+import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -19,9 +22,12 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.lazy.grid.GridCells
+import androidx.compose.foundation.lazy.grid.LazyGridState
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -30,11 +36,11 @@ import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.outlined.GridView
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -49,14 +55,19 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.res.painterResource
 import coil.compose.AsyncImage
 import com.example.myrecipeapp.domain.model.RecipeCategory
+import com.example.myrecipeapp.ui.components.GridSkeletonScreen
+import com.example.myrecipeapp.ui.navigation.Categories
+import com.example.myrecipeapp.ui.navigation.LocalTabReselectEvents
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.filter
 
 @Composable
 fun RecipeScreen(
@@ -64,6 +75,15 @@ fun RecipeScreen(
     viewstate: MainViewModel.RecipeCategoryState,
     navigateToDetail: (RecipeCategory) -> Unit
 ) {
+    // Hoist grid state so reselecting the Categories tab smooth-scrolls to top.
+    val gridState = rememberLazyGridState()
+    val tabReselectEvents = LocalTabReselectEvents.current
+    LaunchedEffect(tabReselectEvents) {
+        tabReselectEvents.events.filter { it is Categories }.collect {
+            gridState.animateScrollToItem(0)
+        }
+    }
+
     Column(
         modifier = modifier
             .fillMaxSize()
@@ -75,6 +95,7 @@ fun RecipeScreen(
                     )
                 )
             )
+            .statusBarsPadding()
             .padding(16.dp)
     ) {
         Column(
@@ -128,21 +149,7 @@ fun RecipeScreen(
         Box(modifier = Modifier.fillMaxSize()) {
             when {
                 viewstate.loading -> {
-                    Column(
-                        modifier = Modifier.align(Alignment.Center),
-                        horizontalAlignment = Alignment.CenterHorizontally
-                    ) {
-                        CircularProgressIndicator(
-                            color = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(48.dp)
-                        )
-                        Spacer(modifier = Modifier.height(16.dp))
-                        Text(
-                            "Loading categories...",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    GridSkeletonScreen(itemCount = 6)
                 }
 
                 viewstate.error != null -> {
@@ -155,6 +162,7 @@ fun RecipeScreen(
                 else -> {
                     CategoryGridDisplay(
                         categories = viewstate.categories,
+                        gridState = gridState,
                         navigateToDetail = navigateToDetail
                     )
                 }
@@ -166,17 +174,23 @@ fun RecipeScreen(
 @Composable
 fun CategoryGridDisplay(
     categories: List<RecipeCategory>,
-    navigateToDetail: (RecipeCategory) -> Unit
+    navigateToDetail: (RecipeCategory) -> Unit,
+    gridState: LazyGridState = rememberLazyGridState()
 ) {
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
+        state = gridState,
         modifier = Modifier.fillMaxSize(),
         contentPadding = PaddingValues(4.dp),
         horizontalArrangement = Arrangement.spacedBy(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp)
     ) {
-        items(categories) { category ->
-            CategoryGridItem(category = category, navigateToDetail = navigateToDetail)
+        itemsIndexed(categories, key = { _, c -> c.id }) { index, category ->
+            CategoryGridItem(
+                category = category,
+                index = index,
+                navigateToDetail = navigateToDetail
+            )
         }
     }
 }
@@ -184,10 +198,18 @@ fun CategoryGridDisplay(
 @Composable
 fun CategoryGridItem(
     category: RecipeCategory,
+    index: Int = 0,
     navigateToDetail: (RecipeCategory) -> Unit
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
+
+    // Staggered entrance — each card delays 60ms × its grid index
+    var visible by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        delay(index * 60L)
+        visible = true
+    }
 
     val scale by animateFloatAsState(
         targetValue = if (isPressed) 0.92f else 1f,
@@ -204,130 +226,146 @@ fun CategoryGridItem(
         label = "category_elevation"
     )
 
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .aspectRatio(0.8f)
-            .scale(scale)
-            .shadow(
-                elevation = elevation, shape = RoundedCornerShape(20.dp),
-                ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
-                spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
+    // Staggered slide-up + fade entrance
+    AnimatedVisibility(
+        visible = visible,
+        enter = slideInVertically(
+            initialOffsetY = { it / 4 },        // slides up from 25% below
+            animationSpec = spring(
+                dampingRatio = Spring.DampingRatioMediumBouncy,
+                stiffness = Spring.StiffnessMediumLow
             )
-            .clickable {
-                isPressed = true
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                navigateToDetail(category)
-            },
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
-        shape = RoundedCornerShape(20.dp)
+        ) + fadeIn(animationSpec = tween(durationMillis = 280))
     ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            if (category.imageResId != 0) {
-                androidx.compose.foundation.Image(
-                    painter = painterResource(category.imageResId),
-                    contentDescription = category.name,
-                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)),
-                    contentScale = ContentScale.Crop
+        Card(
+            modifier = Modifier
+                .fillMaxWidth()
+                .aspectRatio(0.8f)
+                .scale(scale)
+                .shadow(
+                    elevation = elevation, shape = RoundedCornerShape(20.dp),
+                    ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
+                    spotColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
                 )
-            } else {
-                AsyncImage(
-                    model = category.imageUrl, contentDescription = category.name,
-                    modifier = Modifier.fillMaxSize().clip(RoundedCornerShape(20.dp)),
-                    contentScale = ContentScale.Crop
-                )
-            }
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Transparent,
-                                Color.Transparent,
-                                Color.Black.copy(alpha = 0.3f),
-                                Color.Black.copy(alpha = 0.7f)
-                            )
-                        )
+                .clickable {
+                    isPressed = true
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    navigateToDetail(category)
+                },
+            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+            elevation = CardDefaults.cardElevation(defaultElevation = 0.dp),
+            shape = RoundedCornerShape(20.dp)
+        ) {
+            Box(modifier = Modifier.fillMaxSize()) {
+                if (category.imageResId != 0) {
+                    androidx.compose.foundation.Image(
+                        painter = painterResource(category.imageResId),
+                        contentDescription = category.name,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(20.dp)),
+                        contentScale = ContentScale.Crop
                     )
-            )
-            Card(
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(12.dp),
-                colors = CardDefaults.cardColors(
-                    containerColor = MaterialTheme.colorScheme.primary.copy(
-                        alpha = 0.9f
-                    )
-                ),
-                shape = RoundedCornerShape(12.dp),
-                elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-            ) {
-                Row(
-                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Restaurant,
-                        null,
-                        tint = MaterialTheme.colorScheme.onPrimary,
-                        modifier = Modifier.size(14.dp)
-                    )
-                    Text(
-                        category.recipeCount.toString(),
-                        style = MaterialTheme.typography.labelSmall,
-                        color = MaterialTheme.colorScheme.onPrimary,
-                        fontWeight = FontWeight.Bold
+                } else {
+                    AsyncImage(
+                        model = category.imageUrl, contentDescription = category.name,
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .clip(RoundedCornerShape(20.dp)),
+                        contentScale = ContentScale.Crop
                     )
                 }
-            }
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .fillMaxWidth()
-                    .padding(16.dp),
-                verticalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Text(
-                    category.name,
-                    style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp),
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    maxLines = 1,
-                    overflow = TextOverflow.Ellipsis
-                )
-                Text(
-                    category.description,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = Color.White.copy(alpha = 0.9f),
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    lineHeight = 14.sp
-                )
-            }
-            if (isPressed) {
                 Box(
                     modifier = Modifier
-                        .align(Alignment.Center)
-                        .size(40.dp)
+                        .fillMaxSize()
                         .background(
-                            MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
-                            CircleShape
-                        ),
-                    contentAlignment = Alignment.Center
+                            brush = Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Transparent,
+                                    Color.Transparent,
+                                    Color.Black.copy(alpha = 0.3f),
+                                    Color.Black.copy(alpha = 0.7f)
+                                )
+                            )
+                        )
+                )
+                Card(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .padding(12.dp),
+                    colors = CardDefaults.cardColors(
+                        containerColor = MaterialTheme.colorScheme.primary.copy(
+                            alpha = 0.9f
+                        )
+                    ),
+                    shape = RoundedCornerShape(12.dp),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
                 ) {
-                    Icon(
-                        Icons.Outlined.GridView,
-                        "View Category",
-                        tint = Color.White,
-                        modifier = Modifier.size(20.dp)
+                    Row(
+                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp),
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Icon(
+                            Icons.Default.Restaurant,
+                            null,
+                            tint = MaterialTheme.colorScheme.onPrimary,
+                            modifier = Modifier.size(14.dp)
+                        )
+                        Text(
+                            category.recipeCount.toString(),
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onPrimary,
+                            fontWeight = FontWeight.Bold
+                        )
+                    }
+                }
+                Column(
+                    modifier = Modifier
+                        .align(Alignment.BottomStart)
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                ) {
+                    Text(
+                        category.name,
+                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp),
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
                     )
+                    Text(
+                        category.description,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = Color.White.copy(alpha = 0.9f),
+                        maxLines = 2,
+                        overflow = TextOverflow.Ellipsis,
+                        lineHeight = 14.sp
+                    )
+                }
+                if (isPressed) {
+                    Box(
+                        modifier = Modifier
+                            .align(Alignment.Center)
+                            .size(40.dp)
+                            .background(
+                                MaterialTheme.colorScheme.primary.copy(alpha = 0.8f),
+                                CircleShape
+                            ),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            Icons.Outlined.GridView,
+                            "View Category",
+                            tint = Color.White,
+                            modifier = Modifier.size(20.dp)
+                        )
+                    }
                 }
             }
         }
-    }
+    } // end AnimatedVisibility
 }
 
 @Composable

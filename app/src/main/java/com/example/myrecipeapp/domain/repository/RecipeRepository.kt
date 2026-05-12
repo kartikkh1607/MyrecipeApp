@@ -13,9 +13,12 @@ interface RecipeRepository {
 
     /**
      * Returns featured recipes for the home carousel.
-     * Falls back to sample data when the API is unavailable.
+     *
+     * Served from the Room cache when fresh; falls back to sample data when the
+     * API is unavailable. Pass [forceRefresh] = true (e.g. pull-to-refresh) to
+     * bypass the cache and always hit the network.
      */
-    suspend fun getFeaturedRecipes(): List<FeaturedRecipe>
+    suspend fun getFeaturedRecipes(forceRefresh: Boolean = false): List<FeaturedRecipe>
 
     /**
      * Returns a page of search results for [query].

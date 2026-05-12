@@ -29,7 +29,9 @@ interface SpoonacularApiService {
         @Query("number") number: Int = 20,
         @Query("offset") offset: Int = 0,
         @Query("addRecipeInformation") addRecipeInformation: Boolean = true,
-        @Query("addRecipeNutrition") addRecipeNutrition: Boolean = true,
+        // Nutrition data ~triples response size. Off for plain search; callers that
+        // render calories (e.g. category browse) must opt in.
+        @Query("addRecipeNutrition") addRecipeNutrition: Boolean = false,
         @Query("instructionsRequired") instructionsRequired: Boolean = true
     ): SpoonacularSearchResponse
 
