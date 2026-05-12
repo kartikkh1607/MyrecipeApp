@@ -35,3 +35,5 @@ object Profile
 object About
 @Serializable
 object ShoppingList
+@Serializable
+object Chat

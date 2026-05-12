@@ -55,7 +55,8 @@ fun SpoonacularRecipeDto.toDomain(): Recipe {
         isGlutenFree = this.isGlutenFree,
         isDairyFree = this.isDairyFree,
         nutritionInfo = nutrition,
-        calories = nutrition?.calories
+        calories = nutrition?.calories,
+        videoUrl = this.videoUrl
     )
 }
 

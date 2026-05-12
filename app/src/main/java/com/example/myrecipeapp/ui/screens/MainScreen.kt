@@ -162,15 +162,6 @@ fun BottomNavigationBar(
                 // Type-safe check instead of fragile string comparison
                 val isSearchButton = item.route is Search
 
-                val scale by animateFloatAsState(
-                    targetValue = if (isSelected) 1.1f else 1f,
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow
-                    ),
-                    label = "scale_${item.label}"
-                )
-
                 val iconScale by animateFloatAsState(
                     targetValue = if (isSelected) 1.2f else 1f,
                     animationSpec = spring(
@@ -187,7 +178,6 @@ fun BottomNavigationBar(
                             navigateToTab(item.route, isSelected)
                         },
                         modifier = Modifier
-                            .scale(scale)
                             .size(56.dp),
                         shape = CircleShape,
                         containerColor = MaterialTheme.colorScheme.primary,
@@ -231,7 +221,7 @@ fun BottomNavigationBar(
                             )
                             navigateToTab(item.route, isSelected)
                         },
-                        modifier = Modifier.scale(scale * 0.95f),
+                        modifier = Modifier.scale(0.95f),
                         colors = NavigationBarItemDefaults.colors(
                             selectedIconColor = MaterialTheme.colorScheme.onPrimary,
                             selectedTextColor = MaterialTheme.colorScheme.primary,

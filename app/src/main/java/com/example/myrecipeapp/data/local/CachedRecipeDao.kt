@@ -14,11 +14,18 @@ import androidx.room.Query
 @Dao
 interface CachedRecipeDao {
 
-    /** Inserts or replaces a cached recipe. */
     @Insert(onConflict = OnConflictStrategy.REPLACE)
     suspend fun upsert(entity: CachedRecipeEntity)
 
-    /** Returns the cached entity for [id], or null if not yet cached. */
     @Query("SELECT * FROM cached_recipes WHERE id = :id LIMIT 1")
     suspend fun getById(id: String): CachedRecipeEntity?
+
+    @Query("SELECT COUNT(*) FROM cached_recipes")
+    suspend fun count(): Int
+
+    @Query("DELETE FROM cached_recipes WHERE id IN (SELECT id FROM cached_recipes ORDER BY cachedAt ASC LIMIT :count)")
+    suspend fun evictOldest(count: Int)
+
+    @Query("DELETE FROM cached_recipes")
+    suspend fun deleteAll()
 }

@@ -21,8 +21,10 @@ import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import com.example.myrecipeapp.data.source.CategoryDataSource
+import com.example.myrecipeapp.di.AppContainer
 import com.example.myrecipeapp.ui.screens.AboutScreen
 import com.example.myrecipeapp.ui.screens.CategoryDetailScreen
+import com.example.myrecipeapp.ui.screens.ChatScreen
 import com.example.myrecipeapp.ui.screens.FavoritesScreen
 import com.example.myrecipeapp.ui.screens.HomeScreen
 import com.example.myrecipeapp.ui.screens.ProfileScreen
@@ -31,6 +33,7 @@ import com.example.myrecipeapp.ui.screens.RecipeScreen
 import com.example.myrecipeapp.ui.screens.SearchScreen
 import com.example.myrecipeapp.ui.screens.SettingsScreen
 import com.example.myrecipeapp.ui.screens.ShoppingListScreen
+import com.example.myrecipeapp.ui.viewmodel.AiViewModel
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 
 // ── iOS-style spring specs ────────────────────────────────────────────────────
@@ -102,7 +105,8 @@ fun Navigation(
                     navController.navigate(CategoryDetail(categoryId = category.id)) {
                         launchSingleTop = true
                     }
-                }
+                },
+                onRetry = { viewModel.refreshRecipeCategories() }
             )
         }
 
@@ -191,7 +195,18 @@ fun Navigation(
         }
 
         composable<ShoppingList> {
-            ShoppingListScreen(navController = navController, viewModel = viewModel)
+            ShoppingListScreen(
+                navController = navController,
+                viewModel = viewModel,
+                aiViewModel = AiViewModel.Factory(AppContainer.favoriteDao).create(AiViewModel::class.java)
+            )
+        }
+
+        composable<Chat> {
+            ChatScreen(
+                onBackClick = { navController.popBackStack() },
+                viewModel = AiViewModel.Factory(AppContainer.favoriteDao).create(AiViewModel::class.java)
+            )
         }
     }
 }

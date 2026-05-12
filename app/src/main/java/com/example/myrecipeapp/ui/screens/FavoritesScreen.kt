@@ -22,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
@@ -51,8 +52,6 @@ import androidx.compose.material3.IconButton
 import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
-import androidx.compose.material3.Snackbar
-import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.SnackbarResult
 import androidx.compose.material3.Surface
@@ -121,151 +120,107 @@ fun FavoritesScreen(
 
     Scaffold(
         snackbarHost = { BrandedSnackbarHost(snackbarHostState) },
-        containerColor = MaterialTheme.colorScheme.background
+        containerColor = MaterialTheme.colorScheme.background,
+        contentWindowInsets = WindowInsets(0)
     ) { innerPadding ->
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .padding(innerPadding)
-            .statusBarsPadding()
-            .padding(horizontal = 16.dp)
-    ) {
-        // ── Header ────────────────────────────────────────────────────────────
-        Row(
+        Column(
             modifier = Modifier
-                .fillMaxWidth()
-                .padding(bottom = 24.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .padding(innerPadding)
+                .statusBarsPadding()
+                .padding(horizontal = 16.dp)
         ) {
-            Column {
-                Text(
-                    text = "Favorite Recipes",
-                    style = MaterialTheme.typography.headlineLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onBackground
-                )
-                if (favoriteRecipes.isNotEmpty()) {
+            // ── Header ────────────────────────────────────────────────────────────
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(top = 8.dp, bottom = 24.dp),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Column {
                     Text(
-                        text = "${favoriteRecipes.size} saved recipe${if (favoriteRecipes.size > 1) "s" else ""}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                        text = "Favorite Recipes",
+                        style = MaterialTheme.typography.headlineLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onBackground
                     )
-                }
-            }
-
-            // Grid/List toggle — only shown when list is non-empty
-            if (favoriteRecipes.isNotEmpty()) {
-                IconButton(
-                    onClick = {
-                        viewModel.toggleFavoritesGridMode()
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    },
-                    colors = IconButtonDefaults.iconButtonColors(
-                        contentColor = MaterialTheme.colorScheme.primary
-                    )
-                ) {
-                    Icon(
-                        imageVector = if (isGridMode) Icons.Default.ViewList else Icons.Default.GridView,
-                        contentDescription = "Toggle view",
-                        modifier = Modifier.size(28.dp)
-                    )
-                }
-            }
-        }
-
-        // ── Content ──────────────────────────────────────────────────────────
-        AnimatedContent(
-            targetState = favoriteRecipes.isEmpty(),
-            transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
-            label = "favorites_content"
-        ) { isEmpty ->
-            if (isEmpty) {
-                EmptyFavoritesState(
-                    onExploreClick = {
-                        navController.navigate(Search) { launchSingleTop = true }
+                    if (favoriteRecipes.isNotEmpty()) {
+                        Text(
+                            text = "${favoriteRecipes.size} saved recipe${if (favoriteRecipes.size > 1) "s" else ""}",
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
                     }
-                )
-            } else {
-                AnimatedContent(
-                    targetState = isGridMode,
-                    transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(200)) },
-                    label = "grid_list_toggle"
-                ) { grid ->
-                    if (grid) {
-                        // ── Grid mode: 2-col + long-press to delete ──────────
-                        LazyVerticalGrid(
-                            columns = GridCells.Fixed(2),
-                            state = gridState,
-                            modifier = Modifier.fillMaxSize(),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            itemsIndexed(
-                                favoriteRecipes,
-                                key = { _, recipe -> recipe.id }
-                            ) { index, recipe ->
-                                var visible by remember { mutableStateOf(false) }
-                                LaunchedEffect(recipe.id) {
-                                    delay(minOf(index, 5) * 50L)  // cap stagger — beyond 5 items, animate instantly
-                                    visible = true
-                                }
-                                AnimatedVisibility(
-                                    visible = visible,
-                                    enter = scaleIn(
-                                        initialScale = 0.85f,
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioNoBouncy,
-                                            stiffness = 300f
-                                        )
-                                    ) + fadeIn(tween(200))
-                                ) {
-                                    CompactFavoriteCard(
-                                        recipe = recipe,
-                                        onFavoriteToggle = {
-                                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            viewModel.removeFavorite(recipe.id)
-                                        },
-                                        onClick = {
-                                            navController.navigate(RecipeDetail(recipeId = recipe.id))
-                                        }
-                                    )
-                                }
-                            }
+                }
+
+                // Grid/List toggle — only shown when list is non-empty
+                if (favoriteRecipes.isNotEmpty()) {
+                    IconButton(
+                        onClick = {
+                            viewModel.toggleFavoritesGridMode()
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        },
+                        colors = IconButtonDefaults.iconButtonColors(
+                            contentColor = MaterialTheme.colorScheme.primary
+                        )
+                    ) {
+                        Icon(
+                            imageVector = if (isGridMode) Icons.Default.ViewList else Icons.Default.GridView,
+                            contentDescription = "Toggle view",
+                            modifier = Modifier.size(28.dp)
+                        )
+                    }
+                }
+            }
+
+            // Stable method references — hoisted so list items skip recomposition
+            // when unrelated state (snackbar, scroll position) changes in the parent.
+            val onToggleFavorite = remember { viewModel::toggleFavorite }
+            val onRemoveFavorite = remember { viewModel::removeFavorite }
+            val onAddFavorite = remember { viewModel::addFavorite }
+
+            // ── Content ──────────────────────────────────────────────────────────
+            AnimatedContent(
+                targetState = favoriteRecipes.isEmpty(),
+                transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
+                label = "favorites_content"
+            ) { isEmpty ->
+                if (isEmpty) {
+                    EmptyFavoritesState(
+                        onExploreClick = {
+                            navController.navigate(Search) { launchSingleTop = true }
                         }
-                    } else {
-                        // ── List mode: swipe-to-delete ───────────────────────
-                        LazyColumn(
-                            state = listState,
-                            modifier = Modifier.fillMaxSize(),
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            itemsIndexed(
-                                favoriteRecipes,
-                                key = { _, recipe -> recipe.id }
-                            ) { index, recipe ->
-                                var visible by remember { mutableStateOf(false) }
-                                LaunchedEffect(recipe.id) {
-                                    delay(minOf(index, 5) * 60L)  // cap stagger — beyond 5 items, animate instantly
-                                    visible = true
-                                }
-                                AnimatedVisibility(
-                                    visible = visible,
-                                    enter = slideInVertically(
-                                        initialOffsetY = { 40 },
-                                        animationSpec = spring(
-                                            dampingRatio = Spring.DampingRatioNoBouncy,
-                                            stiffness = 280f
-                                        )
-                                    ) + fadeIn(tween(200))
-                                ) {
-                                    SwipeToDeleteFavoriteCard(
-                                        recipe = recipe,
-                                        isFavorite = favoriteIds.contains(recipe.id),
-                                        onDelete = {
+                    )
+                } else {
+                    AnimatedContent(
+                        targetState = isGridMode,
+                        transitionSpec = { fadeIn(tween(250)) togetherWith fadeOut(tween(200)) },
+                        label = "grid_list_toggle"
+                    ) { grid ->
+                        if (grid) {
+                            // ── Grid mode: 2-col + long-press to delete ──────────
+                            LazyVerticalGrid(
+                                columns = GridCells.Fixed(2),
+                                state = gridState,
+                                modifier = Modifier.fillMaxSize(),
+                                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                itemsIndexed(
+                                    favoriteRecipes,
+                                    key = { _, recipe -> recipe.id }
+                                ) { index, recipe ->
+                                    var visible by remember { mutableStateOf(false) }
+                                    LaunchedEffect(recipe.id) {
+                                        delay(minOf(index, 5) * 50L)
+                                        visible = true
+                                    }
+                                    val onRemove = remember(recipe) {
+                                        {
                                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            viewModel.removeFavorite(recipe.id)
+                                            onRemoveFavorite(recipe.id)
                                             scope.launch {
                                                 val result = snackbarHostState.showSnackbar(
                                                     message = "\"${recipe.name}\" removed",
@@ -273,20 +228,91 @@ fun FavoritesScreen(
                                                     duration = androidx.compose.material3.SnackbarDuration.Short
                                                 )
                                                 if (result == SnackbarResult.ActionPerformed) {
-                                                    viewModel.addFavorite(recipe)
+                                                    onAddFavorite(recipe)
                                                 }
                                             }
-                                        },
-                                        onFavoriteToggle = {
+                                            Unit
+                                        }
+                                    }
+                                    val onGridClick = remember(recipe.id) {
+                                        { navController.navigate(RecipeDetail(recipeId = recipe.id)) }
+                                    }
+                                    AnimatedVisibility(
+                                        visible = visible,
+                                        enter = scaleIn(
+                                            initialScale = 0.85f,
+                                            animationSpec = spring(
+                                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                                stiffness = 300f
+                                            )
+                                        ) + fadeIn(tween(200))
+                                    ) {
+                                        CompactFavoriteCard(
+                                            recipe = recipe,
+                                            onRemove = onRemove,
+                                            onClick = onGridClick
+                                        )
+                                    }
+                                }
+                            }
+                        } else {
+                            // ── List mode: swipe-to-delete ───────────────────────
+                            LazyColumn(
+                                state = listState,
+                                modifier = Modifier.fillMaxSize(),
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                itemsIndexed(
+                                    favoriteRecipes,
+                                    key = { _, recipe -> recipe.id }
+                                ) { index, recipe ->
+                                    var visible by remember { mutableStateOf(false) }
+                                    LaunchedEffect(recipe.id) {
+                                        delay(minOf(index, 5) * 60L)
+                                        visible = true
+                                    }
+                                    val onDelete = remember(recipe) {
+                                        {
                                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                            viewModel.toggleFavorite(recipe)
-                                        },
-                                        onClick = {
+                                            onRemoveFavorite(recipe.id)
+                                            scope.launch {
+                                                val result = snackbarHostState.showSnackbar(
+                                                    message = "\"${recipe.name}\" removed",
+                                                    actionLabel = "Undo",
+                                                    duration = androidx.compose.material3.SnackbarDuration.Short
+                                                )
+                                                if (result == SnackbarResult.ActionPerformed) {
+                                                    onAddFavorite(recipe)
+                                                }
+                                            }
+                                            Unit
+                                        }
+                                    }
+                                    val onListClick = remember(recipe.id) {
+                                        {
                                             navController.navigate(RecipeDetail(recipeId = recipe.id)) {
                                                 launchSingleTop = true
                                             }
                                         }
-                                    )
+                                    }
+                                    AnimatedVisibility(
+                                        visible = visible,
+                                        enter = slideInVertically(
+                                            initialOffsetY = { 40 },
+                                            animationSpec = spring(
+                                                dampingRatio = Spring.DampingRatioNoBouncy,
+                                                stiffness = 280f
+                                            )
+                                        ) + fadeIn(tween(200))
+                                    ) {
+                                        SwipeToDeleteFavoriteCard(
+                                            recipe = recipe,
+                                            isFavorite = favoriteIds.contains(recipe.id),
+                                            onDelete = onDelete,
+                                            onFavoriteToggle = onToggleFavorite,
+                                            onClick = onListClick
+                                        )
+                                    }
                                 }
                             }
                         }
@@ -294,7 +320,6 @@ fun FavoritesScreen(
                 }
             }
         }
-    }
     } // end Scaffold
 }
 
@@ -311,7 +336,8 @@ private fun SwipeToDeleteFavoriteCard(
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
             if (value == SwipeToDismissBoxValue.EndToStart ||
-                value == SwipeToDismissBoxValue.StartToEnd) {
+                value == SwipeToDismissBoxValue.StartToEnd
+            ) {
                 onDelete()
                 true
             } else false
@@ -378,12 +404,12 @@ private fun SwipeToDeleteFavoriteCard(
 }
 
 // ── Compact grid card ─────────────────────────────────────────────────────────
-// Tap the card → open recipe.  Tap the ❤ button → remove immediately (same as swipe-delete).
+// Tap the card → open recipe.  Tap the ❤ button → shows undo snackbar (same as swipe-delete).
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun CompactFavoriteCard(
     recipe: Recipe,
-    onFavoriteToggle: () -> Unit,
+    onRemove: () -> Unit,
     onClick: () -> Unit
 ) {
     var isPressed by remember { mutableStateOf(false) }
@@ -393,6 +419,10 @@ private fun CompactFavoriteCard(
         label = "card_scale",
         finishedListener = { isPressed = false }
     )
+    val cardOverlay = remember {
+        Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))
+    }
+    val ratingText = remember(recipe.rating) { String.format("%.1f", recipe.rating) }
 
     Card(
         onClick = {
@@ -407,25 +437,23 @@ private fun CompactFavoriteCard(
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            AsyncImage(
-                model = recipe.imageUrl,
-                contentDescription = recipe.name,
-                modifier = Modifier.fillMaxSize(),
-                contentScale = androidx.compose.ui.layout.ContentScale.Crop
-            )
-            // Gradient overlay
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        Brush.verticalGradient(
-                            listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f))
-                        )
-                    )
-            )
-            // ❤ button — tap to remove from favorites immediately (no dialog)
+                    .background(MaterialTheme.colorScheme.surfaceVariant)
+            ) {
+                AsyncImage(
+                    model = recipe.imageUrl,
+                    contentDescription = recipe.name,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+                )
+            }
+            // Gradient overlay
+            Box(modifier = Modifier.fillMaxSize().background(cardOverlay))
+            // ❤ button — tap shows undo snackbar (consistent with swipe-delete)
             IconButton(
-                onClick = onFavoriteToggle,
+                onClick = onRemove,
                 modifier = Modifier
                     .align(Alignment.TopEnd)
                     .padding(4.dp)
@@ -463,7 +491,7 @@ private fun CompactFavoriteCard(
                         modifier = Modifier.size(12.dp)
                     )
                     Text(
-                        recipe.rating.toString(),
+                        ratingText,
                         style = MaterialTheme.typography.labelSmall,
                         color = Color.White.copy(alpha = 0.9f)
                     )

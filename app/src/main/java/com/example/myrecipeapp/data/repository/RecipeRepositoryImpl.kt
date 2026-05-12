@@ -185,7 +185,12 @@ class RecipeRepositoryImpl(
     // Recipes By Category
     // ─────────────────────────────────────────────────────────────────────────
 
-    override suspend fun getRecipesByCategory(categoryId: String, limit: Int): List<Recipe> {
+    override suspend fun getRecipesByCategory(
+        categoryId: String,
+        limit: Int,
+        offset: Int,
+        append: Boolean
+    ): List<Recipe> {
         val category = CategoryDataSource.getCategoryById(categoryId)
             ?: run {
                 Log.w(TAG, "Category not found: $categoryId")
@@ -194,38 +199,46 @@ class RecipeRepositoryImpl(
 
         if (!apiConfigured) return sampleRecipesForCategory(category, limit)
 
+        // Evict old cache entries when loading fresh data (first page or pull-to-refresh).
+        // Keep the cache bounded to prevent unbounded storage growth.
+        if (offset == 0 && !append) {
+            try {
+                if (cachedRecipeDao.count() > MAX_CACHED_RECIPES) {
+                    cachedRecipeDao.evictOldest(EVICT_BATCH_SIZE)
+                    Log.d(TAG, "Evicted oldest cache entries (limit: $MAX_CACHED_RECIPES)")
+                }
+            } catch (e: Exception) {
+                Log.w(TAG, "Cache eviction failed: ${e.message}")
+            }
+        }
+
         return try {
-            // Route the spoonacularTag to the correct API parameter based on category kind:
-            //  CUISINE   → cuisine=  (e.g. "indian", "italian")
-            //  DISH_TYPE → type=     (e.g. "breakfast", "dessert", "snack,fingerfood")
-            //  DIETARY   → diet=     (e.g. "vegan", "vegetarian", "ketogenic")
-            //
-            // category.apiQuery is a supplementary keyword used to narrow results when the
-            // type alone is too broad (e.g. Dinner vs Lunch both use type="main course").
-            // Category cards display calories — opt in to nutrition for this path only.
             val resp = when (category.kind) {
                 CategoryKind.CUISINE   -> apiService.searchRecipes(
                     query   = category.apiQuery,
                     cuisine = category.spoonacularTag,
                     number  = limit,
+                    offset  = offset,
                     addRecipeNutrition = true
                 )
                 CategoryKind.DISH_TYPE -> apiService.searchRecipes(
                     query  = category.apiQuery,
                     type   = category.spoonacularTag,
                     number = limit,
+                    offset = offset,
                     addRecipeNutrition = true
                 )
                 CategoryKind.DIETARY   -> apiService.searchRecipes(
                     query  = category.apiQuery,
                     diet   = category.spoonacularTag,
                     number = limit,
+                    offset = offset,
                     addRecipeNutrition = true
                 )
             }
 
             val recipes = resp.results.map { it.toDomain() }
-            Log.d(TAG, "Fetched ${recipes.size} recipes for category: ${category.name}")
+            Log.d(TAG, "Fetched ${recipes.size} recipes for category: ${category.name} (offset=$offset)")
             recipes
         } catch (e: Exception) {
             Log.e(TAG, "Category recipes API failed for $categoryId: ${e.message}")
@@ -263,5 +276,8 @@ class RecipeRepositoryImpl(
 
     companion object {
         private const val TAG = "RecipeRepositoryImpl"
+        /** Max cached recipes before we evict the oldest 20. */
+        private const val MAX_CACHED_RECIPES = 100
+        private const val EVICT_BATCH_SIZE = 20
     }
 }

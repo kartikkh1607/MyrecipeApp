@@ -22,11 +22,13 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Shuffle
@@ -60,14 +62,15 @@ import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
-import androidx.core.view.WindowCompat
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.view.WindowCompat
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.myrecipeapp.ui.components.FeaturedCarouselSkeleton
+import com.example.myrecipeapp.ui.navigation.Chat
 import com.example.myrecipeapp.ui.navigation.Home
 import com.example.myrecipeapp.ui.navigation.LocalTabReselectEvents
 import com.example.myrecipeapp.ui.navigation.Profile
@@ -76,7 +79,6 @@ import com.example.myrecipeapp.ui.navigation.Search
 import com.example.myrecipeapp.ui.navigation.ShoppingList
 import com.example.myrecipeapp.ui.theme.ForestGreen
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
 import java.util.Locale
 
@@ -127,82 +129,86 @@ fun HomeScreen(
         },
         modifier = Modifier.fillMaxSize()
     ) {
-    Column(
-        modifier = Modifier
-            .fillMaxSize()
-            .background(MaterialTheme.colorScheme.background)
-            .verticalScroll(scrollState)
-    ) {
-        // ── Header ─────────────────────────────────────────────────────────────
-        HeroHeaderSection(
-            onProfileClick = {
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                navController.navigate(Profile)
-            },
-            onSearchClick = {
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                navController.navigate(Search) { launchSingleTop = true }
-            }
-        )
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(MaterialTheme.colorScheme.background)
+                .verticalScroll(scrollState)
+        ) {
+            // ── Header ─────────────────────────────────────────────────────────────
+            HeroHeaderSection(
+                onProfileClick = {
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    navController.navigate(Profile)
+                },
+                onSearchClick = {
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    navController.navigate(Search) { launchSingleTop = true }
+                }
+            )
 
-        // ── Featured Carousel ───────────────────────────────────────────────────
-        when {
-            homeRecipeState.loading -> {
-                FeaturedCarouselSkeleton()
+            // ── Featured Carousel ───────────────────────────────────────────────────
+            when {
+                homeRecipeState.loading -> {
+                    FeaturedCarouselSkeleton()
+                }
+
+                homeRecipeState.error != null -> {
+                    ErrorSection(
+                        message = homeRecipeState.error ?: "Unknown error",
+                        onRetry = {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.refreshFeaturedRecipes()
+                        }
+                    )
+                }
+
+                homeRecipeState.featuredRecipes.isNotEmpty() -> {
+                    FeaturedRecipeCarousel(navController = navController, viewModel = viewModel)
+                }
             }
 
-            homeRecipeState.error != null -> {
-                ErrorSection(
-                    message = homeRecipeState.error ?: "Unknown error",
-                    onRetry = {
+            Spacer(modifier = Modifier.height(24.dp))
+
+            // ── Quick Actions banner ────────────────────────────────────────────────
+            QuickActionsRow(
+                onRandomRecipe = {
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    val featured = homeRecipeState.featuredRecipes
+                    if (featured.isNotEmpty()) {
+                        val random = featured.random()
+                        navController.navigate(RecipeDetail(recipeId = random.recipe.id)) {
+                            launchSingleTop = true
+                        }
+                    }
+                },
+                onShoppingList = {
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    navController.navigate(ShoppingList) { launchSingleTop = true }
+                },
+                onAIChat = {
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    navController.navigate(Chat) { launchSingleTop = true }
+                }
+            )
+
+            Spacer(modifier = Modifier.height(28.dp))
+
+            // ── Today's Pick ───────────────────────────────────────────────────────
+            if (homeRecipeState.featuredRecipes.isNotEmpty()) {
+                TodaysPickCard(
+                    featured = homeRecipeState.featuredRecipes,
+                    onClick = { recipeId ->
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.refreshFeaturedRecipes()
+                        navController.navigate(RecipeDetail(recipeId = recipeId)) {
+                            launchSingleTop = true
+                        }
                     }
                 )
             }
 
-            homeRecipeState.featuredRecipes.isNotEmpty() -> {
-                FeaturedRecipeCarousel(navController = navController, viewModel = viewModel)
-            }
+            Spacer(modifier = Modifier.height(100.dp))
         }
-
-        Spacer(modifier = Modifier.height(24.dp))
-
-        // ── Quick Actions banner ────────────────────────────────────────────────
-        QuickActionsRow(
-            onRandomRecipe = {
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                val featured = homeRecipeState.featuredRecipes
-                if (featured.isNotEmpty()) {
-                    val random = featured.random()
-                    navController.navigate(RecipeDetail(recipeId = random.recipe.id)) {
-                        launchSingleTop = true
-                    }
-                }
-            },
-            onShoppingList = {
-                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                navController.navigate(ShoppingList) { launchSingleTop = true }
-            }
-        )
-
-        Spacer(modifier = Modifier.height(28.dp))
-
-        // ── Today's Pick ───────────────────────────────────────────────────────
-        if (homeRecipeState.featuredRecipes.isNotEmpty()) {
-            TodaysPickCard(
-                featured = homeRecipeState.featuredRecipes,
-                onClick = { recipeId ->
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    navController.navigate(RecipeDetail(recipeId = recipeId)) {
-                        launchSingleTop = true
-                    }
-                }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(100.dp))
-    }
     } // end PullToRefreshBox
 }
 
@@ -237,20 +243,26 @@ fun HeroHeaderSection(
 
     val dateString = remember(now) {
         // e.g. "Monday, May 11"
-        now.format(java.time.format.DateTimeFormatter.ofPattern("EEEE, MMMM d", Locale.getDefault()))
+        now.format(
+            java.time.format.DateTimeFormatter.ofPattern(
+                "EEEE, MMMM d",
+                Locale.getDefault()
+            )
+        )
     }
 
     // ── Entrance animation ────────────────────────────────────────────────────
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
 
-    // Deep forest gradient — premium, theme-independent hero identity.
-    val heroBrush = Brush.verticalGradient(
-        colors = listOf(
-            ForestGreen,
-            Color(0xFF1F4040)
+    val heroBrush = remember {
+        Brush.verticalGradient(
+            colors = listOf(
+                ForestGreen,
+                Color(0xFF1F4040)
+            )
         )
-    )
+    }
 
     Box(
         modifier = Modifier
@@ -437,11 +449,11 @@ private fun TodaysPickCard(
     // (badge label, badge emoji, CTA copy) tuned to the time of day
     val mood = remember(hour) {
         when (hour) {
-            in 5..10  -> Triple("Today's breakfast", "☀️", "Cook this morning")
+            in 5..10 -> Triple("Today's breakfast", "☀️", "Cook this morning")
             in 11..14 -> Triple("Today's lunch", "🥗", "Make for lunch")
             in 15..16 -> Triple("Afternoon bite", "🍪", "Snack time")
             in 17..21 -> Triple("Tonight's special", "🌙", "Cook this tonight")
-            else      -> Triple("Late-night bite", "🌙", "Cook this now")
+            else -> Triple("Late-night bite", "🌙", "Cook this now")
         }
     }
     val (badgeLabel, badgeEmoji, ctaLabel) = mood
@@ -493,19 +505,20 @@ private fun TodaysPickCard(
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
                 )
+                val cardOverlay = remember {
+                    Brush.verticalGradient(
+                        colors = listOf(
+                            Color.Transparent,
+                            Color.Black.copy(alpha = 0.25f),
+                            Color.Black.copy(alpha = 0.85f)
+                        )
+                    )
+                }
                 // Bottom-up dark gradient for legibility
                 Box(
                     modifier = Modifier
                         .fillMaxSize()
-                        .background(
-                            Brush.verticalGradient(
-                                colors = listOf(
-                                    Color.Transparent,
-                                    Color.Black.copy(alpha = 0.25f),
-                                    Color.Black.copy(alpha = 0.85f)
-                                )
-                            )
-                        )
+                        .background(cardOverlay)
                 )
 
                 // Top-left mood badge
@@ -633,72 +646,102 @@ private fun PickStatChip(emoji: String, value: String) {
     }
 }
 
-// ── Quick Actions — compact pill row ──────────────────────────────────────────
+// ── Quick Actions — horizontally scrollable LazyRow ───────────────────────────
 @Composable
 private fun QuickActionsRow(
     onRandomRecipe: () -> Unit,
-    onShoppingList: () -> Unit
+    onShoppingList: () -> Unit,
+    onAIChat: () -> Unit
 ) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+    Column {
         Text(
             "Quick Actions",
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
+            color = MaterialTheme.colorScheme.onBackground,
+            modifier = Modifier.padding(horizontal = 16.dp)
         )
         Spacer(modifier = Modifier.height(12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
+        LazyRow(
+            contentPadding = PaddingValues(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // Random Recipe — tonal filled button
-            var rndPressed by remember { mutableStateOf(false) }
-            val rndScale by animateFloatAsState(
-                targetValue = if (rndPressed) 0.96f else 1f,
-                animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessHigh),
-                label = "rnd_scale",
-                finishedListener = { rndPressed = false }
-            )
-            FilledTonalButton(
-                onClick = { rndPressed = true; onRandomRecipe() },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                    .scale(rndScale),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.filledTonalButtonColors(
-                    containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                    contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+            // AI Chat Assistant
+            item {
+                var aiPressed by remember { mutableStateOf(false) }
+                val aiScale by animateFloatAsState(
+                    targetValue = if (aiPressed) 0.96f else 1f,
+                    animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessHigh),
+                    label = "ai_scale",
+                    finishedListener = { aiPressed = false }
                 )
-            ) {
-                Icon(Icons.Default.Shuffle, null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Random Recipe", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                Button(
+                    onClick = { aiPressed = true; onAIChat() },
+                    modifier = Modifier
+                        .height(52.dp)
+                        .scale(aiScale),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ForestGreen,
+                        contentColor = Color.White
+                    )
+                ) {
+                    Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(6.dp))
+                    Text("AI Chef", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1, softWrap = false)
+                }
             }
 
-            // Shopping List — outlined button
-            var shpPressed by remember { mutableStateOf(false) }
-            val shpScale by animateFloatAsState(
-                targetValue = if (shpPressed) 0.96f else 1f,
-                animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessHigh),
-                label = "shp_scale",
-                finishedListener = { shpPressed = false }
-            )
-            Button(
-                onClick = { shpPressed = true; onShoppingList() },
-                modifier = Modifier
-                    .weight(1f)
-                    .height(52.dp)
-                    .scale(shpScale),
-                shape = RoundedCornerShape(16.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary,
-                    contentColor = MaterialTheme.colorScheme.onPrimary
+            // Random Recipe
+            item {
+                var rndPressed by remember { mutableStateOf(false) }
+                val rndScale by animateFloatAsState(
+                    targetValue = if (rndPressed) 0.96f else 1f,
+                    animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessHigh),
+                    label = "rnd_scale",
+                    finishedListener = { rndPressed = false }
                 )
-            ) {
-                Icon(Icons.Default.ShoppingCart, null, modifier = Modifier.size(18.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Shopping List", fontWeight = FontWeight.SemiBold, fontSize = 13.sp)
+                FilledTonalButton(
+                    onClick = { rndPressed = true; onRandomRecipe() },
+                    modifier = Modifier
+                        .height(52.dp)
+                        .scale(rndScale),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.filledTonalButtonColors(
+                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
+                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
+                    )
+                ) {
+                    Icon(Icons.Default.Shuffle, null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Random Recipe", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1, softWrap = false)
+                }
+            }
+
+            // Shopping List
+            item {
+                var shpPressed by remember { mutableStateOf(false) }
+                val shpScale by animateFloatAsState(
+                    targetValue = if (shpPressed) 0.96f else 1f,
+                    animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessHigh),
+                    label = "shp_scale",
+                    finishedListener = { shpPressed = false }
+                )
+                Button(
+                    onClick = { shpPressed = true; onShoppingList() },
+                    modifier = Modifier
+                        .height(52.dp)
+                        .scale(shpScale),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = MaterialTheme.colorScheme.primary,
+                        contentColor = MaterialTheme.colorScheme.onPrimary
+                    )
+                ) {
+                    Icon(Icons.Default.ShoppingCart, null, modifier = Modifier.size(18.dp))
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Shopping List", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1, softWrap = false)
+                }
             }
         }
     }

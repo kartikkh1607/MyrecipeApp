@@ -37,10 +37,10 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.Remove
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.ShoppingCart
@@ -82,6 +82,7 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.example.myrecipeapp.domain.model.Ingredient
@@ -146,7 +147,7 @@ fun RecipeDetailScreen(
 
     // ── Servings scaling ──────────────────────────────────────────────────────
     val baseServings = recipe.servings.coerceAtLeast(1)
-    var currentServings by remember(recipe.id) { mutableIntStateOf(baseServings) }
+    var currentServings by remember(recipe.id, recipe.servings) { mutableIntStateOf(baseServings) }
     val servingScale = currentServings.toFloat() / baseServings.toFloat()
 
     fun shareCurrentRecipe() {
@@ -176,12 +177,24 @@ fun RecipeDetailScreen(
 
         // ── Recipe Detail content (always underneath) ─────────────────────────
         val listState = rememberLazyListState()
+        val scope = rememberCoroutineScope()
         val parallaxOffset by remember {
             derivedStateOf {
                 if (listState.firstVisibleItemIndex == 0)
                     listState.firstVisibleItemScrollOffset * 0.4f
                 else 300f
             }
+        }
+        // Show sticky nav after the hero is fully scrolled past (index > 0)
+        val showStickyNav by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
+
+        // Dynamic index lookup — avoids fragile hardcoded indices that break on LazyColumn changes.
+        // Each section header has a stable key; we find its position at scroll time.
+        fun findSectionIndex(key: String): Int {
+            listState.layoutInfo.visibleItemsInfo.forEach { item ->
+                if (item.key == key) return item.index
+            }
+            return -1
         }
 
         LazyColumn(
@@ -214,6 +227,7 @@ fun RecipeDetailScreen(
 
             item {
                 CookingActionButtons(
+                    recipeName = recipe.name,
                     onStartCooking = {
                         isCookingMode = true
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -233,7 +247,7 @@ fun RecipeDetailScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            item {
+            item(key = "ingredients_section") {
                 ServingsStepper(
                     servings = currentServings,
                     onChange = {
@@ -273,7 +287,7 @@ fun RecipeDetailScreen(
                 Spacer(modifier = Modifier.height(24.dp))
             }
 
-            item {
+            item(key = "nutrition_section") {
                 recipe.nutritionInfo?.let { nutrition ->
                     NutritionSection(nutritionInfo = nutrition)
                     Spacer(modifier = Modifier.height(24.dp))
@@ -284,6 +298,36 @@ fun RecipeDetailScreen(
                 TagsSection(tags = recipe.tags)
                 Spacer(modifier = Modifier.height(100.dp))
             }
+        }
+
+        // ── Sticky section jump nav ─────────────────────────────────────────────────
+        AnimatedVisibility(
+            visible = showStickyNav && !isCookingMode,
+            enter = slideInVertically(
+                initialOffsetY = { -it },
+                animationSpec = tween(280)
+            ) + fadeIn(tween(200)),
+            exit = slideOutVertically(
+                targetOffsetY = { -it },
+                animationSpec = tween(240)
+            ) + fadeOut(tween(180)),
+            modifier = Modifier.align(Alignment.TopCenter)
+        ) {
+            RecipeSectionNav(
+                hasNutrition = recipe.nutritionInfo != null,
+                onIngredients = {
+                    val idx = findSectionIndex("ingredients_section")
+                    scope.launch { listState.animateScrollToItem(if (idx >= 0) idx else 5) }
+                },
+                onInstructions = {
+                    val idx = findSectionIndex("instructions_header")
+                    scope.launch { listState.animateScrollToItem(if (idx >= 0) idx else 6) }
+                },
+                onNutrition = {
+                    val idx = findSectionIndex("nutrition_section")
+                    if (idx >= 0) scope.launch { listState.animateScrollToItem(idx) }
+                }
+            )
         }
 
         // ── Cooking Mode: true full-screen overlay covering the bottom nav ────
@@ -316,6 +360,63 @@ fun RecipeDetailScreen(
                 )
             }
         }
+    }
+}
+
+// ── Section jump nav bar ───────────────────────────────────────────────────────
+@Composable
+private fun RecipeSectionNav(
+    hasNutrition: Boolean,
+    onIngredients: () -> Unit,
+    onInstructions: () -> Unit,
+    onNutrition: () -> Unit
+) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp, vertical = 8.dp),
+        shape = RoundedCornerShape(50.dp),
+        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
+        shadowElevation = 8.dp,
+        tonalElevation = 4.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 6.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceEvenly
+        ) {
+            SectionNavPill(label = "Ingredients", onClick = onIngredients)
+            SectionNavPill(label = "Instructions", onClick = onInstructions)
+            if (hasNutrition) {
+                SectionNavPill(label = "Nutrition", onClick = onNutrition)
+            }
+        }
+    }
+}
+
+@Composable
+private fun SectionNavPill(label: String, onClick: () -> Unit) {
+    var pressed by remember { mutableStateOf(false) }
+    val bgScale by animateFloatAsState(
+        targetValue = if (pressed) 0.92f else 1f,
+        animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessHigh),
+        label = "nav_pill_scale",
+        finishedListener = { pressed = false }
+    )
+    Surface(
+        onClick = { pressed = true; onClick() },
+        shape = RoundedCornerShape(40.dp),
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = Modifier.scale(bgScale)
+    ) {
+        Text(
+            label,
+            style = MaterialTheme.typography.labelMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onPrimaryContainer,
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+        )
     }
 }
 
@@ -367,19 +468,21 @@ fun RecipeHeroSection(
             contentScale = ContentScale.Crop
         )
 
+        val overlayBrush = remember {
+            Brush.verticalGradient(
+                colors = listOf(
+                    Color.Black.copy(alpha = 0.35f),
+                    Color.Transparent,
+                    Color.Black.copy(alpha = 0.75f)
+                )
+            )
+        }
+
         // Gradient Overlay
         Box(
             modifier = Modifier
                 .fillMaxSize()
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(
-                            Color.Black.copy(alpha = 0.35f),
-                            Color.Transparent,
-                            Color.Black.copy(alpha = 0.75f)
-                        )
-                    )
-                )
+                .background(overlayBrush)
         )
 
         // Top Bar
@@ -543,54 +646,99 @@ fun RecipeInfoItem(
 
 @Composable
 fun CookingActionButtons(
+    recipeName: String,
     onStartCooking: () -> Unit,
     onAddToShoppingList: () -> Unit
 ) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
-    ) {
-        Button(
-            onClick = onStartCooking,
-            modifier = Modifier
-                .weight(1f)
-                .height(56.dp),
-            colors = ButtonDefaults.buttonColors(
-                containerColor = MaterialTheme.colorScheme.primary
-            ),
-            shape = RoundedCornerShape(16.dp)
+    val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        // Primary action row
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            Icon(
-                imageVector = Icons.Default.PlayArrow,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Start Cooking",
-                fontWeight = FontWeight.Bold
-            )
+            Button(
+                onClick = onStartCooking,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(56.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                ),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.PlayArrow,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Start Cooking",
+                    fontWeight = FontWeight.Bold
+                )
+            }
+
+            OutlinedButton(
+                onClick = onAddToShoppingList,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Icon(
+                    imageVector = Icons.Default.ShoppingCart,
+                    contentDescription = null,
+                    modifier = Modifier.size(20.dp)
+                )
+                Spacer(modifier = Modifier.width(8.dp))
+                Text(
+                    text = "Shopping List",
+                    fontWeight = FontWeight.Medium
+                )
+            }
         }
 
-        OutlinedButton(
-            onClick = onAddToShoppingList,
-            modifier = Modifier
-                .weight(1f)
-                .height(56.dp),
-            shape = RoundedCornerShape(16.dp)
+        // Watch on YouTube — searches YouTube with the recipe name
+        Spacer(modifier = Modifier.height(12.dp))
+        Surface(
+            onClick = {
+                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+                val encodedQuery = java.net.URLEncoder.encode(recipeName, "UTF-8")
+                val youtubeUrl = "https://www.youtube.com/results?search_query=$encodedQuery"
+                val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(youtubeUrl))
+                context.startActivity(intent)
+            },
+            modifier = Modifier.fillMaxWidth(),
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFFFF0000).copy(alpha = 0.08f),
+            border = androidx.compose.foundation.BorderStroke(
+                1.dp,
+                Color(0xFFFF0000).copy(alpha = 0.25f)
+            )
         ) {
-            Icon(
-                imageVector = Icons.Default.ShoppingCart,
-                contentDescription = null,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(modifier = Modifier.width(8.dp))
-            Text(
-                text = "Shopping List",
-                fontWeight = FontWeight.Medium
-            )
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 14.dp, horizontal = 16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Text(
+                    text = "▶",
+                    fontSize = 14.sp,
+                    color = Color(0xFFFF0000)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text(
+                    text = "Watch Video on YouTube",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color(0xFFFF0000)
+                )
+            }
         }
     }
 }

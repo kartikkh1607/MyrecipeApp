@@ -37,7 +37,9 @@ data class SpoonacularRecipeDto(
     @SerializedName("extendedIngredients") val ingredients: List<SpoonacularIngredientDto>? = emptyList(),
     @SerializedName("analyzedInstructions") val instructions: List<SpoonacularInstructionDto>? = emptyList(),
     // Nutrition data — populated when includeNutrition=true is passed to getRecipeDetails
-    @SerializedName("nutrition") val nutrition: SpoonacularNutritionDto? = null
+    @SerializedName("nutrition") val nutrition: SpoonacularNutritionDto? = null,
+    // YouTube video URL if Spoonacular has an associated video for this recipe
+    @SerializedName("videoUrl") val videoUrl: String? = null
 )
 
 data class SpoonacularIngredientDto(

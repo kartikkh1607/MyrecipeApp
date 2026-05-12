@@ -40,6 +40,8 @@ android {
         // This line reads the property from local.properties and creates a field in BuildConfig
         val apiKey = localProperties.getProperty("spoonacular.api.key") ?: ""
         buildConfigField("String", "SPOONACULAR_API_KEY", "\"$apiKey\"")
+        val geminiApiKey = localProperties.getProperty("gemini.api.key") ?: ""
+        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
     }
 
     buildTypes {
@@ -68,6 +70,7 @@ android {
         sourceCompatibility = JavaVersion.VERSION_11
         targetCompatibility = JavaVersion.VERSION_11
     }
+
     buildFeatures {
         compose = true
         buildConfig = true  // Enable BuildConfig for API keys
@@ -75,6 +78,9 @@ android {
 }
 
 dependencies {
+    // Gemini AI - OkHttp for streaming
+    implementation("com.squareup.okhttp3:okhttp:4.12.0")
+    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
     val nav_version = "2.8.5"
 
     // Kotlinx Serialization (required for type-safe Navigation 2.8+)

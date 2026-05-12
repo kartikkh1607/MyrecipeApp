@@ -18,6 +18,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
@@ -60,14 +61,23 @@ fun shimmerBrush(
 @Composable
 fun ShimmerBox(
     modifier: Modifier = Modifier,
-    cornerRadius: Dp = 8.dp
+    cornerRadius: Dp = 8.dp,
+    brush: Brush = shimmerBrush()
 ) {
     Box(
         modifier = modifier
             .clip(RoundedCornerShape(cornerRadius))
-            .background(shimmerBrush())
+            .background(brush)
     )
 }
+
+/**
+ * Modifier extension that applies the animated shimmer brush as a background.
+ * Must be called from a Composable scope.
+ * Usage: `Modifier.shimmerEffect()`
+ */
+@Composable
+fun Modifier.shimmerEffect(): Modifier = this.background(shimmerBrush())
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Featured Carousel skeleton — matches the real FeaturedRecipeCarousel height
@@ -88,7 +98,7 @@ fun FeaturedCarouselSkeleton() {
         Column(
             modifier = Modifier
                 .fillMaxWidth()
-                .align(androidx.compose.ui.Alignment.BottomStart)
+                .align(Alignment.BottomStart)
                 .padding(20.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
@@ -123,6 +133,7 @@ fun FeaturedCarouselSkeleton() {
 
 @Composable
 fun GridSkeletonScreen(itemCount: Int = 6) {
+    val brush = shimmerBrush()
     Column(
         modifier = Modifier
             .fillMaxWidth()
@@ -143,19 +154,22 @@ fun GridSkeletonScreen(itemCount: Int = 6) {
                             modifier = Modifier
                                 .fillMaxWidth()
                                 .height(130.dp),
-                            cornerRadius = 16.dp
+                            cornerRadius = 16.dp,
+                            brush = brush
                         )
                         ShimmerBox(
                             modifier = Modifier
                                 .fillMaxWidth(0.7f)
                                 .height(12.dp),
-                            cornerRadius = 6.dp
+                            cornerRadius = 6.dp,
+                            brush = brush
                         )
                         ShimmerBox(
                             modifier = Modifier
                                 .fillMaxWidth(0.45f)
                                 .height(10.dp),
-                            cornerRadius = 5.dp
+                            cornerRadius = 5.dp,
+                            brush = brush
                         )
                     }
                 }

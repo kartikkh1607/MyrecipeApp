@@ -34,9 +34,11 @@ class GetRecipesByCategoryUseCase(
 ) {
     suspend operator fun invoke(
         categoryId: String,
-        limit: Int = defaultLimit
+        limit: Int = defaultLimit,
+        offset: Int = 0,
+        append: Boolean = false
     ): Result<List<Recipe>> =
         runCatching {
-            repository.getRecipesByCategory(categoryId, limit)
+            repository.getRecipesByCategory(categoryId, limit, offset, append)
         }
 }

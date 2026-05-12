@@ -149,24 +149,24 @@ fun FeaturedRecipeCarousel(
             pageSize = PageSize.Fixed(320.dp) // Show peek of next/previous pages
         ) { page ->
             val featuredRecipe = featuredRecipes[page]
-
-            // Calculate page offset for parallax effect
-            val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-            val scale = lerp(0.85f, 1f, 1f - pageOffset.absoluteValue.coerceIn(0f, 1f))
-            val alpha = lerp(0.5f, 1f, 1f - pageOffset.absoluteValue.coerceIn(0f, 1f))
+            val onCardClick = remember(featuredRecipe.recipe.id) {
+                {
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    navController.navigate(RecipeDetail(recipeId = featuredRecipe.recipe.id))
+                }
+            }
 
             FeaturedRecipeCard(
                 featuredRecipe = featuredRecipe,
-                onClick = {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    navController.navigate(RecipeDetail(recipeId = featuredRecipe.recipe.id))
-                },
-                modifier = Modifier
-                    .graphicsLayer {
-                        scaleX = scale
-                        scaleY = scale
-                        this.alpha = alpha
-                    }
+                onClick = onCardClick,
+                // Reads pagerState inside graphicsLayer (draw phase) — avoids per-frame recomposition
+                modifier = Modifier.graphicsLayer {
+                    val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+                    val fraction = pageOffset.absoluteValue.coerceIn(0f, 1f)
+                    scaleX = lerp(0.85f, 1f, 1f - fraction)
+                    scaleY = lerp(0.85f, 1f, 1f - fraction)
+                    alpha = lerp(0.5f, 1f, 1f - fraction)
+                }
             )
         }
 
@@ -379,10 +379,8 @@ fun CarouselIndicators(
         verticalAlignment = Alignment.CenterVertically
     ) {
         repeat(pageCount) { index ->
-            // Each IndicatorDot is its own composable scope — Compose skips dots that didn’t change
-            IndicatorDot(
-                isSelected = pagerState.currentPage == index,
-                onClick = {
+            val onClick = remember(index) {
+                {
                     scope.launch {
                         pagerState.animateScrollToPage(
                             page = index,
@@ -392,7 +390,13 @@ fun CarouselIndicators(
                             )
                         )
                     }
+                    Unit
                 }
+            }
+            // Each IndicatorDot is its own composable scope — Compose skips dots that didn’t change
+            IndicatorDot(
+                isSelected = pagerState.currentPage == index,
+                onClick = onClick
             )
         }
     }

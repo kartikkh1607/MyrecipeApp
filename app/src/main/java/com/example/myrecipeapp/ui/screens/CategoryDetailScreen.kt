@@ -17,6 +17,7 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
+import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
@@ -39,8 +40,8 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
-import androidx.compose.material3.Text
 import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
@@ -75,9 +76,18 @@ fun CategoryDetailScreen(
     onBackClick: () -> Unit = {},
     onRecipeClick: (String) -> Unit = {}
 ) {
-    var selectedDietaryFilter by remember { mutableStateOf(DietaryFilter.ALL) }
+    // Restore persisted filter so it survives back-navigation
+    var selectedDietaryFilter by remember(category.id) {
+        mutableStateOf(viewModel.getCategoryFilter(category.id))
+    }
     var showFilterBottomSheet by remember { mutableStateOf(false) }
     var sortByRating by remember { mutableStateOf(false) }
+
+    // Persist filter change to ViewModel so it's restored on re-visit
+    val updateFilter = { newFilter: com.example.myrecipeapp.domain.model.DietaryFilter ->
+        selectedDietaryFilter = newFilter
+        viewModel.setCategoryFilter(category.id, newFilter)
+    }
 
     // Observe favorites at composable scope — reads inside items{} won't
     // trigger recomposition on their own without this delegation.
@@ -147,18 +157,20 @@ fun CategoryDetailScreen(
                 )
             }
 
+            val headerOverlay = remember {
+                Brush.verticalGradient(
+                    colors = listOf(
+                        Color.Black.copy(alpha = 0.3f),
+                        Color.Black.copy(alpha = 0.7f)
+                    )
+                )
+            }
+
             // Gradient overlay
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(
-                        brush = Brush.verticalGradient(
-                            colors = listOf(
-                                Color.Black.copy(alpha = 0.3f),
-                                Color.Black.copy(alpha = 0.7f)
-                            )
-                        )
-                    )
+                    .background(brush = headerOverlay)
             )
 
             // Back button
@@ -240,6 +252,8 @@ fun CategoryDetailScreen(
             }
         }
 
+        val onFavToggle = remember { viewModel::toggleFavorite }
+
         // Recipes list with lazy loading indicator + pull-to-refresh
         PullToRefreshBox(
             isRefreshing = isRefreshing,
@@ -249,145 +263,37 @@ fun CategoryDetailScreen(
             },
             modifier = Modifier.fillMaxSize()
         ) {
-        LazyColumn(
-            modifier = Modifier.fillMaxSize(),
-            contentPadding = PaddingValues(16.dp),
-            verticalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            // Active filter indicator
-            if (selectedDietaryFilter != DietaryFilter.ALL) {
-                item {
-                    Card(
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.primaryContainer
-                        ),
-                        shape = RoundedCornerShape(20.dp)
-                    ) {
-                        Row(
-                            modifier = Modifier.padding(12.dp),
-                            verticalAlignment = Alignment.CenterVertically,
-                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            LazyColumn(
+                modifier = Modifier.fillMaxSize(),
+                contentPadding = PaddingValues(16.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                // Active filter indicator
+                if (selectedDietaryFilter != DietaryFilter.ALL) {
+                    item {
+                        Card(
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.primaryContainer
+                            ),
+                            shape = RoundedCornerShape(20.dp)
                         ) {
-                            Text(
-                                text = "Showing ${
-                                    selectedDietaryFilter.name.lowercase()
-                                        .replaceFirstChar { it.uppercase() }
-                                } recipes",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                                fontWeight = FontWeight.Medium
-                            )
-                            Spacer(modifier = Modifier.weight(1f))
-                            TextButton(
-                                onClick = { selectedDietaryFilter = DietaryFilter.ALL }
+                            Row(
+                                modifier = Modifier.padding(12.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(8.dp)
                             ) {
-                                Text("Clear Filter")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Show loading state with progress indicator
-            if (categoryRecipesState.loading) {
-                item {
-                    Box(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(32.dp),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Column(
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(16.dp)
-                        ) {
-                            CircularProgressIndicator()
-                            Text(
-                                text = "Loading recipes...",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                            )
-                            Text(
-                                text = "Fetching up to 20 recipes",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
-                            )
-                        }
-                    }
-                }
-            }
-
-            // Show error state
-            if (categoryRecipesState.error != null && !categoryRecipesState.loading) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.errorContainer
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(16.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(8.dp)
-                        ) {
-                            Text(
-                                text = "Oops! Something went wrong",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onErrorContainer
-                            )
-                            Text(
-                                text = categoryRecipesState.error ?: "Unknown error occurred",
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
-                                textAlign = TextAlign.Center
-                            )
-                            Button(
-                                onClick = { viewModel.getRecipesByCategory(category.id) },
-                                modifier = Modifier.padding(top = 8.dp)
-                            ) {
-                                Text("Try Again")
-                            }
-                        }
-                    }
-                }
-            }
-
-            // Show empty state when no recipes found
-            if (!categoryRecipesState.loading && categoryRecipesState.error == null && filteredRecipes.isEmpty()) {
-                item {
-                    Card(
-                        modifier = Modifier.fillMaxWidth(),
-                        colors = CardDefaults.cardColors(
-                            containerColor = MaterialTheme.colorScheme.surfaceVariant
-                        ),
-                        shape = RoundedCornerShape(12.dp)
-                    ) {
-                        Column(
-                            modifier = Modifier.padding(24.dp),
-                            horizontalAlignment = Alignment.CenterHorizontally,
-                            verticalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            Text(
-                                text = "No recipes found",
-                                style = MaterialTheme.typography.titleMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                            Text(
-                                text = if (selectedDietaryFilter != DietaryFilter.ALL) {
-                                    "No recipes match your dietary filter. Try clearing the filter or selecting a different one."
-                                } else {
-                                    "No recipes available for this category at the moment. Please try again later."
-                                },
-                                style = MaterialTheme.typography.bodyMedium,
-                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                                textAlign = TextAlign.Center
-                            )
-                            if (selectedDietaryFilter != DietaryFilter.ALL) {
-                                Button(
-                                    onClick = { selectedDietaryFilter = DietaryFilter.ALL }
+                                Text(
+                                    text = "Showing ${
+                                        selectedDietaryFilter.name.lowercase()
+                                            .replaceFirstChar { it.uppercase() }
+                                    } recipes",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    fontWeight = FontWeight.Medium
+                                )
+                                Spacer(modifier = Modifier.weight(1f))
+                                TextButton(
+                                    onClick = { updateFilter(DietaryFilter.ALL) }
                                 ) {
                                     Text("Clear Filter")
                                 }
@@ -395,49 +301,185 @@ fun CategoryDetailScreen(
                         }
                     }
                 }
-            }
 
-            // Show recipes when available with count header
-            if (!categoryRecipesState.loading && filteredRecipes.isNotEmpty()) {
-                // Recipe count and sort options
-                item {
-                    Row(
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(vertical = 8.dp),
-                        horizontalArrangement = Arrangement.SpaceBetween,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Text(
-                            text = "${filteredRecipes.size} recipes found",
-                            style = MaterialTheme.typography.bodyMedium,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
-                        )
-
-                        FilterChip(
-                            onClick = { sortByRating = !sortByRating },
-                            label = {
+                // Show loading state with progress indicator
+                if (categoryRecipesState.loading) {
+                    item {
+                        Box(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(32.dp),
+                            contentAlignment = Alignment.Center
+                        ) {
+                            Column(
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(16.dp)
+                            ) {
+                                CircularProgressIndicator()
                                 Text(
-                                    "Sort by Rating",
-                                    style = MaterialTheme.typography.labelSmall
+                                    text = "Loading recipes...",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
                                 )
-                            },
-                            selected = sortByRating
-                        )
+                                Text(
+                                    text = "Fetching up to 20 recipes",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.5f)
+                                )
+                            }
+                        }
                     }
                 }
 
-                items(filteredRecipes, key = { it.id }) { recipe ->
-                    EnhancedRecipeCard(
-                        recipe = recipe,
-                        isFavorite = favoriteIds.contains(recipe.id),
-                        onFavoriteToggle = { viewModel.toggleFavorite(it) },
-                        onClick = { onRecipeClick(recipe.id) }
-                    )
+                // Show error state
+                if (categoryRecipesState.error != null && !categoryRecipesState.loading) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.errorContainer
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(16.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(8.dp)
+                            ) {
+                                Text(
+                                    text = "Oops! Something went wrong",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onErrorContainer
+                                )
+                                Text(
+                                    text = categoryRecipesState.error ?: "Unknown error occurred",
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f),
+                                    textAlign = TextAlign.Center
+                                )
+                                Button(
+                                    onClick = { viewModel.getRecipesByCategory(category.id) },
+                                    modifier = Modifier.padding(top = 8.dp)
+                                ) {
+                                    Text("Try Again")
+                                }
+                            }
+                        }
+                    }
                 }
-            }
-        } // end LazyColumn
+
+                // Show empty state when no recipes found
+                if (!categoryRecipesState.loading && categoryRecipesState.error == null && filteredRecipes.isEmpty()) {
+                    item {
+                        Card(
+                            modifier = Modifier.fillMaxWidth(),
+                            colors = CardDefaults.cardColors(
+                                containerColor = MaterialTheme.colorScheme.surfaceVariant
+                            ),
+                            shape = RoundedCornerShape(12.dp)
+                        ) {
+                            Column(
+                                modifier = Modifier.padding(24.dp),
+                                horizontalAlignment = Alignment.CenterHorizontally,
+                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                            ) {
+                                Text(
+                                    text = "No recipes found",
+                                    style = MaterialTheme.typography.titleMedium,
+                                    fontWeight = FontWeight.Bold
+                                )
+                                Text(
+                                    text = if (selectedDietaryFilter != DietaryFilter.ALL) {
+                                        "No recipes match your dietary filter. Try clearing the filter or selecting a different one."
+                                    } else {
+                                        "No recipes available for this category at the moment. Please try again later."
+                                    },
+                                    style = MaterialTheme.typography.bodyMedium,
+                                    color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
+                                    textAlign = TextAlign.Center
+                                )
+                                if (selectedDietaryFilter != DietaryFilter.ALL) {
+                                    Button(
+                                        onClick = { updateFilter(DietaryFilter.ALL) }
+                                    ) {
+                                        Text("Clear Filter")
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // Show recipes when available with count header
+                if (!categoryRecipesState.loading && filteredRecipes.isNotEmpty()) {
+                    // Recipe count and sort options
+                    item {
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(vertical = 8.dp),
+                            horizontalArrangement = Arrangement.SpaceBetween,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = "${filteredRecipes.size} recipes found",
+                                style = MaterialTheme.typography.bodyMedium,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f)
+                            )
+
+                            FilterChip(
+                                onClick = { sortByRating = !sortByRating },
+                                label = {
+                                    Text(
+                                        "Sort by Rating",
+                                        style = MaterialTheme.typography.labelSmall
+                                    )
+                                },
+                                selected = sortByRating
+                            )
+                        }
+                    }
+
+                    items(filteredRecipes, key = { it.id }) { recipe ->
+                        val onCardClick = remember(recipe.id) { { onRecipeClick(recipe.id) } }
+                        EnhancedRecipeCard(
+                            recipe = recipe,
+                            isFavorite = favoriteIds.contains(recipe.id),
+                            onFavoriteToggle = onFavToggle,
+                            onClick = onCardClick
+                        )
+                    }
+
+                    // Load More button
+                    if (categoryRecipesState.hasMore && !categoryRecipesState.loading) {
+                        item(key = "load_more") {
+                            Spacer(modifier = Modifier.height(8.dp))
+                            androidx.compose.material3.Button(
+                                onClick = { viewModel.loadMoreCategoryRecipes(category.id) },
+                                modifier = Modifier
+                                    .fillMaxWidth()
+                                    .padding(horizontal = 16.dp),
+                                enabled = !categoryRecipesState.isLoadingMore
+                            ) {
+                                if (categoryRecipesState.isLoadingMore) {
+                                    CircularProgressIndicator(
+                                        modifier = Modifier.size(18.dp),
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        strokeWidth = 2.dp
+                                    )
+                                    Spacer(modifier = Modifier.width(8.dp))
+                                    Text("Loading...")
+                                } else {
+                                    Text("Load More (${categoryRecipesState.totalLoaded} loaded)")
+                                }
+                            }
+                            Spacer(modifier = Modifier.height(24.dp))
+                        }
+                    }
+                }
+            } // end LazyColumn
         } // end PullToRefreshBox
     }
 
@@ -449,7 +491,7 @@ fun CategoryDetailScreen(
             DietaryFilterBottomSheet(
                 selectedFilter = selectedDietaryFilter,
                 onFilterSelected = { filter ->
-                    selectedDietaryFilter = filter
+                    updateFilter(filter)
                     showFilterBottomSheet = false
                 },
                 availableFilters = category.dietaryTags + DietaryFilter.ALL
@@ -518,15 +560,33 @@ fun EnhancedRecipeCard(
             horizontalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             // Enhanced image with overlay + badges
-            Box {
-                AsyncImage(
-                    model = recipe.imageUrl,
-                    contentDescription = recipe.name,
+            val ratingText = remember(recipe.rating) {
+                String.format(Locale.ROOT, "%.1f", recipe.rating)
+            }
+            val difficultyBgColor = remember(recipe.difficulty) {
+                when (recipe.difficulty) {
+                    com.example.myrecipeapp.domain.model.RecipeDifficulty.EASY ->
+                        Color(0xFF2E7D32)
+                    com.example.myrecipeapp.domain.model.RecipeDifficulty.MEDIUM ->
+                        Color(0xFFE65100)
+                    com.example.myrecipeapp.domain.model.RecipeDifficulty.HARD ->
+                        Color(0xFFC62828)
+                }
+            }
+            Box(modifier = Modifier.size(100.dp)) {
+                Box(
                     modifier = Modifier
-                        .size(100.dp)
-                        .clip(RoundedCornerShape(12.dp)),
-                    contentScale = ContentScale.Crop
-                )
+                        .fillMaxSize()
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                ) {
+                    AsyncImage(
+                        model = recipe.imageUrl,
+                        contentDescription = recipe.name,
+                        modifier = Modifier.fillMaxSize(),
+                        contentScale = ContentScale.Crop,
+                    )
+                }
 
                 // Rating badge — top end
                 if (recipe.rating > 0) {
@@ -551,7 +611,7 @@ fun EnhancedRecipeCard(
                                 modifier = Modifier.size(12.dp)
                             )
                             Text(
-                                text = String.format(Locale.ROOT, "%.1f", recipe.rating),
+                                text = ratingText,
                                 style = MaterialTheme.typography.labelSmall,
                                 color = Color.White,
                                 fontWeight = FontWeight.Bold
@@ -561,14 +621,6 @@ fun EnhancedRecipeCard(
                 }
 
                 // Difficulty badge — bottom start
-                val difficultyBgColor = when (recipe.difficulty) {
-                    com.example.myrecipeapp.domain.model.RecipeDifficulty.EASY ->
-                        Color(0xFF2E7D32) // dark green
-                    com.example.myrecipeapp.domain.model.RecipeDifficulty.MEDIUM ->
-                        Color(0xFFE65100) // dark orange
-                    com.example.myrecipeapp.domain.model.RecipeDifficulty.HARD ->
-                        Color(0xFFC62828) // dark red
-                }
                 Surface(
                     modifier = Modifier
                         .align(Alignment.BottomStart)

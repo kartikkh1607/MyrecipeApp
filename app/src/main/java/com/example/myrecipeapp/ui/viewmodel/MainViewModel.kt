@@ -127,11 +127,37 @@ class MainViewModel(
     private val _searchState = mutableStateOf(SearchState())
     val searchState: State<SearchState> = _searchState
 
+    // ── Recent Searches ───────────────────────────────────────────────────────
+    // In-memory only — session history, max 5 entries, most-recent first.
+    private val _recentSearches = mutableStateOf<List<String>>(emptyList())
+    val recentSearches: State<List<String>> = _recentSearches
+
+    /** Adds [query] to the top of the recent list (deduped, capped at 5). */
+    fun addRecentSearch(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank()) return
+        val updated = (listOf(trimmed) + _recentSearches.value.filter {
+            it.lowercase() != trimmed.lowercase()
+        }).take(5)
+        _recentSearches.value = updated
+    }
+
+    fun clearRecentSearch(query: String) {
+        _recentSearches.value = _recentSearches.value.filter { it != query }
+    }
+
+    fun clearAllRecentSearches() {
+        _recentSearches.value = emptyList()
+    }
+
     // ── Category Recipes State ────────────────────────────────────────────────
     data class CategoryRecipesState(
         val loading: Boolean = false,
         val recipes: List<Recipe> = emptyList(),
-        val error: String? = null
+        val error: String? = null,
+        val totalLoaded: Int = 0,
+        val hasMore: Boolean = false,
+        val isLoadingMore: Boolean = false
     )
 
     // ── Favorites State (Room-backed) ─────────────────────────────────────────
@@ -160,7 +186,9 @@ class MainViewModel(
     fun addFavorite(recipe: Recipe) {
         viewModelScope.launch {
             favoriteDao.insert(recipe.toFavoriteEntity())
-            cachedRecipeDao.upsert(recipe.toCachedEntity())
+            // Do NOT upsert into cachedRecipeDao here — the recipe object sourced from
+            // FavoriteEntity has servings=0, no ingredients, and no instructions, so it
+            // would corrupt the detail cache and cause the servings stepper to show wrong values.
         }
     }
 
@@ -184,12 +212,12 @@ class MainViewModel(
     private val _lastAddedRecipeName = mutableStateOf<String?>(null)
     val lastAddedRecipeName: State<String?> = _lastAddedRecipeName
 
-    /** Appends [recipe]'s ingredients to the shopping list.
-     *  Existing items are preserved; duplicate keys (same recipe+ingredient
-     *  added twice) are silently dropped by the DAO (OnConflictStrategy.IGNORE). */
+    /** Replaces all recipe items (keeps Custom items) with [recipe]'s ingredients. */
     fun addToShoppingList(recipe: Recipe) {
         _lastAddedRecipeName.value = recipe.name
         viewModelScope.launch {
+            // Clear existing recipe items before adding new ones
+            shoppingDao.deleteByRecipeExcluding()
             recipe.ingredients.forEach { ing ->
                 val key = "${recipe.id}_${ing.id.ifEmpty { ing.name }}"
                 shoppingDao.insert(
@@ -241,6 +269,28 @@ class MainViewModel(
         viewModelScope.launch { shoppingDao.deleteAll() }
     }
 
+    /**
+     * Adds a free-text item (not from any recipe) to the shopping list.
+     * Groups under the "Custom" section so it's visually distinct.
+     */
+    fun addCustomShoppingItem(name: String) {
+        val trimmed = name.trim()
+        if (trimmed.isBlank()) return
+        viewModelScope.launch {
+            val key =
+                "custom_${System.currentTimeMillis()}_${trimmed.lowercase().replace(' ', '_')}"
+            shoppingDao.insert(
+                ShoppingItemEntity(
+                    key = key,
+                    ingredientName = trimmed,
+                    amount = "",
+                    unit = "",
+                    recipeName = "Custom"
+                )
+            )
+        }
+    }
+
     // ── Category Recipes State ────────────────────────────────────────────────
     private val _categoryRecipesState = mutableStateOf(CategoryRecipesState())
     val categoryRecipesState: State<CategoryRecipesState> = _categoryRecipesState
@@ -264,6 +314,21 @@ class MainViewModel(
     ) {
         override fun removeEldestEntry(eldest: Map.Entry<String, Pair<List<Recipe>, Long>>): Boolean =
             size > CACHE_MAX_SIZE
+    }
+
+    // ── Per-category dietary filter persistence ─────────────────────────────
+    // Remembers user's filter choice per category so it's restored on re-visit.
+    private val categoryFilters =
+        mutableMapOf<String, com.example.myrecipeapp.domain.model.DietaryFilter>()
+
+    fun getCategoryFilter(categoryId: String): com.example.myrecipeapp.domain.model.DietaryFilter =
+        categoryFilters[categoryId] ?: com.example.myrecipeapp.domain.model.DietaryFilter.ALL
+
+    fun setCategoryFilter(
+        categoryId: String,
+        filter: com.example.myrecipeapp.domain.model.DietaryFilter
+    ) {
+        categoryFilters[categoryId] = filter
     }
 
     // ── Search-result cache — keyed by "query|offset", value = (result, cachedAt) ─
@@ -317,8 +382,13 @@ class MainViewModel(
             !_recipeDetailState.value.loading
         ) return
 
-        // Clear previous recipe right away — UI shows a spinner, not stale content
-        _recipeDetailState.value = RecipeDetailState(loading = true, recipe = null, error = null)
+        // Only reset state when there's something to clear. If the state is already
+        // the default (loading=true, no recipe), skipping this write prevents a spurious
+        // recompose of RecipeDetailScreen right as the navigation enter-animation begins.
+        val current = _recipeDetailState.value
+        if (current.recipe != null || current.error != null) {
+            _recipeDetailState.value = RecipeDetailState(loading = true, recipe = null, error = null)
+        }
 
         launchOp(
             onStart = { /* state already set above */ },
@@ -373,6 +443,7 @@ class MainViewModel(
                 .fold(
                     onSuccess = {
                         searchCache[key] = it to System.currentTimeMillis()
+                        addRecentSearch(query)   // record in history on first successful result
                         _searchState.value =
                             SearchState(
                                 loading = false,
@@ -444,7 +515,12 @@ class MainViewModel(
         val cached = categoryCache[categoryId]
         if (cached != null && (System.currentTimeMillis() - cached.second) < CACHE_TTL_MS) {
             _categoryRecipesState.value =
-                CategoryRecipesState(loading = false, recipes = cached.first)
+                CategoryRecipesState(
+                    loading = false,
+                    recipes = cached.first,
+                    totalLoaded = cached.first.size,
+                    hasMore = false
+                )
             return
         }
         launchOp(
@@ -453,10 +529,14 @@ class MainViewModel(
                     _categoryRecipesState.value.copy(loading = true, error = null)
             },
             call = { getByCategoryUseCase(categoryId) },
-            onSuccess = {
-                // LinkedHashMap.removeEldestEntry handles eviction automatically.
-                categoryCache[categoryId] = Pair(it, System.currentTimeMillis())
-                _categoryRecipesState.value = CategoryRecipesState(loading = false, recipes = it)
+            onSuccess = { newRecipes ->
+                categoryCache[categoryId] = Pair(newRecipes, System.currentTimeMillis())
+                _categoryRecipesState.value = CategoryRecipesState(
+                    loading = false,
+                    recipes = newRecipes,
+                    totalLoaded = newRecipes.size,
+                    hasMore = newRecipes.size >= 20  // Spoonacular returns 20 per page
+                )
             },
             onFailure = {
                 Log.e(TAG, "getRecipesByCategory: ${it.message}")
@@ -466,6 +546,38 @@ class MainViewModel(
                 )
             }
         )
+    }
+
+    fun loadMoreCategoryRecipes(categoryId: String) {
+        val current = _categoryRecipesState.value
+        if (current.loading || current.isLoadingMore || !current.hasMore) return
+
+        _categoryRecipesState.value = current.copy(isLoadingMore = true, error = null)
+
+        viewModelScope.launch {
+            val offset = current.totalLoaded
+            val result = getByCategoryUseCase(categoryId, offset = offset, append = true)
+            result.fold(
+                onSuccess = { newRecipes ->
+                    val updated = current.copy(
+                        isLoadingMore = false,
+                        recipes = current.recipes + newRecipes,
+                        totalLoaded = current.totalLoaded + newRecipes.size,
+                        hasMore = newRecipes.size >= 20
+                    )
+                    _categoryRecipesState.value = updated
+                    // Update cache with full list
+                    categoryCache[categoryId] = Pair(updated.recipes, System.currentTimeMillis())
+                },
+                onFailure = {
+                    Log.w(TAG, "loadMoreCategoryRecipes: ${it.message}")
+                    _categoryRecipesState.value = current.copy(
+                        isLoadingMore = false,
+                        error = "Failed to load more recipes"
+                    )
+                }
+            )
+        }
     }
 
     // ── Private helpers ───────────────────────────────────────────────────────

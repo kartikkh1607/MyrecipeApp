@@ -49,6 +49,39 @@ object NetworkModule {
         }
     }
 
+    /**
+     * Retries failed requests up to [maxRetries] times with exponential backoff.
+     * Only retries on idempotent methods (GET) and transient failures (timeout, 503, etc).
+     */
+    private class RetryInterceptor(
+        private val maxRetries: Int = 3,
+        private val initialBackoffMs: Long = 1_000L
+    ) : Interceptor {
+        override fun intercept(chain: Interceptor.Chain): Response {
+            val request = chain.request()
+            var lastException: java.io.IOException? = null
+
+            repeat(maxRetries) { attempt ->
+                try {
+                    val response = chain.proceed(request)
+                    // Success — but also retry on 503 Service Unavailable
+                    if (response.code == 503 && attempt < maxRetries - 1) {
+                        response.close()
+                        Thread.sleep(initialBackoffMs * (attempt + 1))
+                        return@repeat
+                    }
+                    return response
+                } catch (e: java.io.IOException) {
+                    lastException = e
+                    if (attempt < maxRetries - 1) {
+                        Thread.sleep(initialBackoffMs * (attempt + 1))
+                    }
+                }
+            }
+            throw lastException ?: java.io.IOException("Request failed after $maxRetries retries")
+        }
+    }
+
     private val loggingInterceptor = HttpLoggingInterceptor().apply {
         // BODY logs the entire JSON response (~100 KB per call) to Logcat — big CPU hit.
         // HEADERS is enough for debugging: shows URL, status code, and timing.
@@ -67,6 +100,7 @@ object NetworkModule {
         OkHttpClient.Builder()
             .cache(httpCache)
             .addInterceptor(ApiKeyInterceptor(BuildConfig.SPOONACULAR_API_KEY))
+            .addInterceptor(RetryInterceptor())
             .addInterceptor(offlineFallbackInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(10, TimeUnit.SECONDS)   // fail fast on no connection

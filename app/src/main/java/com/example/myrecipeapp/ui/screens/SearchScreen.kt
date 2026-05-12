@@ -35,6 +35,8 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Clear
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.History
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -47,6 +49,7 @@ import androidx.compose.material3.SuggestionChip
 import androidx.compose.material3.SuggestionChipDefaults
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.material3.TextField
 import androidx.compose.material3.TextFieldDefaults
 import androidx.compose.runtime.Composable
@@ -57,9 +60,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.runtime.snapshotFlow
-import kotlinx.coroutines.FlowPreview
-import kotlinx.coroutines.flow.debounce
-import kotlinx.coroutines.flow.distinctUntilChanged
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
@@ -77,7 +77,10 @@ import com.example.myrecipeapp.R
 import com.example.myrecipeapp.ui.navigation.LocalTabReselectEvents
 import com.example.myrecipeapp.ui.navigation.RecipeDetail
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
+import kotlinx.coroutines.FlowPreview
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.debounce
+import kotlinx.coroutines.flow.distinctUntilChanged
 import kotlinx.coroutines.flow.filter
 import com.example.myrecipeapp.ui.navigation.Search as SearchRoute
 
@@ -214,10 +217,13 @@ fun SearchScreen(
             label = "search_content"
         ) { isEmpty ->
             if (isEmpty) {
-                SearchIdleState(onTagClick = { tag ->
-                    // Strip emoji prefix (e.g., "🍝 Pasta" → "Pasta")
-                    searchText = tag.substringAfter(" ")
-                })
+                SearchIdleState(
+                    viewModel = viewModel,
+                    onTagClick = { tag ->
+                        // Strip emoji prefix (e.g., "🍝 Pasta" → "Pasta")
+                        searchText = tag.substringAfter(" ")
+                    }
+                )
             } else {
                 SearchResults(
                     searchText = searchText,
@@ -239,8 +245,12 @@ fun SearchScreen(
 
 // ── Idle / empty state ────────────────────────────────────────────────────────
 @Composable
-private fun SearchIdleState(onTagClick: (String) -> Unit) {
+private fun SearchIdleState(
+    viewModel: MainViewModel,
+    onTagClick: (String) -> Unit
+) {
     val popularTags = stringArrayResource(R.array.search_popular_tags).toList()
+    val recentSearches by viewModel.recentSearches
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { delay(80); visible = true }
 
@@ -299,7 +309,110 @@ private fun SearchIdleState(onTagClick: (String) -> Unit) {
                 )
                 Spacer(modifier = Modifier.height(20.dp))
 
-                // Popular tag chips
+                // ── Recent searches ──────────────────────────────────────────
+                if (recentSearches.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            Icon(
+                                Icons.Default.History,
+                                contentDescription = null,
+                                modifier = Modifier.size(16.dp),
+                                tint = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                "Recent",
+                                style = MaterialTheme.typography.labelLarge,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                        TextButton(
+                            onClick = { viewModel.clearAllRecentSearches() },
+                            contentPadding = PaddingValues(horizontal = 8.dp, vertical = 0.dp)
+                        ) {
+                            Text(
+                                "Clear all",
+                                style = MaterialTheme.typography.labelSmall,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(8.dp))
+                    LazyRow(
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        contentPadding = PaddingValues(vertical = 4.dp)
+                    ) {
+                        items(recentSearches, key = { it }) { query ->
+                            var chipVisible by remember { mutableStateOf(false) }
+                            LaunchedEffect(query) { chipVisible = true }
+                            AnimatedVisibility(
+                                visible = chipVisible,
+                                enter = scaleIn(
+                                    initialScale = 0.85f,
+                                    animationSpec = spring(Spring.DampingRatioNoBouncy, 320f)
+                                ) + fadeIn()
+                            ) {
+                                // Custom chip: [🕐 query  ✕]
+                                Surface(
+                                    onClick = { onTagClick(query) },
+                                    shape = RoundedCornerShape(20.dp),
+                                    color = MaterialTheme.colorScheme.primaryContainer
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(
+                                            start = 10.dp,
+                                            end = 6.dp,
+                                            top = 7.dp,
+                                            bottom = 7.dp
+                                        ),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                                    ) {
+                                        Icon(
+                                            Icons.Default.History,
+                                            contentDescription = null,
+                                            modifier = Modifier.size(14.dp),
+                                            tint = MaterialTheme.colorScheme.primary
+                                        )
+                                        Text(
+                                            query,
+                                            style = MaterialTheme.typography.bodyMedium,
+                                            fontWeight = FontWeight.Medium,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer
+                                        )
+                                        Surface(
+                                            onClick = { viewModel.clearRecentSearch(query) },
+                                            shape = CircleShape,
+                                            color = MaterialTheme.colorScheme.onPrimaryContainer.copy(
+                                                alpha = 0.12f
+                                            ),
+                                            modifier = Modifier.size(18.dp)
+                                        ) {
+                                            Box(contentAlignment = Alignment.Center) {
+                                                Icon(
+                                                    Icons.Default.Close,
+                                                    contentDescription = "Remove $query",
+                                                    modifier = Modifier.size(10.dp),
+                                                    tint = MaterialTheme.colorScheme.onPrimaryContainer
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(20.dp))
+                }
+
+                // ── Popular tag chips ────────────────────────────────────────
                 Text(
                     "Popular",
                     style = MaterialTheme.typography.labelLarge,
@@ -529,7 +642,8 @@ fun SearchResults(
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
-                        val fallbackSuggestions = stringArrayResource(R.array.search_fallback_suggestions).toList()
+                        val fallbackSuggestions =
+                            stringArrayResource(R.array.search_fallback_suggestions).toList()
                         LazyRow(
                             horizontalArrangement = Arrangement.spacedBy(8.dp),
                             contentPadding = PaddingValues(horizontal = 4.dp)

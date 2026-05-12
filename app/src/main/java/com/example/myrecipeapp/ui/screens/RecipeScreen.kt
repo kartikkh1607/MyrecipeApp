@@ -31,9 +31,11 @@ import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Error
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material.icons.outlined.GridView
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.Icon
@@ -57,6 +59,7 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
@@ -73,7 +76,8 @@ import kotlinx.coroutines.flow.filter
 fun RecipeScreen(
     modifier: Modifier = Modifier,
     viewstate: MainViewModel.RecipeCategoryState,
-    navigateToDetail: (RecipeCategory) -> Unit
+    navigateToDetail: (RecipeCategory) -> Unit,
+    onRetry: () -> Unit = {}
 ) {
     // Hoist grid state so reselecting the Categories tab smooth-scrolls to top.
     val gridState = rememberLazyGridState()
@@ -155,6 +159,7 @@ fun RecipeScreen(
                 viewstate.error != null -> {
                     ErrorDisplay(
                         message = viewstate.error,
+                        onRetry = onRetry,
                         modifier = Modifier.align(Alignment.Center)
                     )
                 }
@@ -369,26 +374,62 @@ fun CategoryGridItem(
 }
 
 @Composable
-fun ErrorDisplay(message: String, modifier: Modifier = Modifier) {
-    Column(modifier = modifier, horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(
-            Icons.Default.Error,
-            null,
-            modifier = Modifier.size(64.dp),
-            tint = MaterialTheme.colorScheme.error
-        )
-        Spacer(modifier = Modifier.height(16.dp))
+fun ErrorDisplay(message: String, onRetry: () -> Unit = {}, modifier: Modifier = Modifier) {
+    var retryPressed by remember { mutableStateOf(false) }
+    val iconScale by animateFloatAsState(
+        targetValue = if (retryPressed) 0.88f else 1f,
+        animationSpec = spring(Spring.DampingRatioMediumBouncy, Spring.StiffnessMedium),
+        label = "error_icon_scale",
+        finishedListener = { retryPressed = false }
+    )
+    Column(
+        modifier = modifier.padding(24.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(96.dp)
+                .background(
+                    color = MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.22f),
+                    shape = CircleShape
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Icon(
+                Icons.Default.WifiOff,
+                contentDescription = null,
+                modifier = Modifier
+                    .size(48.dp)
+                    .scale(iconScale),
+                tint = MaterialTheme.colorScheme.error
+            )
+        }
         Text(
-            "Something went wrong",
+            "You're offline",
             style = MaterialTheme.typography.headlineSmall,
             fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.error
+            color = MaterialTheme.colorScheme.onBackground
         )
-        Spacer(modifier = Modifier.height(8.dp))
         Text(
             message,
             style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+            textAlign = TextAlign.Center
         )
+        Spacer(modifier = Modifier.height(4.dp))
+        Button(
+            onClick = { retryPressed = true; onRetry() },
+            shape = RoundedCornerShape(50.dp),
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primary
+            )
+        ) {
+            Text(
+                "Try Again",
+                fontWeight = FontWeight.SemiBold,
+                modifier = Modifier.padding(horizontal = 12.dp)
+            )
+        }
     }
 }

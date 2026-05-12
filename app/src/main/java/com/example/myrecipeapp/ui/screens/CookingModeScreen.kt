@@ -1,7 +1,19 @@
 package com.example.myrecipeapp.ui.screens
 
+import android.Manifest
+import android.content.Intent
+import android.speech.RecognitionListener
+import android.speech.RecognizerIntent
+import android.speech.SpeechRecognizer
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.ExperimentalAnimationApi
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -33,6 +45,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.TipsAndUpdates
 import androidx.compose.material3.Card
@@ -44,15 +57,19 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -60,6 +77,8 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.example.myrecipeapp.domain.model.Recipe
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 
 
 @OptIn(ExperimentalAnimationApi::class, ExperimentalMaterial3Api::class)
@@ -72,10 +91,140 @@ fun CookingModeScreen(
     var currentStepIndex by remember { mutableIntStateOf(0) }
     var completedSteps by remember { mutableStateOf(setOf<Int>()) }
     val hapticFeedback = LocalHapticFeedback.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
 
     val currentStep = steps.getOrNull(currentStepIndex)
     val isAllDone = completedSteps.size == steps.size && steps.isNotEmpty()
     val isLast = steps.isNotEmpty() && currentStepIndex == steps.lastIndex
+
+    // ── Voice recognition state ───────────────────────────────────────────────
+    var isListening by remember { mutableStateOf(false) }
+    // "" = idle, "Listening…" = active, any other string = feedback text
+    var voiceHint by remember { mutableStateOf("") }
+
+    // SpeechRecognizer created once, released on dispose
+    val speechRecognizer = remember {
+        if (SpeechRecognizer.isRecognitionAvailable(context))
+            SpeechRecognizer.createSpeechRecognizer(context)
+        else null
+    }
+    DisposableEffect(Unit) {
+        onDispose { speechRecognizer?.destroy() }
+    }
+
+    /** Processes a raw transcript into a step command. */
+    fun handleVoiceCommand(text: String) {
+        val lower = text.lowercase().trim()
+        when {
+            lower.contains("next") || lower.contains("forward") -> {
+                voiceHint = "👉 Next step"
+                if (!isLast) {
+                    completedSteps = completedSteps + currentStepIndex
+                    currentStepIndex++
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                } else {
+                    onExitCookingMode()
+                }
+            }
+
+            lower.contains("back") || lower.contains("previous") || lower.contains("prev") -> {
+                voiceHint = "👈 Previous step"
+                if (currentStepIndex > 0) {
+                    completedSteps = completedSteps - currentStepIndex
+                    currentStepIndex--
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                }
+            }
+
+            lower.contains("finish") || lower.contains("done") || lower.contains("exit") -> {
+                voiceHint = "✅ Finishing"
+                onExitCookingMode()
+            }
+
+            else -> {
+                voiceHint = "Try: \"next\", \"back\", \"finish\""
+            }
+        }
+        scope.launch { delay(2000); voiceHint = "" }
+    }
+
+    /** Starts listening. Wires the RecognitionListener inline so it has access to state. */
+    fun startListening() {
+        val sr = speechRecognizer ?: run {
+            voiceHint = "Voice not available"
+            scope.launch { delay(2000); voiceHint = "" }
+            return
+        }
+        val intent = Intent(RecognizerIntent.ACTION_RECOGNIZE_SPEECH).apply {
+            putExtra(
+                RecognizerIntent.EXTRA_LANGUAGE_MODEL,
+                RecognizerIntent.LANGUAGE_MODEL_FREE_FORM
+            )
+            putExtra(RecognizerIntent.EXTRA_MAX_RESULTS, 1)
+            putExtra(RecognizerIntent.EXTRA_PARTIAL_RESULTS, false)
+        }
+        sr.setRecognitionListener(object : RecognitionListener {
+            override fun onReadyForSpeech(params: android.os.Bundle?) {
+                voiceHint = "Listening…"
+            }
+
+            override fun onBeginningOfSpeech() {}
+            override fun onRmsChanged(rmsdB: Float) {}
+            override fun onBufferReceived(buffer: ByteArray?) {}
+            override fun onEndOfSpeech() {
+                isListening = false
+            }
+
+            override fun onError(error: Int) {
+                isListening = false
+                voiceHint = when (error) {
+                    SpeechRecognizer.ERROR_NO_MATCH -> "Didn't catch that"
+                    SpeechRecognizer.ERROR_SPEECH_TIMEOUT -> "No speech detected"
+                    else -> "Try again"
+                }
+                scope.launch { delay(2000); voiceHint = "" }
+            }
+
+            override fun onResults(results: android.os.Bundle?) {
+                isListening = false
+                val matches = results?.getStringArrayList(SpeechRecognizer.RESULTS_RECOGNITION)
+                val best = matches?.firstOrNull() ?: return
+                handleVoiceCommand(best)
+            }
+
+            override fun onPartialResults(partialResults: android.os.Bundle?) {}
+            override fun onEvent(eventType: Int, params: android.os.Bundle?) {}
+        })
+        isListening = true
+        sr.startListening(intent)
+        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+    }
+
+    // Permission launcher — requests RECORD_AUDIO, then starts listening if granted
+    val permissionLauncher = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission()
+    ) { granted ->
+        if (granted) startListening()
+        else {
+            voiceHint = "Mic permission denied"
+            scope.launch { delay(2000); voiceHint = "" }
+        }
+    }
+
+    /** Checks permission then either starts immediately or requests. */
+    fun onMicClick() {
+        if (isListening) {
+            speechRecognizer?.stopListening()
+            isListening = false
+            voiceHint = ""
+            return
+        }
+        val granted = context.checkSelfPermission(Manifest.permission.RECORD_AUDIO) ==
+                android.content.pm.PackageManager.PERMISSION_GRANTED
+        if (granted) startListening()
+        else permissionLauncher.launch(Manifest.permission.RECORD_AUDIO)
+    }
 
     Column(
         modifier = Modifier
@@ -455,17 +604,63 @@ fun CookingModeScreen(
                     )
                 }
 
-                // Mic button (centre)
-                Surface(
-                    shape = CircleShape,
-                    color = MaterialTheme.colorScheme.secondaryContainer,
-                    modifier = Modifier.size(48.dp)
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            Icons.Default.Mic, "Voice",
-                            tint = MaterialTheme.colorScheme.onSecondaryContainer,
-                            modifier = Modifier.size(22.dp)
+                // Mic button (centre) — now wired to SpeechRecognizer
+                // Pulses while listening
+                val pulseTransition = rememberInfiniteTransition(label = "mic_pulse")
+                val micScale by pulseTransition.animateFloat(
+                    initialValue = 1f,
+                    targetValue = if (isListening) 1.18f else 1f,
+                    animationSpec = infiniteRepeatable(
+                        animation = tween(600),
+                        repeatMode = RepeatMode.Reverse
+                    ),
+                    label = "mic_scale"
+                )
+                val micBgColor by animateColorAsState(
+                    targetValue = if (isListening)
+                        MaterialTheme.colorScheme.primary
+                    else
+                        MaterialTheme.colorScheme.secondaryContainer,
+                    label = "mic_bg"
+                )
+                val micIconColor by animateColorAsState(
+                    targetValue = if (isListening)
+                        MaterialTheme.colorScheme.onPrimary
+                    else
+                        MaterialTheme.colorScheme.onSecondaryContainer,
+                    label = "mic_icon"
+                )
+
+                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                    Surface(
+                        onClick = { onMicClick() },
+                        shape = CircleShape,
+                        color = micBgColor,
+                        modifier = Modifier
+                            .size(52.dp)
+                            .scale(micScale)
+                    ) {
+                        Box(contentAlignment = Alignment.Center) {
+                            Icon(
+                                if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
+                                contentDescription = if (isListening) "Stop listening" else "Voice command",
+                                tint = micIconColor,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                    }
+                    // Voice hint label below mic
+                    if (voiceHint.isNotEmpty()) {
+                        Spacer(Modifier.height(4.dp))
+                        Text(
+                            voiceHint,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = if (isListening)
+                                MaterialTheme.colorScheme.primary
+                            else
+                                MaterialTheme.colorScheme.onSurfaceVariant,
+                            textAlign = TextAlign.Center,
+                            maxLines = 1
                         )
                     }
                 }

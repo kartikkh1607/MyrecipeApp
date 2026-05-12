@@ -40,5 +40,10 @@ interface RecipeRepository {
     /**
      * Returns recipes belonging to [categoryId] up to [limit] results.
      */
-    suspend fun getRecipesByCategory(categoryId: String, limit: Int = 20): List<Recipe>
+    suspend fun getRecipesByCategory(
+        categoryId: String,
+        limit: Int,
+        offset: Int,
+        append: Boolean
+    ): List<Recipe>
 }
