@@ -10,19 +10,21 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import com.example.myrecipeapp.domain.model.ThemeMode
 import com.example.myrecipeapp.ui.screens.MainScreen
 import com.example.myrecipeapp.ui.theme.MyrecipeAppTheme
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
+import dagger.hilt.android.AndroidEntryPoint
 
+@AndroidEntryPoint
 class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
         setContent {
-            val recipeViewModel: MainViewModel = viewModel(factory = MainViewModel.Factory())
+            val recipeViewModel: MainViewModel = hiltViewModel()
             val themeMode by recipeViewModel.themeMode.collectAsStateWithLifecycle()
             val systemDark = isSystemInDarkTheme()
             val darkTheme = when (themeMode) {

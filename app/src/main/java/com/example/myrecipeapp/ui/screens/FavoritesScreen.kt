@@ -246,8 +246,11 @@ fun FavoritesScreen(
                                             Unit
                                         }
                                     }
-                                    val onGridClick = remember(recipe.id) {
-                                        { navController.navigate(RecipeDetail(recipeId = recipe.id)) }
+                                    val onGridClick = remember(recipe.id, sortedFavorites) {
+                                        {
+                                            viewModel.setRecipeSwipeList(sortedFavorites.map { it.id })
+                                            navController.navigate(RecipeDetail(recipeId = recipe.id))
+                                        }
                                     }
                                     AnimatedVisibility(
                                         visible = visible,
@@ -299,8 +302,9 @@ fun FavoritesScreen(
                                             Unit
                                         }
                                     }
-                                    val onListClick = remember(recipe.id) {
+                                    val onListClick = remember(recipe.id, sortedFavorites) {
                                         {
+                                            viewModel.setRecipeSwipeList(sortedFavorites.map { it.id })
                                             navController.navigate(RecipeDetail(recipeId = recipe.id)) {
                                                 launchSingleTop = true
                                             }

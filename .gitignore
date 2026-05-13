@@ -1,24 +1,77 @@
+##############################################
+# Android / Gradle
+##############################################
 *.iml
-.gradle
+.gradle/
 /local.properties
-/.idea/caches
-/.idea/libraries
+local.properties
+/build/
+/captures/
+.externalNativeBuild/
+.cxx/
+
+##############################################
+# IntelliJ / Android Studio IDE
+##############################################
+/.idea/caches/
+/.idea/libraries/
 /.idea/modules.xml
 /.idea/workspace.xml
 /.idea/navEditor.xml
 /.idea/assetWizardSettings.xml
+/.idea/.name
+/.idea/dictionaries/
+/.idea/shelf/
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
-local.properties
+Thumbs.db
 
-# Kotlin compiler error dumps
+##############################################
+# Kotlin
+##############################################
 .kotlin/
 
-# Ad-hoc build/error logs we never want committed
-build_error.txt
-*.log
-# Added by code-review-graph
+##############################################
+# 🔐 SECURITY — Never commit these
+##############################################
+# Firebase / Google Services config (contains API keys)
+google-services.json
+# Release / debug keystores and signing configs
+*.jks
+*.keystore
+*.p12
+# Key properties files (passwords / key aliases)
+keystore.properties
+signing.properties
+release.properties
+# Any secrets / env files
+*.env
+secrets.properties
+api_keys.properties
+
+##############################################
+# AI / IDE tool configs (local, not for repo)
+##############################################
+.claude/
+.gemini/
+.kiro/
+.qoder/
+.cursor/
+.vscode/
+.windsurfrules
+CLAUDE.md
+GEMINI.md
+AGENTS.md
+QODER.md
+.cursorrules
+.opencode.json
+.mcp.json
 .code-review-graph/
+
+##############################################
+# Logs and temp files
+##############################################
+*.log
+build_error.txt
+*.tmp
+*.bak
+*.swp

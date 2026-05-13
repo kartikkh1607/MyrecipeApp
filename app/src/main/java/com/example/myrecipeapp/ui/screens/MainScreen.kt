@@ -50,12 +50,15 @@ import com.example.myrecipeapp.ui.navigation.Navigation
 import com.example.myrecipeapp.ui.navigation.Search
 import com.example.myrecipeapp.ui.navigation.Settings
 import com.example.myrecipeapp.ui.navigation.TabReselectEvents
+import com.example.myrecipeapp.ui.viewmodel.AuthViewModel
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
     val navController = rememberNavController()
+    val authViewModel: AuthViewModel = hiltViewModel()
 
     // Only show the bottom nav on the 5 main tab destinations.
     // Any detail / full-screen route gets a hidden nav bar.
@@ -97,7 +100,11 @@ fun MainScreen(viewModel: MainViewModel) {
                     .fillMaxSize()
                     .padding(bottom = if (showBottomBar) paddingValues.calculateBottomPadding() else 0.dp)
             ) {
-                Navigation(navController = navController, viewModel = viewModel)
+                Navigation(
+                    navController = navController,
+                    viewModel = viewModel,
+                    authViewModel = authViewModel
+                )
             }
         }
     }

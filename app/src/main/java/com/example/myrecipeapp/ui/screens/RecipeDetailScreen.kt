@@ -3,6 +3,9 @@ package com.example.myrecipeapp.ui.screens
 import android.content.Intent
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
@@ -112,20 +115,81 @@ import java.util.Locale
 import kotlin.math.cos
 import kotlin.math.sin
 
-@OptIn(ExperimentalMaterial3Api::class)
+@OptIn(ExperimentalFoundationApi::class, ExperimentalMaterial3Api::class)
 @Composable
 fun RecipeDetailScreen(
     recipeId: String,
     navController: NavHostController,
     viewModel: MainViewModel
 ) {
+    val swipeIds by viewModel.recipeSwipeIds
+    val hasSwipeList = swipeIds.size > 1 && swipeIds.contains(recipeId)
+
+    if (hasSwipeList) {
+        val initialPage = remember(recipeId, swipeIds) {
+            swipeIds.indexOf(recipeId).coerceAtLeast(0)
+        }
+        val pagerState = rememberPagerState(initialPage = initialPage) { swipeIds.size }
+        Box(modifier = Modifier.fillMaxSize()) {
+            HorizontalPager(
+                state = pagerState,
+                modifier = Modifier.fillMaxSize()
+            ) { page ->
+                RecipeDetailPage(
+                    recipeId = swipeIds[page],
+                    navController = navController,
+                    viewModel = viewModel
+                )
+            }
+            SwipePageIndicator(
+                count = swipeIds.size,
+                current = pagerState.currentPage,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .padding(bottom = 28.dp)
+            )
+        }
+    } else {
+        RecipeDetailPage(recipeId = recipeId, navController = navController, viewModel = viewModel)
+    }
+}
+
+@Composable
+private fun SwipePageIndicator(count: Int, current: Int, modifier: Modifier = Modifier) {
+    Row(
+        modifier = modifier,
+        horizontalArrangement = Arrangement.spacedBy(6.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        repeat(count.coerceAtMost(10)) { i ->
+            Box(
+                modifier = Modifier
+                    .size(if (i == current) 8.dp else 6.dp)
+                    .clip(CircleShape)
+                    .background(
+                        if (i == current) Color.White
+                        else Color.White.copy(alpha = 0.4f)
+                    )
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RecipeDetailPage(
+    recipeId: String,
+    navController: NavHostController,
+    viewModel: MainViewModel
+) {
+    val cachedRecipe = viewModel.recipeDetailCache[recipeId]
     val recipeDetailState by viewModel.recipeDetailState
 
     LaunchedEffect(recipeId) {
-        viewModel.fetchRecipeDetails(recipeId)
+        if (cachedRecipe == null) viewModel.fetchRecipeDetails(recipeId)
     }
 
-    val recipe = recipeDetailState.recipe?.takeIf { it.id == recipeId }
+    val recipe = cachedRecipe ?: recipeDetailState.recipe?.takeIf { it.id == recipeId }
 
     if (recipe == null) {
         Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

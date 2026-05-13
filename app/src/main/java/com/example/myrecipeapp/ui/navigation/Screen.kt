@@ -30,6 +30,8 @@ data class RecipeDetail(val recipeId: String)      // type-safe argument
 
 // ── Secondary screens ─────────────────────────────────────────────────────────
 @Serializable
+object Auth
+@Serializable
 object Profile
 @Serializable
 object About

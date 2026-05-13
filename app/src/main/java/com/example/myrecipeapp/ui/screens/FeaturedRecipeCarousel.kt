@@ -149,9 +149,10 @@ fun FeaturedRecipeCarousel(
             pageSize = PageSize.Fixed(320.dp) // Show peek of next/previous pages
         ) { page ->
             val featuredRecipe = featuredRecipes[page]
-            val onCardClick = remember(featuredRecipe.recipe.id) {
+            val onCardClick = remember(featuredRecipe.recipe.id, featuredRecipes) {
                 {
                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    viewModel.setRecipeSwipeList(featuredRecipes.map { it.recipe.id })
                     navController.navigate(RecipeDetail(recipeId = featuredRecipe.recipe.id))
                 }
             }

@@ -1,5 +1,5 @@
 <resources>
-    <string name="app_name">MyrecipeApp</string>
+    <string name="app_name">MealTime</string>
 
     <!-- Popular search tags shown on the Search idle state and as "Try instead" suggestions. -->
     <string-array name="search_popular_tags" translatable="false">

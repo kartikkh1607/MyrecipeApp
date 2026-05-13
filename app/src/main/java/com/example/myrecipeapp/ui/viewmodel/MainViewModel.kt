@@ -1,12 +1,14 @@
 package com.example.myrecipeapp.ui.viewmodel
 
+import android.content.Context
 import android.util.Log
 import androidx.compose.runtime.State
 import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.mutableStateMapOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.myrecipeapp.data.local.CachedRecipeDao
 import com.example.myrecipeapp.data.local.FavoriteDao
 import com.example.myrecipeapp.data.local.ShoppingDao
 import com.example.myrecipeapp.data.local.ShoppingItemEntity
@@ -15,7 +17,6 @@ import com.example.myrecipeapp.data.local.toCachedEntity
 import com.example.myrecipeapp.data.local.toFavoriteEntity
 import com.example.myrecipeapp.data.local.toRecipe
 import com.example.myrecipeapp.data.local.toShoppingListItem
-import com.example.myrecipeapp.di.AppContainer
 import com.example.myrecipeapp.domain.model.FeaturedRecipe
 import com.example.myrecipeapp.domain.model.Recipe
 import com.example.myrecipeapp.domain.model.RecipeCategory
@@ -26,12 +27,18 @@ import com.example.myrecipeapp.domain.usecase.GetCategoriesUseCase
 import com.example.myrecipeapp.domain.usecase.GetFeaturedRecipesUseCase
 import com.example.myrecipeapp.domain.usecase.GetRecipeDetailsUseCase
 import com.example.myrecipeapp.domain.usecase.GetRecipesByCategoryUseCase
+import com.example.myrecipeapp.data.analytics.AnalyticsHelper
+import com.example.myrecipeapp.data.repository.SyncRepository
+import com.example.myrecipeapp.data.repository.UserRepository
 import com.example.myrecipeapp.domain.usecase.SearchRecipesUseCase
+import dagger.hilt.android.lifecycle.HiltViewModel
+import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
 /**
  * Presentation-layer ViewModel.
@@ -45,7 +52,8 @@ import kotlinx.coroutines.launch
  * Issue #6 fix: [searchRecipes] now delays 300 ms before firing so rapid keystrokes
  *               cancel the coroutine before any network call is made.
  */
-class MainViewModel(
+@HiltViewModel
+class MainViewModel @Inject constructor(
     private val getFeaturedRecipes: GetFeaturedRecipesUseCase,
     private val searchUseCase: SearchRecipesUseCase,
     private val getRecipeDetails: GetRecipeDetailsUseCase,
@@ -53,16 +61,26 @@ class MainViewModel(
     private val getByCategoryUseCase: GetRecipesByCategoryUseCase,
     private val favoriteDao: FavoriteDao,
     private val shoppingDao: ShoppingDao,
-    private val cachedRecipeDao: com.example.myrecipeapp.data.local.CachedRecipeDao
+    private val cachedRecipeDao: CachedRecipeDao,
+    @ApplicationContext private val appContext: Context,
+    private val analytics: AnalyticsHelper,
+    private val userRepository: UserRepository,
+    private val syncRepository: SyncRepository
 ) : ViewModel() {
 
-    // ── Theme State (Issue #4) ────────────────────────────────────────────────
+    // ── Recipe detail cache — keyed by recipe ID ─────────────────────────────
+    // Populated on every successful fetchRecipeDetails call so that the pager
+    // can show already-loaded recipes instantly without re-fetching.
+    val recipeDetailCache = mutableStateMapOf<String, Recipe>()
 
-    /**
-     * Emits the user's persisted theme choice from DataStore.
-     * Defaults to [ThemeMode.SYSTEM] until DataStore emits its first value.
-     */
-    private val appContext = com.example.myrecipeapp.MyRecipeApplication.instance
+    private val _recipeSwipeIds = mutableStateOf<List<String>>(emptyList())
+    val recipeSwipeIds: State<List<String>> = _recipeSwipeIds
+
+    fun setRecipeSwipeList(ids: List<String>) {
+        _recipeSwipeIds.value = ids
+    }
+
+    // ── Theme State (Issue #4) ────────────────────────────────────────────────
 
     /**
      * Emits the user's persisted theme choice.
@@ -208,7 +226,12 @@ class MainViewModel(
     }
 
     fun removeFavorite(recipeId: String) {
-        viewModelScope.launch { favoriteDao.delete(recipeId) }
+        viewModelScope.launch {
+            favoriteDao.delete(recipeId)
+            userRepository.currentUser?.uid?.let { uid ->
+                runCatching { syncRepository.deleteFavorite(uid, recipeId) }
+            }
+        }
     }
 
     /** Restores a previously removed favorite (used by undo-snackbar). */
@@ -224,12 +247,16 @@ class MainViewModel(
 
     fun toggleFavorite(recipe: Recipe) {
         viewModelScope.launch {
+            val uid = userRepository.currentUser?.uid
             if (_favoriteRecipes.value.any { it.id == recipe.id }) {
                 favoriteDao.delete(recipe.id)
+                uid?.let { runCatching { syncRepository.deleteFavorite(it, recipe.id) } }
             } else {
-                favoriteDao.insert(recipe.toFavoriteEntity())
-                // Also cache the full recipe so it's available offline from Favorites
+                val entity = recipe.toFavoriteEntity()
+                favoriteDao.insert(entity)
                 cachedRecipeDao.upsert(recipe.toCachedEntity())
+                analytics.logRecipeFavorited(recipe.id, recipe.name)
+                uid?.let { runCatching { syncRepository.uploadFavorite(it, entity) } }
             }
         }
     }
@@ -244,20 +271,22 @@ class MainViewModel(
     /** Replaces all recipe items (keeps Custom items) with [recipe]'s ingredients. */
     fun addToShoppingList(recipe: Recipe) {
         _lastAddedRecipeName.value = recipe.name
+        analytics.logShoppingListUpdated("add_recipe", recipe.name)
         viewModelScope.launch {
-            // Clear existing recipe items before adding new ones
+            val uid = userRepository.currentUser?.uid
             shoppingDao.deleteByRecipeExcluding()
+            uid?.let { runCatching { syncRepository.clearShoppingList(it) } }
             recipe.ingredients.forEach { ing ->
                 val key = "${recipe.id}_${ing.id.ifEmpty { ing.name }}"
-                shoppingDao.insert(
-                    ShoppingItemEntity(
-                        key = key,
-                        ingredientName = ing.name,
-                        amount = ing.amount,
-                        unit = ing.unit,
-                        recipeName = recipe.name
-                    )
+                val entity = ShoppingItemEntity(
+                    key = key,
+                    ingredientName = ing.name,
+                    amount = ing.amount,
+                    unit = ing.unit,
+                    recipeName = recipe.name
                 )
+                shoppingDao.insert(entity)
+                uid?.let { runCatching { syncRepository.uploadShoppingItem(it, entity) } }
             }
         }
     }
@@ -274,7 +303,12 @@ class MainViewModel(
     }
 
     fun removeItem(key: String) {
-        viewModelScope.launch { shoppingDao.deleteByKey(key) }
+        viewModelScope.launch {
+            shoppingDao.deleteByKey(key)
+            userRepository.currentUser?.uid?.let { uid ->
+                runCatching { syncRepository.deleteShoppingItem(uid, key) }
+            }
+        }
     }
 
     /** Restores a previously deleted shopping item (used by undo-snackbar). */
@@ -295,7 +329,12 @@ class MainViewModel(
 
 
     fun clearShoppingList() {
-        viewModelScope.launch { shoppingDao.deleteAll() }
+        viewModelScope.launch {
+            shoppingDao.deleteAll()
+            userRepository.currentUser?.uid?.let { uid ->
+                runCatching { syncRepository.clearShoppingList(uid) }
+            }
+        }
     }
 
     /**
@@ -416,7 +455,8 @@ class MainViewModel(
         // recompose of RecipeDetailScreen right as the navigation enter-animation begins.
         val current = _recipeDetailState.value
         if (current.recipe != null || current.error != null) {
-            _recipeDetailState.value = RecipeDetailState(loading = true, recipe = null, error = null)
+            _recipeDetailState.value =
+                RecipeDetailState(loading = true, recipe = null, error = null)
         }
 
         launchOp(
@@ -424,6 +464,10 @@ class MainViewModel(
             call = { getRecipeDetails(recipeId) },
             onSuccess = {
                 _recipeDetailState.value = RecipeDetailState(loading = false, recipe = it)
+                it?.let { r ->
+                    recipeDetailCache[r.id] = r
+                    analytics.logRecipeViewed(r.id, r.name)
+                }
             },
             onFailure = {
                 Log.w(TAG, "fetchRecipeDetails: ${it.message}")
@@ -472,7 +516,8 @@ class MainViewModel(
                 .fold(
                     onSuccess = {
                         searchCache[key] = it to System.currentTimeMillis()
-                        addRecentSearch(query)   // record in history on first successful result
+                        addRecentSearch(query)
+                        analytics.logSearch(query)
                         _searchState.value =
                             SearchState(
                                 loading = false,
@@ -560,6 +605,9 @@ class MainViewModel(
             call = { getByCategoryUseCase(categoryId) },
             onSuccess = { newRecipes ->
                 categoryCache[categoryId] = Pair(newRecipes, System.currentTimeMillis())
+                val categoryName = _recipeCategoriesState.value.categories
+                    .find { it.id == categoryId }?.name ?: categoryId
+                analytics.logCategoryViewed(categoryId, categoryName)
                 _categoryRecipesState.value = CategoryRecipesState(
                     loading = false,
                     recipes = newRecipes,
@@ -658,23 +706,5 @@ class MainViewModel(
 
     companion object {
         private const val TAG = "MainViewModel"
-    }
-
-    // ── Factory ───────────────────────────────────────────────────────────────
-
-    class Factory : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return MainViewModel(
-                getFeaturedRecipes = AppContainer.getFeaturedRecipesUseCase,
-                searchUseCase = AppContainer.searchRecipesUseCase,
-                getRecipeDetails = AppContainer.getRecipeDetailsUseCase,
-                getCategories = AppContainer.getCategoriesUseCase,
-                getByCategoryUseCase = AppContainer.getRecipesByCategoryUseCase,
-                favoriteDao = AppContainer.favoriteDao,
-                shoppingDao = AppContainer.shoppingDao,
-                cachedRecipeDao = AppContainer.cachedRecipeDao
-            ) as T
-        }
     }
 }

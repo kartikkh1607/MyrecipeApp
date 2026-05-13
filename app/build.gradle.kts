@@ -6,6 +6,9 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
     id("kotlin-parcelize")
     id("com.google.devtools.ksp") version "2.3.7"
+    id("com.google.dagger.hilt.android")
+    alias(libs.plugins.google.services)
+    alias(libs.plugins.firebase.crashlytics.plugin)
 }
 
 ksp {
@@ -24,7 +27,7 @@ android {
     compileSdk = 36
 
     defaultConfig {
-        applicationId = "com.example.myrecipeapp"
+        applicationId = "com.kartik.mealtime"
         minSdk = 26
         targetSdk = 36
         versionCode = 1
@@ -44,6 +47,29 @@ android {
         buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
     }
 
+    // Only register a release signing config if local.properties has all 4 entries.
+    // Avoids a configuration-time failure when contributors clone without a keystore.
+    val keystorePath = localProperties.getProperty("keystore.path")
+    val keystoreStorePassword = localProperties.getProperty("keystore.store.password")
+    val keystoreKeyAlias = localProperties.getProperty("keystore.key.alias")
+    val keystoreKeyPassword = localProperties.getProperty("keystore.key.password")
+    val hasReleaseSigning = !keystorePath.isNullOrBlank() &&
+            !keystoreStorePassword.isNullOrBlank() &&
+            !keystoreKeyAlias.isNullOrBlank() &&
+            !keystoreKeyPassword.isNullOrBlank() &&
+            rootProject.file(keystorePath).exists()
+
+    if (hasReleaseSigning) {
+        signingConfigs {
+            create("release") {
+                storeFile     = rootProject.file(keystorePath!!)
+                storePassword = keystoreStorePassword
+                keyAlias      = keystoreKeyAlias
+                keyPassword   = keystoreKeyPassword
+            }
+        }
+    }
+
     buildTypes {
         debug {
             isDebuggable = true
@@ -55,12 +81,13 @@ android {
             isMinifyEnabled = true
             isShrinkResources = true
             isDebuggable = false
+            if (hasReleaseSigning) {
+                signingConfig = signingConfigs.getByName("release")
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
-
-            // Performance optimizations
             ndk {
                 debugSymbolLevel = "NONE"
             }
@@ -112,7 +139,7 @@ dependencies {
 
     // json to kotlin object mapping
     implementation(libs.converter.gson)
-    
+
     // HTTP logging interceptor for debugging
     implementation(libs.logging.interceptor)
 
@@ -159,4 +186,21 @@ dependencies {
     // Debugging
     debugImplementation(libs.androidx.ui.tooling)
     debugImplementation(libs.androidx.ui.test.manifest)
+
+    // Hilt
+    implementation(libs.hilt.android)
+    ksp(libs.hilt.compiler)
+
+    // Firebase — BOM keeps all Firebase library versions in sync automatically
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.crashlytics)
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.firestore)
+    implementation(libs.kotlinx.coroutines.play.services)
+
+// Hilt Navigation Compose
+    implementation(libs.androidx.hilt.navigation.compose.v120)
+
+
 }

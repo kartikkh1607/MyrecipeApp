@@ -19,6 +19,7 @@ import com.example.myrecipeapp.domain.model.Recipe
 import com.example.myrecipeapp.domain.model.RecipeCategory
 import com.example.myrecipeapp.domain.model.SearchResult
 import com.example.myrecipeapp.domain.repository.RecipeRepository
+import javax.inject.Inject
 
 /**
  * Concrete implementation of [RecipeRepository].
@@ -29,7 +30,7 @@ import com.example.myrecipeapp.domain.repository.RecipeRepository
  * Issue #7 fix: [getRecipeDetails] now caches successful API responses in Room
  * and serves them from cache when offline, so the detail screen never shows up empty.
  */
-class RecipeRepositoryImpl(
+class RecipeRepositoryImpl @Inject constructor(
     private val apiService: SpoonacularApiService,
     private val cachedRecipeDao: CachedRecipeDao,
     private val featuredCacheDao: FeaturedCacheDao

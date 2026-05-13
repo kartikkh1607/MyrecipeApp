@@ -8,10 +8,10 @@
             <InsightsFilterSettings>
               <option name="connection">
                 <ConnectionSetting>
-                  <option name="appId" value="PLACEHOLDER" />
-                  <option name="mobileSdkAppId" value="" />
-                  <option name="projectId" value="" />
-                  <option name="projectNumber" value="" />
+                  <option name="appId" value="com.kartik.mealtime.debug" />
+                  <option name="mobileSdkAppId" value="1:477468465040:android:db3b85f64402ad23644515" />
+                  <option name="projectId" value="mealtime-96386" />
+                  <option name="projectNumber" value="477468465040" />
                 </ConnectionSetting>
               </option>
               <option name="signal" value="SIGNAL_UNSPECIFIED" />

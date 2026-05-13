@@ -180,6 +180,7 @@ fun HomeScreen(
                     val featured = homeRecipeState.featuredRecipes
                     if (featured.isNotEmpty()) {
                         val random = featured.random()
+                        viewModel.setRecipeSwipeList(featured.map { it.recipe.id })
                         navController.navigate(RecipeDetail(recipeId = random.recipe.id)) {
                             launchSingleTop = true
                         }
@@ -203,6 +204,7 @@ fun HomeScreen(
                     featured = homeRecipeState.featuredRecipes,
                     onClick = { recipeId ->
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.setRecipeSwipeList(homeRecipeState.featuredRecipes.map { it.recipe.id })
                         navController.navigate(RecipeDetail(recipeId = recipeId)) {
                             launchSingleTop = true
                         }

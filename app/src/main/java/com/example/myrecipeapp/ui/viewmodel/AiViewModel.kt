@@ -3,15 +3,20 @@ package com.example.myrecipeapp.ui.viewmodel
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.example.myrecipeapp.data.analytics.AnalyticsHelper
 import com.example.myrecipeapp.data.local.FavoriteDao
 import com.example.myrecipeapp.data.remote.ChatMessage
 import com.example.myrecipeapp.data.remote.GeminiAiService
+import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.launch
+import javax.inject.Inject
 
-class AiViewModel(
-    private val favoriteDao: FavoriteDao
+@HiltViewModel
+class AiViewModel @Inject constructor(
+    private val favoriteDao: FavoriteDao,
+    private val aiService: GeminiAiService,
+    private val analytics: AnalyticsHelper
 ) : ViewModel() {
 
     // ── Chat State ─────────────────────────────────────────────────────────────
@@ -48,7 +53,6 @@ class AiViewModel(
         data class Error(val message: String) : RecommendationState()
     }
 
-    private val aiService = GeminiAiService()
     private val conversationHistory = mutableListOf<ChatMessage>()
 
     init {
@@ -76,8 +80,8 @@ class AiViewModel(
                 error = null
             )
 
-            // Add to history
             conversationHistory.add(ChatMessage(content = trimmed, isUser = true))
+            analytics.logAiChatMessageSent()
 
             // Send to AI
             val result = aiService.sendChatMessage(trimmed, conversationHistory.map {
@@ -126,10 +130,7 @@ class AiViewModel(
         viewModelScope.launch {
             _recommendationState.value = RecommendationState.Loading
 
-            // Get favorite recipe names
-            val favorites = favoriteDao.getAllSync().map { it.name }
-            val favoriteNames = favorites.map { it }
-
+            val favoriteNames = favoriteDao.getAllSync().map { it.name }
             val result = aiService.getRecipeRecommendations(favoriteNames)
             result.fold(
                 onSuccess = { response ->
@@ -177,13 +178,4 @@ class AiViewModel(
         }
     }
 
-    // ── Factory ────────────────────────────────────────────────────────────────
-    class Factory(
-        private val favoriteDao: FavoriteDao
-    ) : ViewModelProvider.Factory {
-        @Suppress("UNCHECKED_CAST")
-        override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return AiViewModel(favoriteDao) as T
-        }
-    }
 }

@@ -10,12 +10,13 @@ import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
 import java.util.concurrent.TimeUnit
+import javax.inject.Inject
 
 /**
  * Gemini AI API client for recipe chat and recommendations.
  * Uses the Gemini 2.0 Flash model via the REST API.
  */
-class GeminiAiService {
+class GeminiAiService @Inject constructor() {
 
     private val client = OkHttpClient.Builder()
         .connectTimeout(30, TimeUnit.SECONDS)

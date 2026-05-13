@@ -444,7 +444,12 @@ fun CategoryDetailScreen(
                     }
 
                     items(filteredRecipes, key = { it.id }) { recipe ->
-                        val onCardClick = remember(recipe.id) { { onRecipeClick(recipe.id) } }
+                        val onCardClick = remember(recipe.id, filteredRecipes) {
+                            {
+                                viewModel.setRecipeSwipeList(filteredRecipes.map { it.id })
+                                onRecipeClick(recipe.id)
+                            }
+                        }
                         EnhancedRecipeCard(
                             recipe = recipe,
                             isFavorite = favoriteIds.contains(recipe.id),

@@ -20,9 +20,10 @@ import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
+import androidx.hilt.navigation.compose.hiltViewModel
 import com.example.myrecipeapp.data.source.CategoryDataSource
-import com.example.myrecipeapp.di.AppContainer
 import com.example.myrecipeapp.ui.screens.AboutScreen
+import com.example.myrecipeapp.ui.screens.AuthScreen
 import com.example.myrecipeapp.ui.screens.CategoryDetailScreen
 import com.example.myrecipeapp.ui.screens.ChatScreen
 import com.example.myrecipeapp.ui.screens.FavoritesScreen
@@ -33,7 +34,7 @@ import com.example.myrecipeapp.ui.screens.RecipeScreen
 import com.example.myrecipeapp.ui.screens.SearchScreen
 import com.example.myrecipeapp.ui.screens.SettingsScreen
 import com.example.myrecipeapp.ui.screens.ShoppingListScreen
-import com.example.myrecipeapp.ui.viewmodel.AiViewModel
+import com.example.myrecipeapp.ui.viewmodel.AuthViewModel
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 
 // ── iOS-style spring specs ────────────────────────────────────────────────────
@@ -58,7 +59,8 @@ private val searchSpring = spring<Float>(
 @Composable
 fun Navigation(
     navController: NavHostController,
-    viewModel: MainViewModel
+    viewModel: MainViewModel,
+    authViewModel: AuthViewModel
 ) {
     NavHost(
         navController = navController,
@@ -186,8 +188,22 @@ fun Navigation(
 
         // ── Secondary screens ──────────────────────────────────────────────────────
 
+        composable<Auth> {
+            AuthScreen(
+                viewModel = authViewModel,
+                onAuthSuccess = { navController.popBackStack() }
+            )
+        }
+
         composable<Profile> {
-            ProfileScreen(navController = navController, viewModel = viewModel)
+            ProfileScreen(
+                navController = navController,
+                viewModel = viewModel,
+                authViewModel = authViewModel,
+                onNavigateToAuth = {
+                    navController.navigate(Auth) { launchSingleTop = true }
+                }
+            )
         }
 
         composable<About> {
@@ -198,14 +214,14 @@ fun Navigation(
             ShoppingListScreen(
                 navController = navController,
                 viewModel = viewModel,
-                aiViewModel = AiViewModel.Factory(AppContainer.favoriteDao).create(AiViewModel::class.java)
+                aiViewModel = hiltViewModel()
             )
         }
 
         composable<Chat> {
             ChatScreen(
                 onBackClick = { navController.popBackStack() },
-                viewModel = AiViewModel.Factory(AppContainer.favoriteDao).create(AiViewModel::class.java)
+                viewModel = hiltViewModel()
             )
         }
     }

@@ -15,13 +15,18 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.Logout
+import androidx.compose.material.icons.filled.AccountCircle
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -29,14 +34,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.example.myrecipeapp.ui.viewmodel.AuthViewModel
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ProfileScreen(navController: NavHostController, viewModel: MainViewModel) {
+fun ProfileScreen(
+    navController: NavHostController,
+    viewModel: MainViewModel,
+    authViewModel: AuthViewModel,
+    onNavigateToAuth: () -> Unit
+) {
     val favoriteRecipes by viewModel.favoriteRecipes
     val shoppingList by viewModel.shoppingList
+    val currentUser by authViewModel.currentUser.collectAsStateWithLifecycle()
 
     Column(
         modifier = Modifier
@@ -81,30 +94,73 @@ fun ProfileScreen(navController: NavHostController, viewModel: MainViewModel) {
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
-                        Icons.Default.Person,
-                        "Avatar",
+                        if (currentUser != null) Icons.Default.AccountCircle else Icons.Default.Person,
+                        contentDescription = "Avatar",
                         modifier = Modifier.size(40.dp),
                         tint = MaterialTheme.colorScheme.onPrimary
                     )
                 }
+
                 Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    "Recipe Explorer",
-                    style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold
-                )
-                Text(
-                    "Food enthusiast and recipe collector",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
+
+                if (currentUser != null) {
+                    Text(
+                        currentUser!!.email ?: "Signed In",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Your data syncs across devices",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                } else {
+                    Text(
+                        "Guest",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold
+                    )
+                    Text(
+                        "Sign in to sync your favorites & shopping list",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+
                 Spacer(modifier = Modifier.height(24.dp))
+
                 Row(
                     modifier = Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.SpaceEvenly
                 ) {
                     ProfileStat("Favorites", favoriteRecipes.size.toString())
                     ProfileStat("Shopping", shoppingList.size.toString())
+                }
+
+                Spacer(modifier = Modifier.height(24.dp))
+
+                if (currentUser != null) {
+                    OutlinedButton(
+                        onClick = { authViewModel.signOut() },
+                        modifier = Modifier.fillMaxWidth(),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.error
+                        )
+                    ) {
+                        Icon(
+                            Icons.AutoMirrored.Filled.Logout,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp)
+                        )
+                        Text("Sign Out", modifier = Modifier.padding(start = 8.dp))
+                    }
+                } else {
+                    Button(
+                        onClick = onNavigateToAuth,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text("Sign In / Register")
+                    }
                 }
             }
         }

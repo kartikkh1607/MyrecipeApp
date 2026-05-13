@@ -233,6 +233,7 @@ fun SearchScreen(
                         searchText = tag.substringAfter(" ")
                     },
                     onRecipeClick = { recipeId ->
+                        viewModel.setRecipeSwipeList(viewModel.searchState.value.recipes.map { it.id })
                         navController.navigate(RecipeDetail(recipeId = recipeId)) {
                             launchSingleTop = true
                         }

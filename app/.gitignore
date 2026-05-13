@@ -1,1 +1,8 @@
 /build
+
+# 🔐 SECURITY — must never be committed
+google-services.json
+*.jks
+*.keystore
+*.p12
+keystore.properties

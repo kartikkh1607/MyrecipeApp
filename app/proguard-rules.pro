@@ -60,6 +60,25 @@
 # Suppress warnings about Kotlin coroutines internals (safe to ignore).
 -dontwarn kotlinx.coroutines.**
 
+# ── Gemini AI (request / response DTOs serialised with Gson) ─────────────────
+# These data classes live directly in the .remote package and use @SerializedName.
+# Without this rule R8 strips their fields and AI features return null responses.
+-keep class com.example.myrecipeapp.data.remote.GenerateContentRequest { *; }
+-keep class com.example.myrecipeapp.data.remote.GenerateContentResponse { *; }
+-keep class com.example.myrecipeapp.data.remote.Content { *; }
+-keep class com.example.myrecipeapp.data.remote.Part { *; }
+-keep class com.example.myrecipeapp.data.remote.GenerationConfig { *; }
+-keep class com.example.myrecipeapp.data.remote.Candidate { *; }
+-keep class com.example.myrecipeapp.data.remote.ChatMessage { *; }
+
+# ── Hilt ──────────────────────────────────────────────────────────────────────
+# Hilt bundles its own rules via the AAR, but these guard against edge cases
+# where generated _HiltComponents or _MembersInjector classes get stripped.
+-keep @dagger.hilt.android.HiltAndroidApp class * { *; }
+-keep @dagger.hilt.android.AndroidEntryPoint class * { *; }
+-keep @dagger.hilt.android.lifecycle.HiltViewModel class * { *; }
+-dontwarn dagger.hilt.**
+
 # ── Logging: strip debug logs in release ──────────────────────────────────────
 # Removes all android.util.Log.d and Log.v calls from release builds,
 # preventing API usage patterns from leaking into device logs.
