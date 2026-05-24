@@ -30,7 +30,7 @@
 -keep class * implements com.google.gson.JsonDeserializer
 
 # Keep all DTO classes (Spoonacular response models)
--keep class com.example.myrecipeapp.data.remote.dto.** { *; }
+-keep class com.kartik.mealtime.data.remote.dto.** { *; }
 
 # ── Kotlinx Serialisation ─────────────────────────────────────────────────────
 # Required for type-safe navigation routes serialised with @Serializable.
@@ -41,7 +41,7 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 # Keep all navigation route data classes
--keep @kotlinx.serialization.Serializable class com.example.myrecipeapp.ui.navigation.** { *; }
+-keep @kotlinx.serialization.Serializable class com.kartik.mealtime.ui.navigation.** { *; }
 
 # ── Room (local database) ─────────────────────────────────────────────────────
 # Room generates *_Impl classes at compile time via KSP. R8 must not strip them.
@@ -55,7 +55,7 @@
 
 # ── Android / Compose ─────────────────────────────────────────────────────────
 # Keep BuildConfig so the API key and DEBUG flag are accessible at runtime.
--keep class com.example.myrecipeapp.BuildConfig { *; }
+-keep class com.kartik.mealtime.BuildConfig { *; }
 
 # Suppress warnings about Kotlin coroutines internals (safe to ignore).
 -dontwarn kotlinx.coroutines.**
@@ -63,13 +63,13 @@
 # ── Gemini AI (request / response DTOs serialised with Gson) ─────────────────
 # These data classes live directly in the .remote package and use @SerializedName.
 # Without this rule R8 strips their fields and AI features return null responses.
--keep class com.example.myrecipeapp.data.remote.GenerateContentRequest { *; }
--keep class com.example.myrecipeapp.data.remote.GenerateContentResponse { *; }
--keep class com.example.myrecipeapp.data.remote.Content { *; }
--keep class com.example.myrecipeapp.data.remote.Part { *; }
--keep class com.example.myrecipeapp.data.remote.GenerationConfig { *; }
--keep class com.example.myrecipeapp.data.remote.Candidate { *; }
--keep class com.example.myrecipeapp.data.remote.ChatMessage { *; }
+-keep class com.kartik.mealtime.data.remote.GenerateContentRequest { *; }
+-keep class com.kartik.mealtime.data.remote.GenerateContentResponse { *; }
+-keep class com.kartik.mealtime.data.remote.Content { *; }
+-keep class com.kartik.mealtime.data.remote.Part { *; }
+-keep class com.kartik.mealtime.data.remote.GenerationConfig { *; }
+-keep class com.kartik.mealtime.data.remote.Candidate { *; }
+-keep class com.kartik.mealtime.data.remote.ChatMessage { *; }
 
 # ── Hilt ──────────────────────────────────────────────────────────────────────
 # Hilt bundles its own rules via the AAR, but these guard against edge cases

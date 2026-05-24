@@ -23,7 +23,7 @@ if (localPropertiesFile.exists()) {
 }
 
 android {
-    namespace = "com.example.myrecipeapp"
+    namespace = "com.kartik.mealtime"
     compileSdk = 36
 
     defaultConfig {
