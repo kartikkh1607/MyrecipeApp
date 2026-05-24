@@ -1,0 +1,89 @@
+// Firestore security rules for MealTime
+// ==========================================================================
+//
+// The app code uses this layout:
+//   /users/{uid}/favorites/{recipeId}
+//   /users/{uid}/shoppingItems/{itemKey}
+//
+// These rules enforce that:
+//   1. Only authenticated Firebase Auth users can read/write anything.
+//   2. Each user can only access documents under their OWN uid path.
+//   3. No reads of other users' data, no writes outside your own subtree.
+//   4. Document fields are validated for shape so malformed writes are rejected.
+//
+// HOW TO APPLY:
+//   1. Open https://console.firebase.google.com → your project → Firestore Database → Rules
+//   2. Paste the contents below (replacing whatever is there)
+//   3. Click "Publish"
+//
+// Verify with the Rules Playground (also in Firebase Console) — try reading
+// /users/SOMEONE_ELSES_UID/favorites/* while authenticated as a different user.
+// It MUST deny.
+
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    // ── Per-user data tree ────────────────────────────────────────────────
+    // Everything under /users/{userId}/... is private to that user.
+    match /users/{userId} {
+
+      // Top-level user doc — read/write only if it's your own uid.
+      allow read, write: if isOwner(userId);
+
+      // Favorites: validate shape on write to reject malformed/oversized docs.
+      match /favorites/{recipeId} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+                              && isValidFavorite(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      // Shopping list items
+      match /shoppingItems/{itemKey} {
+        allow read: if isOwner(userId);
+        allow create, update: if isOwner(userId)
+                              && isValidShoppingItem(request.resource.data);
+        allow delete: if isOwner(userId);
+      }
+
+      // Catch-all for any future per-user collections.
+      match /{document=**} {
+        allow read, write: if isOwner(userId);
+      }
+    }
+
+    // ── Default deny ──────────────────────────────────────────────────────
+    // Anything outside /users/{uid}/... is forbidden.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+
+// ── Helpers ─────────────────────────────────────────────────────────────────
+function isOwner(userId) {
+  return request.auth != null && request.auth.uid == userId;
+}
+
+function isValidFavorite(data) {
+  return data.keys().hasAll(['id', 'name'])
+      && data.id is string  && data.id.size() <= 64
+      && data.name is string && data.name.size() <= 200
+      && (!('imageUrl' in data) || data.imageUrl is string)
+      && (!('category' in data) || data.category is string)
+      && (!('rating' in data)   || data.rating is number)
+      && (!('prepTime' in data) || data.prepTime is number)
+      && (!('cookTime' in data) || data.cookTime is number)
+      && (!('difficulty' in data) || data.difficulty is string);
+}
+
+function isValidShoppingItem(data) {
+  return data.keys().hasAll(['key', 'ingredientName'])
+      && data.key is string && data.key.size() <= 128
+      && data.ingredientName is string && data.ingredientName.size() <= 200
+      && (!('amount' in data)     || data.amount is string)
+      && (!('unit' in data)       || data.unit is string)
+      && (!('recipeName' in data) || data.recipeName is string)
+      && (!('checked' in data)    || data.checked is bool);
+}

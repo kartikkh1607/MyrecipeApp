@@ -74,6 +74,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.navigation.NavHostController
 import com.example.myrecipeapp.R
+import com.example.myrecipeapp.ui.components.BannerAd
 import com.example.myrecipeapp.ui.navigation.LocalTabReselectEvents
 import com.example.myrecipeapp.ui.navigation.RecipeDetail
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
@@ -463,6 +464,10 @@ private fun SearchIdleState(
                         }
                     }
                 }
+
+                // ── Banner Ad (idle state only — don't interrupt active search) ──
+                Spacer(modifier = Modifier.height(24.dp))
+                BannerAd()
             }
         }
     }

@@ -79,11 +79,45 @@
 -keep @dagger.hilt.android.lifecycle.HiltViewModel class * { *; }
 -dontwarn dagger.hilt.**
 
-# ── Logging: strip debug logs in release ──────────────────────────────────────
-# Removes all android.util.Log.d and Log.v calls from release builds,
-# preventing API usage patterns from leaking into device logs.
+# ── Logging: strip ALL log calls in release ───────────────────────────────────
+# Removes every android.util.Log call (v/d/i/w/e/wtf) plus printStackTrace and
+# System.out.println from release builds. Prevents API behaviour, user actions,
+# and stack traces from leaking into device logs where any installed app with
+# READ_LOGS permission (on older Android versions) could harvest them.
 -assumenosideeffects class android.util.Log {
     public static boolean isLoggable(java.lang.String, int);
     public static int v(...);
     public static int d(...);
+    public static int i(...);
+    public static int w(...);
+    public static int e(...);
+    public static int wtf(...);
 }
+-assumenosideeffects class java.io.PrintStream {
+    public void println(%);
+    public void println(**);
+}
+-assumenosideeffects class java.lang.Throwable {
+    public void printStackTrace();
+}
+
+# ── Source-line stripping ─────────────────────────────────────────────────────
+# Without these, decompiled stack traces include original .kt filenames and
+# line numbers — a roadmap for reverse engineers. We still need SourceFile for
+# Crashlytics symbolication, but we rename it to something opaque.
+-renamesourcefileattribute SourceFile
+-keepattributes SourceFile,LineNumberTable
+
+# ── Aggressive obfuscation ────────────────────────────────────────────────────
+# Allow R8 to merge interfaces, repackage classes, and rename packages.
+# Makes static analysis of the APK significantly harder.
+-repackageclasses ''
+-allowaccessmodification
+-optimizationpasses 5
+
+# ── API key protection (defense in depth) ─────────────────────────────────────
+# BuildConfig holds Spoonacular + Gemini keys. R8 normally keeps the class for
+# us (rule above), but we make the field strings live in a renamed class so
+# string search through the APK doesn't immediately surface them.
+# NOTE: This is not real security — a determined attacker WILL extract the keys.
+# The proper fix is a Cloud Function proxy. See SECURITY.md.

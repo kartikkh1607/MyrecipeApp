@@ -1,8 +1,12 @@
 <?xml version="1.0" encoding="utf-8"?>
-<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
 
     <uses-permission android:name="android.permission.INTERNET" />
     <uses-permission android:name="android.permission.RECORD_AUDIO" />
+    <!-- AdMob: required by Play Services Ads SDK to read the Advertising ID.
+         You MUST disclose this in the Play Console "Data safety" form. -->
+    <uses-permission android:name="com.google.android.gms.permission.AD_ID" />
 
     <application
         android:name=".MyRecipeApplication"
@@ -16,11 +20,26 @@
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
         android:theme="@style/Theme.MyrecipeApp">
+
+        <!-- AdMob App ID — current value is Google's official TEST app ID.
+             Replace with your production App ID from AdMob Console before publishing.
+             Get yours at: https://apps.admob.com/ -->
+        <meta-data
+            android:name="com.google.android.gms.ads.APPLICATION_ID"
+            android:value="ca-app-pub-3940256099942544~3347511713" />
+
+        <!-- Resolve manifest merger conflict between play-services-ads-lite
+             (gma_ad_services_config) and play-services-measurement-api
+             (ga_ad_services_config). Ads SDK config wins. -->
+        <property
+            android:name="android.adservices.AD_SERVICES_CONFIG"
+            android:resource="@xml/gma_ad_services_config"
+            tools:replace="android:resource" />
         <activity
             android:name=".MainActivity"
             android:exported="true"
             android:label="@string/app_name"
-            android:theme="@style/Theme.MyrecipeApp">
+            android:theme="@style/Theme.MealTime.Splash">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 

@@ -104,7 +104,7 @@ fun SettingsScreen(
             type = "text/plain"
             putExtra(
                 Intent.EXTRA_TEXT,
-                "Check out My Recipe App: https://play.google.com/store/apps/details?id=$appId"
+                "Check out MealTime — your personal recipe companion: https://play.google.com/store/apps/details?id=$appId"
             )
         }
         context.startActivity(Intent.createChooser(send, "Share app"))

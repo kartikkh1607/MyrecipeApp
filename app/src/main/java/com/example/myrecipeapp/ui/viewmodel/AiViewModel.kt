@@ -6,9 +6,11 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.example.myrecipeapp.data.analytics.AnalyticsHelper
 import com.example.myrecipeapp.data.local.FavoriteDao
+import com.example.myrecipeapp.data.preferences.UserPreferencesRepository
 import com.example.myrecipeapp.data.remote.ChatMessage
 import com.example.myrecipeapp.data.remote.GeminiAiService
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -16,7 +18,8 @@ import javax.inject.Inject
 class AiViewModel @Inject constructor(
     private val favoriteDao: FavoriteDao,
     private val aiService: GeminiAiService,
-    private val analytics: AnalyticsHelper
+    private val analytics: AnalyticsHelper,
+    private val userPrefsRepo: UserPreferencesRepository
 ) : ViewModel() {
 
     // ── Chat State ─────────────────────────────────────────────────────────────
@@ -83,10 +86,19 @@ class AiViewModel @Inject constructor(
             conversationHistory.add(ChatMessage(content = trimmed, isUser = true))
             analytics.logAiChatMessageSent()
 
+            // Personalization: include the user's dietary prefs so Gemini
+            // filters suggestions accordingly. "" if user hasn't set any.
+            val dietaryPrefs = userPrefsRepo.preferences.first().dietaryPrefs
+                .joinToString(", ") { it.label }
+
             // Send to AI
-            val result = aiService.sendChatMessage(trimmed, conversationHistory.map {
-                ChatMessage(content = it.content, isUser = it.isUser)
-            })
+            val result = aiService.sendChatMessage(
+                message = trimmed,
+                conversationHistory = conversationHistory.map {
+                    ChatMessage(content = it.content, isUser = it.isUser)
+                },
+                dietaryPreferences = dietaryPrefs
+            )
 
             result.fold(
                 onSuccess = { response ->
@@ -131,7 +143,10 @@ class AiViewModel @Inject constructor(
             _recommendationState.value = RecommendationState.Loading
 
             val favoriteNames = favoriteDao.getAllSync().map { it.name }
-            val result = aiService.getRecipeRecommendations(favoriteNames)
+            val dietaryPrefs = userPrefsRepo.preferences.first().dietaryPrefs
+                .joinToString(", ") { it.label }
+
+            val result = aiService.getRecipeRecommendations(favoriteNames, dietaryPrefs)
             result.fold(
                 onSuccess = { response ->
                     val suggestions = parseRecommendations(response)

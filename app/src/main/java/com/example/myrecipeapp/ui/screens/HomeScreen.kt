@@ -68,10 +68,14 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.view.WindowCompat
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
+import com.example.myrecipeapp.data.preferences.RecentRecipe
 import com.example.myrecipeapp.domain.model.FeaturedRecipe
 import com.example.myrecipeapp.domain.model.RecipeDifficulty
+import com.example.myrecipeapp.ui.components.BannerAd
 import com.example.myrecipeapp.ui.components.FeaturedCarouselSkeleton
 import com.example.myrecipeapp.ui.navigation.Chat
 import com.example.myrecipeapp.ui.navigation.Home
@@ -82,6 +86,7 @@ import com.example.myrecipeapp.ui.navigation.Search
 import com.example.myrecipeapp.ui.navigation.ShoppingList
 import com.example.myrecipeapp.ui.theme.ForestGreen
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
+import com.example.myrecipeapp.ui.viewmodel.UserViewModel
 import kotlinx.coroutines.flow.filter
 import java.util.Locale
 
@@ -89,11 +94,14 @@ import java.util.Locale
 @Composable
 fun HomeScreen(
     navController: NavHostController,
-    viewModel: MainViewModel
+    viewModel: MainViewModel,
+    userViewModel: UserViewModel = hiltViewModel()
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     val categoriesState by viewModel.recipeCategoriesState
     val homeRecipeState by viewModel.homeRecipeState
+    val userPrefs by userViewModel.preferences.collectAsStateWithLifecycle()
+    val recentRecipes by userViewModel.recentRecipes.collectAsStateWithLifecycle()
 
     // Hero is dark green → force light status-bar icons while Home is visible.
     val view = LocalView.current
@@ -140,6 +148,8 @@ fun HomeScreen(
         ) {
             // ── Header ─────────────────────────────────────────────────────────────
             HeroHeaderSection(
+                displayName = userPrefs.displayName,
+                avatarEmoji = userPrefs.avatarEmoji,
                 onProfileClick = {
                     hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                     navController.navigate(Profile)
@@ -198,6 +208,23 @@ fun HomeScreen(
 
             Spacer(modifier = Modifier.height(28.dp))
 
+            // ── Recently Viewed ────────────────────────────────────────────────────
+            // Shown only after the user has opened at least one recipe.
+            if (recentRecipes.isNotEmpty()) {
+                RecentlyViewedSection(
+                    recipes = recentRecipes,
+                    onRecipeClick = { recipeId ->
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        // Set swipe list so pager can navigate across recents
+                        viewModel.setRecipeSwipeList(recentRecipes.map { it.id })
+                        navController.navigate(RecipeDetail(recipeId = recipeId)) {
+                            launchSingleTop = true
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.height(28.dp))
+            }
+
             // ── Today's Pick ───────────────────────────────────────────────────────
             if (homeRecipeState.featuredRecipes.isNotEmpty()) {
                 TodaysPickCard(
@@ -212,6 +239,10 @@ fun HomeScreen(
                 )
             }
 
+            // ── Banner Ad ──────────────────────────────────────────────────────────
+            Spacer(modifier = Modifier.height(24.dp))
+            BannerAd(modifier = Modifier.padding(horizontal = 16.dp))
+
             Spacer(modifier = Modifier.height(100.dp))
         }
     } // end PullToRefreshBox
@@ -221,6 +252,8 @@ fun HomeScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun HeroHeaderSection(
+    displayName: String = "",
+    avatarEmoji: String = "",
     onProfileClick: () -> Unit,
     onSearchClick: () -> Unit
 ) {
@@ -229,13 +262,15 @@ fun HeroHeaderSection(
     val now = remember { java.time.LocalDateTime.now() }
     val hour = now.hour
 
-    val greeting = remember(hour) {
-        when (hour) {
+    val greeting = remember(hour, displayName) {
+        val base = when (hour) {
             in 5..11 -> "Good Morning"
             in 12..16 -> "Good Afternoon"
             in 17..20 -> "Good Evening"
             else -> "Good Night"
         }
+        // Append name if user has set one — "Good Morning, Kartik"
+        if (displayName.isNotBlank()) "$base, ${displayName.trim()}" else base
     }
     val greetingEmoji = remember(hour) {
         when (hour) {
@@ -355,12 +390,17 @@ fun HeroHeaderSection(
                         )
                     ) {
                         Box(contentAlignment = Alignment.Center) {
-                            Icon(
-                                imageVector = Icons.Outlined.Person,
-                                contentDescription = "Profile",
-                                tint = Color.White,
-                                modifier = Modifier.size(22.dp)
-                            )
+                            // Show user's chosen emoji avatar if set, else fallback to a person icon.
+                            if (avatarEmoji.isNotBlank()) {
+                                Text(text = avatarEmoji, fontSize = 22.sp)
+                            } else {
+                                Icon(
+                                    imageVector = Icons.Outlined.Person,
+                                    contentDescription = "Profile",
+                                    tint = Color.White,
+                                    modifier = Modifier.size(22.dp)
+                                )
+                            }
                         }
                     }
                 }
@@ -884,6 +924,83 @@ private fun QuickActionsRow(
                     Text("Shopping List", fontWeight = FontWeight.SemiBold, fontSize = 13.sp, maxLines = 1, softWrap = false)
                 }
             }
+        }
+    }
+}
+
+// ── Recently Viewed — horizontal scroll of recipes the user recently opened ──
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RecentlyViewedSection(
+    recipes: List<RecentRecipe>,
+    onRecipeClick: (recipeId: String) -> Unit
+) {
+    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = "Recently viewed",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(modifier = Modifier.width(8.dp))
+            Text("🕐", fontSize = 16.sp)
+        }
+        Spacer(modifier = Modifier.height(12.dp))
+
+        LazyRow(
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+            contentPadding = PaddingValues(end = 4.dp)
+        ) {
+            items(recipes, key = { it.id }) { recent ->
+                RecentRecipeCard(recent = recent, onClick = { onRecipeClick(recent.id) })
+            }
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun RecentRecipeCard(recent: RecentRecipe, onClick: () -> Unit) {
+    val scrim = remember {
+        Brush.verticalGradient(
+            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.75f))
+        )
+    }
+    Card(
+        onClick = onClick,
+        modifier = Modifier
+            .width(140.dp)
+            .height(100.dp),
+        shape = RoundedCornerShape(16.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = recent.imageUrl,
+                contentDescription = recent.name,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(scrim)
+            )
+            Text(
+                text = recent.name,
+                style = MaterialTheme.typography.labelMedium,
+                color = Color.White,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .padding(horizontal = 10.dp, vertical = 8.dp)
+            )
         }
     }
 }

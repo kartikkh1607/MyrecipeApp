@@ -33,13 +33,18 @@ class GeminiAiService @Inject constructor() {
 
     /**
      * Send a chat message to Gemini and get a text response.
+     *
+     * [dietaryPreferences] — comma-separated list (e.g. "Vegetarian, Gluten-Free")
+     * read from the user's profile. Prepended to the system prompt so Gemini
+     * filters suggestions to match the user's diet.
      */
     suspend fun sendChatMessage(
         message: String,
-        conversationHistory: List<ChatMessage> = emptyList()
+        conversationHistory: List<ChatMessage> = emptyList(),
+        dietaryPreferences: String = ""
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = buildPrompt(conversationHistory, message)
+            val prompt = buildPrompt(conversationHistory, message, dietaryPreferences)
             val requestBody = GenerateContentRequest(
                 contents = listOf(
                     Content(
@@ -155,7 +160,11 @@ class GeminiAiService @Inject constructor() {
         }
     }
 
-    private fun buildPrompt(history: List<ChatMessage>, newMessage: String): String {
+    private fun buildPrompt(
+        history: List<ChatMessage>,
+        newMessage: String,
+        dietaryPreferences: String = ""
+    ): String {
         val sb = StringBuilder()
         sb.appendLine("You are a friendly and knowledgeable recipe assistant. You help users:")
         sb.appendLine("- Find recipes based on ingredients they have")
@@ -163,6 +172,13 @@ class GeminiAiService @Inject constructor() {
         sb.appendLine("- Answer cooking questions and provide tips")
         sb.appendLine("- Suggest recipes based on preferences and dietary needs")
         sb.appendLine()
+        // Per-user dietary context — only emitted when the user has set preferences.
+        if (dietaryPreferences.isNotBlank()) {
+            sb.appendLine("IMPORTANT — User's dietary preferences: $dietaryPreferences.")
+            sb.appendLine("ONLY suggest recipes that match these preferences. If asked about")
+            sb.appendLine("recipes that conflict, gently note the conflict and offer alternatives.")
+            sb.appendLine()
+        }
         sb.appendLine("Keep responses conversational, helpful, and concise.")
         sb.appendLine("When suggesting recipes, mention the recipe name in **bold**.")
         sb.appendLine()

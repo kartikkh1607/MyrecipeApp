@@ -1,5 +1,25 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
 
+    <!--
+        Post-splash theme — empty parent so Compose's MaterialTheme owns all styling.
+        Activities don't actually use this directly; it's the target the splash
+        theme transitions to after the system splash dismisses.
+    -->
     <style name="Theme.MyrecipeApp" parent="android:Theme.Material.Light.NoActionBar" />
+
+    <!--
+        Splash screen theme — applied to the launcher Activity so cold-launch
+        shows our branded splash (forest-green background, cream utensil icon).
+        Auto-dismisses when the first Compose frame is drawn; transitions to
+        Theme.MyrecipeApp via postSplashScreenTheme.
+
+        Android 12+ uses these attrs natively. Older versions get the same look
+        via the AndroidX core-splashscreen back-compat shim.
+    -->
+    <style name="Theme.MealTime.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">@color/forest_green</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
+        <item name="postSplashScreenTheme">@style/Theme.MyrecipeApp</item>
+    </style>
 </resources>

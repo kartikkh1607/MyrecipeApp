@@ -12,6 +12,7 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -56,6 +57,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
@@ -71,7 +73,11 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
+import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
@@ -79,9 +85,23 @@ import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.compose.runtime.rememberCoroutineScope
+import com.example.myrecipeapp.R
 import com.example.myrecipeapp.ui.theme.ForestGreen
 import com.example.myrecipeapp.ui.viewmodel.AuthViewModel
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
+import kotlinx.coroutines.launch
+
+/** Which auth path is mid-flight (drives per-button spinner). */
+private enum class AuthPath { None, Email, Google }
 
 @Composable
 fun AuthScreen(
@@ -99,10 +119,87 @@ fun AuthScreen(
     val focusManager = LocalFocusManager.current
     val isLoading = uiState is AuthViewModel.AuthUiState.Loading
 
+    // Tracks which auth path is in-flight so we can show the spinner on the
+    // right button. Resets to None when uiState settles to Success / Error / Info.
+    var activePath by remember { mutableStateOf(AuthPath.None) }
+    val emailLoading = isLoading && activePath == AuthPath.Email
+    val googleLoading = isLoading && activePath == AuthPath.Google
+
+    // ── Google Sign-In wiring (Credential Manager) ───────────────────────────
+    // setServerClientId expects the *Web* OAuth client ID (auto-created when
+    // Google sign-in is enabled in Firebase Console). The empty default in
+    // strings.xml disables the button until the developer fills it in.
+    val context = LocalContext.current
+    val coroutineScope = rememberCoroutineScope()
+    val webClientId = stringResource(R.string.web_client_id)
+    val googleEnabled = webClientId.isNotBlank()
+
+    fun launchGoogleSignIn() {
+        if (!googleEnabled) {
+            viewModel.setError("Google sign-in isn't configured yet.")
+            return
+        }
+        val credentialManager = CredentialManager.create(context)
+        val googleIdOption = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)  // show all Google accounts on device
+            .setServerClientId(webClientId)
+            .setAutoSelectEnabled(false)
+            .build()
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(googleIdOption)
+            .build()
+
+        coroutineScope.launch {
+            try {
+                val result = credentialManager.getCredential(context = context, request = request)
+                val credential = result.credential
+                if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                    val googleIdToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+                    activePath = AuthPath.Google
+                    viewModel.signInWithGoogle(googleIdToken)
+                } else {
+                    viewModel.setError("Unexpected credential type returned.")
+                }
+            } catch (_: GetCredentialCancellationException) {
+                // User dismissed the chooser — silent.
+            } catch (_: NoCredentialException) {
+                viewModel.setError("No Google accounts found on this device.")
+            } catch (_: GoogleIdTokenParsingException) {
+                viewModel.setError("Couldn't read your Google ID token. Try again.")
+            } catch (e: GetCredentialException) {
+                viewModel.setError(e.message ?: "Google sign-in failed.")
+            }
+        }
+    }
+
+    // ── Security: prevent screenshots / screen recording on the auth screen ──
+    // FLAG_SECURE blocks: screenshots, screen-recording apps, app-switcher thumbnails,
+    // and casting/projection. Cleared on dispose so other screens behave normally.
+    val view = LocalView.current
+    DisposableEffect(view) {
+        val window = (view.context as? android.app.Activity)?.window
+        window?.setFlags(
+            android.view.WindowManager.LayoutParams.FLAG_SECURE,
+            android.view.WindowManager.LayoutParams.FLAG_SECURE
+        )
+        onDispose {
+            window?.clearFlags(android.view.WindowManager.LayoutParams.FLAG_SECURE)
+        }
+    }
+
     LaunchedEffect(uiState) {
         when (val state = uiState) {
-            is AuthViewModel.AuthUiState.Success -> onAuthSuccess()
+            is AuthViewModel.AuthUiState.Success -> {
+                activePath = AuthPath.None
+                onAuthSuccess()
+            }
             is AuthViewModel.AuthUiState.Error -> {
+                activePath = AuthPath.None
+                snackbarHostState.showSnackbar(state.message)
+                viewModel.resetState()
+            }
+            is AuthViewModel.AuthUiState.Info -> {
+                activePath = AuthPath.None
                 snackbarHostState.showSnackbar(state.message)
                 viewModel.resetState()
             }
@@ -189,7 +286,37 @@ fun AuthScreen(
                         }
                     )
 
-                    Spacer(Modifier.height(28.dp))
+                    Spacer(Modifier.height(20.dp))
+
+                    // ── Welcome subtitle ──────────────────────────────────────
+                    AnimatedContent(
+                        targetState = selectedTab,
+                        transitionSpec = {
+                            (fadeIn(tween(220)) + slideInVertically(tween(220)) { it / 6 })
+                                .togetherWith(fadeOut(tween(180)))
+                        },
+                        label = "auth_welcome"
+                    ) { tab ->
+                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                            Text(
+                                text = if (tab == 0) "Welcome back!" else "Create your account",
+                                style = MaterialTheme.typography.titleLarge,
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(Modifier.height(4.dp))
+                            Text(
+                                text = if (tab == 0)
+                                    "Sign in to continue cooking"
+                                else
+                                    "Save favorites & sync across devices",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(20.dp))
 
                     // ── Fields (animated between sign-in and register) ────────
                     AnimatedContent(
@@ -224,7 +351,10 @@ fun AuthScreen(
                                 onNext = { focusManager.moveFocus(FocusDirection.Down) },
                                 onDone = {
                                     focusManager.clearFocus()
-                                    if (tab == 0) viewModel.signIn(email, password)
+                                    if (tab == 0) {
+                                        activePath = AuthPath.Email
+                                        viewModel.signIn(email, password)
+                                    }
                                 }
                             )
 
@@ -246,29 +376,57 @@ fun AuthScreen(
                                     onTogglePassword = { confirmPasswordVisible = !confirmPasswordVisible },
                                     onDone = {
                                         focusManager.clearFocus()
-                                        if (password == confirmPassword)
+                                        if (password == confirmPassword) {
+                                            activePath = AuthPath.Email
                                             viewModel.register(email, password)
-                                        else
-                                            viewModel.resetState()
+                                        } else {
+                                            viewModel.setError("Passwords do not match")
+                                        }
                                     }
                                 )
                             }
                         }
                     }
 
-                    Spacer(Modifier.height(24.dp))
+                    // ── Forgot password? link (Sign In tab only) ──────────────
+                    AnimatedVisibility(
+                        visible = selectedTab == 0,
+                        enter = fadeIn(tween(200)),
+                        exit = fadeOut(tween(150))
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxWidth(),
+                            horizontalArrangement = Arrangement.End
+                        ) {
+                            TextButton(
+                                onClick = { viewModel.sendPasswordReset(email) },
+                                enabled = !isLoading
+                            ) {
+                                Text(
+                                    text = "Forgot password?",
+                                    style = MaterialTheme.typography.bodySmall,
+                                    fontWeight = FontWeight.Medium,
+                                    color = MaterialTheme.colorScheme.primary
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(if (selectedTab == 0) 8.dp else 24.dp))
 
                     // ── Primary button ────────────────────────────────────────
                     Button(
                         onClick = {
                             focusManager.clearFocus()
                             if (selectedTab == 0) {
+                                activePath = AuthPath.Email
                                 viewModel.signIn(email, password)
                             } else {
                                 if (password == confirmPassword) {
+                                    activePath = AuthPath.Email
                                     viewModel.register(email, password)
                                 } else {
-                                    viewModel.resetState()
+                                    viewModel.setError("Passwords do not match")
                                 }
                             }
                         },
@@ -287,7 +445,7 @@ fun AuthScreen(
                             pressedElevation = 8.dp
                         )
                     ) {
-                        if (isLoading) {
+                        if (emailLoading) {
                             CircularProgressIndicator(
                                 modifier = Modifier.size(22.dp),
                                 color = MaterialTheme.colorScheme.onPrimary,
@@ -329,6 +487,46 @@ fun AuthScreen(
                     }
 
                     Spacer(Modifier.height(16.dp))
+
+                    // ── Google Sign-In button ─────────────────────────────────
+                    androidx.compose.material3.OutlinedButton(
+                        onClick = { launchGoogleSignIn() },
+                        enabled = !isLoading,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(54.dp),
+                        shape = RoundedCornerShape(16.dp),
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.5.dp,
+                            MaterialTheme.colorScheme.outline
+                        ),
+                        colors = ButtonDefaults.outlinedButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurface
+                        )
+                    ) {
+                        if (googleLoading) {
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(22.dp),
+                                color = MaterialTheme.colorScheme.primary,
+                                strokeWidth = 2.5.dp
+                            )
+                        } else {
+                            Image(
+                                painter = painterResource(id = R.drawable.ic_google_logo),
+                                contentDescription = null,
+                                modifier = Modifier.size(20.dp)
+                            )
+                            Spacer(Modifier.width(12.dp))
+                            Text(
+                                text = "Continue with Google",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Medium,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(12.dp))
 
                     // ── Guest button ──────────────────────────────────────────
                     androidx.compose.material3.OutlinedButton(

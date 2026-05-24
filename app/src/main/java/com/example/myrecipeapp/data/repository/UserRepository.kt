@@ -2,6 +2,7 @@ package com.example.myrecipeapp.data.repository
 
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
+import com.google.firebase.auth.GoogleAuthProvider
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -27,6 +28,19 @@ class UserRepository @Inject constructor(
 
     suspend fun register(email: String, password: String): Result<FirebaseUser> = runCatching {
         auth.createUserWithEmailAndPassword(email, password).await().user!!
+    }
+
+    /**
+     * Sign in to Firebase using a Google ID token obtained from Credential Manager.
+     * Caller flow: CredentialManager.getCredential → GoogleIdTokenCredential.idToken → this.
+     */
+    suspend fun signInWithGoogleIdToken(idToken: String): Result<FirebaseUser> = runCatching {
+        val credential = GoogleAuthProvider.getCredential(idToken, null)
+        auth.signInWithCredential(credential).await().user!!
+    }
+
+    suspend fun sendPasswordReset(email: String): Result<Unit> = runCatching {
+        auth.sendPasswordResetEmail(email).await()
     }
 
     fun signOut() = auth.signOut()

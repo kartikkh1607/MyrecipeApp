@@ -107,6 +107,8 @@ import com.example.myrecipeapp.domain.model.Ingredient
 import com.example.myrecipeapp.domain.model.NutritionInfo
 import com.example.myrecipeapp.domain.model.Recipe
 import com.example.myrecipeapp.domain.model.RecipeStep
+import com.example.myrecipeapp.ui.components.findActivity
+import com.example.myrecipeapp.ui.components.rememberInterstitialAdManager
 import com.example.myrecipeapp.ui.navigation.ShoppingList
 import com.example.myrecipeapp.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
@@ -189,6 +191,18 @@ private fun RecipeDetailPage(
         if (cachedRecipe == null) viewModel.fetchRecipeDetails(recipeId)
     }
 
+    // ── Interstitial ad trigger ───────────────────────────────────────────────
+    // Fires on every Nth recipe view (controlled by AdConfig.INTERSTITIAL_FREQUENCY).
+    // 800 ms delay lets the enter animation finish AND debounces rapid pager swipes —
+    // if the user swipes to a new recipe before the delay elapses, this coroutine is
+    // cancelled by the LaunchedEffect key change, so no ad shows for skipped pages.
+    val adManager = rememberInterstitialAdManager()
+    val context = LocalContext.current
+    LaunchedEffect(recipeId) {
+        delay(800)
+        context.findActivity()?.let { adManager.maybeShowOnRecipeView(it) }
+    }
+
     val recipe = cachedRecipe ?: recipeDetailState.recipe?.takeIf { it.id == recipeId }
 
     if (recipe == null) {
@@ -208,9 +222,16 @@ private fun RecipeDetailPage(
 
     var isCookingMode by remember { mutableStateOf(false) }
     val hapticFeedback = LocalHapticFeedback.current
-    val context = LocalContext.current
     val isFavorite by remember(recipe.id) {
         derivedStateOf { viewModel.favoriteIds.value.contains(recipe.id) }
+    }
+
+    // Personalization: record this view exactly once per unique recipe.id.
+    // Fires for cached recipes too (cache short-circuits fetch, but we still
+    // want streak + recently-viewed updated). Key on recipe.id so swiping
+    // through the pager tracks each new page.
+    LaunchedEffect(recipe.id) {
+        viewModel.recordRecipeView(recipe)
     }
 
     val baseServings = recipe.servings.coerceAtLeast(1)

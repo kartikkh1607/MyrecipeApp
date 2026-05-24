@@ -1,6 +1,16 @@
 <resources>
     <string name="app_name">MealTime</string>
 
+    <!--
+        Web (OAuth 2.0) client ID for Google Sign-In via Credential Manager.
+        Source: Firebase Console → Authentication → Sign-in method → Google
+                (enable, then copy "Web client ID" — also visible in google-services.json
+                under client.oauth_client[client_type==3].client_id, or in
+                Google Cloud Console → APIs & Services → Credentials → "Web client".)
+        Leave empty to disable the Google button.
+    -->
+    <string name="web_client_id" translatable="false"></string>
+
     <!-- Popular search tags shown on the Search idle state and as "Try instead" suggestions. -->
     <string-array name="search_popular_tags" translatable="false">
         <item>🍝 Pasta</item>

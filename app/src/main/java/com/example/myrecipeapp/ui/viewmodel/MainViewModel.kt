@@ -28,8 +28,11 @@ import com.example.myrecipeapp.domain.usecase.GetFeaturedRecipesUseCase
 import com.example.myrecipeapp.domain.usecase.GetRecipeDetailsUseCase
 import com.example.myrecipeapp.domain.usecase.GetRecipesByCategoryUseCase
 import com.example.myrecipeapp.data.analytics.AnalyticsHelper
+import com.example.myrecipeapp.data.preferences.RecentRecipesRepository
+import com.example.myrecipeapp.data.preferences.UserPreferencesRepository
 import com.example.myrecipeapp.data.repository.SyncRepository
 import com.example.myrecipeapp.data.repository.UserRepository
+import com.example.myrecipeapp.domain.model.DietaryFilter
 import com.example.myrecipeapp.domain.usecase.SearchRecipesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -65,7 +68,9 @@ class MainViewModel @Inject constructor(
     @ApplicationContext private val appContext: Context,
     private val analytics: AnalyticsHelper,
     private val userRepository: UserRepository,
-    private val syncRepository: SyncRepository
+    private val syncRepository: SyncRepository,
+    private val userPrefsRepo: UserPreferencesRepository,
+    private val recentRecipesRepo: RecentRecipesRepository
 ) : ViewModel() {
 
     // ── Recipe detail cache — keyed by recipe ID ─────────────────────────────
@@ -375,41 +380,34 @@ class MainViewModel @Inject constructor(
     // Max 20 entries, entries expire after 24 h. accessOrder=true makes this a real LRU:
     // reading an entry via get() moves it to the most-recently-used end, so eviction
     // picks the entry whose last *access* (not insertion) was oldest.
-    private val CACHE_TTL_MS = 24 * 60 * 60 * 1000L  // 24 hours
-    private val CACHE_MAX_SIZE = 20
     private val categoryCache = object : LinkedHashMap<String, Pair<List<Recipe>, Long>>(
         16, 0.75f, /* accessOrder = */ true
     ) {
         override fun removeEldestEntry(eldest: Map.Entry<String, Pair<List<Recipe>, Long>>): Boolean =
-            size > CACHE_MAX_SIZE
+            size > CATEGORY_CACHE_MAX_SIZE
     }
 
     // ── Per-category dietary filter persistence ─────────────────────────────
     // Remembers user's filter choice per category so it's restored on re-visit.
-    private val categoryFilters =
-        mutableMapOf<String, com.example.myrecipeapp.domain.model.DietaryFilter>()
+    private val categoryFilters = mutableMapOf<String, DietaryFilter>()
 
-    fun getCategoryFilter(categoryId: String): com.example.myrecipeapp.domain.model.DietaryFilter =
-        categoryFilters[categoryId] ?: com.example.myrecipeapp.domain.model.DietaryFilter.ALL
+    fun getCategoryFilter(categoryId: String): DietaryFilter =
+        categoryFilters[categoryId] ?: DietaryFilter.ALL
 
-    fun setCategoryFilter(
-        categoryId: String,
-        filter: com.example.myrecipeapp.domain.model.DietaryFilter
-    ) {
+    fun setCategoryFilter(categoryId: String, filter: DietaryFilter) {
         categoryFilters[categoryId] = filter
     }
 
     // ── Search-result cache — keyed by "query|offset", value = (result, cachedAt) ─
     // Saves API calls when the user types the same query twice (e.g. clears + retypes).
     // 30-minute TTL keeps results fresh enough; 20-entry LRU bounds memory.
-    private val SEARCH_CACHE_TTL_MS = 30 * 60 * 1000L  // 30 minutes
-    private val SEARCH_CACHE_MAX_SIZE = 20
     private val searchCache = object : LinkedHashMap<String, Pair<SearchResult, Long>>(
         16, 0.75f, /* accessOrder = */ true
     ) {
         override fun removeEldestEntry(eldest: Map.Entry<String, Pair<SearchResult, Long>>): Boolean =
             size > SEARCH_CACHE_MAX_SIZE
     }
+
 
     private fun searchCacheKey(query: String, offset: Int): String =
         "${query.lowercase().trim()}|$offset"
@@ -474,6 +472,18 @@ class MainViewModel @Inject constructor(
                 _recipeDetailState.value = RecipeDetailState(loading = false, error = it.message)
             }
         )
+    }
+
+    /**
+     * Records a recipe view for personalization — updates streak, increments
+     * lifetime view count, pushes onto the recently-viewed list. Called from
+     * [RecipeDetailPage] once the recipe is loaded (whether fresh or cached).
+     */
+    fun recordRecipeView(recipe: Recipe) {
+        viewModelScope.launch {
+            userPrefsRepo.recordRecipeView()
+            recentRecipesRepo.add(recipe)
+        }
     }
 
     // Job reference so we can cancel a stale search when a new one starts
@@ -706,5 +716,9 @@ class MainViewModel @Inject constructor(
 
     companion object {
         private const val TAG = "MainViewModel"
+        private const val CACHE_TTL_MS = 24 * 60 * 60 * 1000L     // 24 hours
+        private const val CATEGORY_CACHE_MAX_SIZE = 20
+        private const val SEARCH_CACHE_TTL_MS = 30 * 60 * 1000L   // 30 minutes
+        private const val SEARCH_CACHE_MAX_SIZE = 20
     }
 }

@@ -108,6 +108,14 @@ dependencies {
     // Gemini AI - OkHttp for streaming
     implementation("com.squareup.okhttp3:okhttp:4.12.0")
     implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+
+    // Google AdMob — banner + interstitial ads (Phase A monetization).
+    // Production ad unit IDs go in data/ads/AdConfig.kt; test IDs are baked in.
+    implementation("com.google.android.gms:play-services-ads:23.6.0")
+
+    // Android 12+ SplashScreen API (with back-compat shim for older versions).
+    implementation("androidx.core:core-splashscreen:1.0.1")
+
     val nav_version = "2.8.5"
 
     // Kotlinx Serialization (required for type-safe Navigation 2.8+)
@@ -198,6 +206,12 @@ dependencies {
     implementation(libs.firebase.auth)
     implementation(libs.firebase.firestore)
     implementation(libs.kotlinx.coroutines.play.services)
+
+    // Credential Manager — modern Google Sign-In flow (replaces deprecated GoogleSignInClient).
+    // Returns a GoogleIdToken via androidx.credentials → fed into FirebaseAuth.signInWithCredential.
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
 
 // Hilt Navigation Compose
     implementation(libs.androidx.hilt.navigation.compose.v120)
