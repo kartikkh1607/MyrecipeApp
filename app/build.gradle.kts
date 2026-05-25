@@ -45,6 +45,23 @@ android {
         buildConfigField("String", "SPOONACULAR_API_KEY", "\"$apiKey\"")
         val geminiApiKey = localProperties.getProperty("gemini.api.key") ?: ""
         buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
+        val groqApiKey = localProperties.getProperty("groq.api.key") ?: ""
+        buildConfigField("String", "GROQ_API_KEY", "\"$groqApiKey\"")
+
+        // AdMob production ad-unit IDs — injected from local.properties so they never
+        // live in source control. Left blank in debug (debug uses Google's baked-in
+        // test IDs) and blank in release until configured. AdConfig.adsEnabled disables
+        // ads in release when these are blank, so test IDs can never ship as production.
+        val admobBannerId = localProperties.getProperty("admob.banner.id") ?: ""
+        buildConfigField("String", "ADMOB_BANNER_ID", "\"$admobBannerId\"")
+        val admobInterstitialId = localProperties.getProperty("admob.interstitial.id") ?: ""
+        buildConfigField("String", "ADMOB_INTERSTITIAL_ID", "\"$admobInterstitialId\"")
+
+        // AdMob App ID for the manifest. Default to Google's test App ID (valid format,
+        // safe for debug); the release build below swaps in the production App ID when
+        // admob.app.id is set in local.properties. A valid App ID must always be present
+        // or the Ads SDK's auto-init ContentProvider crashes the app at launch.
+        manifestPlaceholders["admobAppId"] = "ca-app-pub-3940256099942544~3347511713"
     }
 
     // Only register a release signing config if local.properties has all 4 entries.
@@ -84,6 +101,13 @@ android {
             if (hasReleaseSigning) {
                 signingConfig = signingConfigs.getByName("release")
             }
+            // Swap in the production AdMob App ID when configured; otherwise keep the
+            // test App ID so the Ads SDK can still initialize (ad requests stay gated
+            // by AdConfig.adsEnabled, which is false in release without prod unit IDs).
+            val prodAdmobAppId = localProperties.getProperty("admob.app.id")
+            if (!prodAdmobAppId.isNullOrBlank()) {
+                manifestPlaceholders["admobAppId"] = prodAdmobAppId
+            }
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
@@ -94,29 +118,42 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_17
+        targetCompatibility = JavaVersion.VERSION_17
     }
 
     buildFeatures {
         compose = true
         buildConfig = true  // Enable BuildConfig for API keys
     }
+
+    testOptions {
+        unitTests {
+            // Robolectric needs Android resources merged into the unit-test classpath.
+            isIncludeAndroidResources = true
+            // Return sane defaults (0/false/empty) instead of throwing on unmocked
+            // android.jar calls — keeps pure-JVM tests from hitting "not mocked" errors.
+            isReturnDefaultValues = true
+        }
+    }
+}
+
+kotlin {
+    jvmToolchain(17)
 }
 
 dependencies {
-    // Gemini AI - OkHttp for streaming
-    implementation("com.squareup.okhttp3:okhttp:4.12.0")
-    implementation("com.squareup.okhttp3:logging-interceptor:4.12.0")
+    // OkHttp — used directly by GeminiAiService for streaming. Version-aligned via the
+    // catalog with logging-interceptor (libs.logging.interceptor, below) and the OkHttp
+    // 5.x that Retrofit 3.x pulls transitively, so only one OkHttp is on the classpath.
+    implementation(libs.okhttp)
 
     // Google AdMob — banner + interstitial ads (Phase A monetization).
     // Production ad unit IDs go in data/ads/AdConfig.kt; test IDs are baked in.
-    implementation("com.google.android.gms:play-services-ads:23.6.0")
+    implementation(libs.play.services.ads)
 
     // Android 12+ SplashScreen API (with back-compat shim for older versions).
-    implementation("androidx.core:core-splashscreen:1.0.1")
-
-    val nav_version = "2.8.5"
+    implementation(libs.androidx.core.splashscreen)
 
     // Kotlinx Serialization (required for type-safe Navigation 2.8+)
     implementation(libs.kotlinx.serialization.json)
@@ -155,7 +192,6 @@ dependencies {
     implementation(libs.coil.compose)
 
     // Room (local database for favorites + shopping list persistence)
-    val room_version = "2.6.1"
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)   // coroutines + Flow support
     ksp(libs.androidx.room.compiler)
@@ -214,7 +250,7 @@ dependencies {
     implementation(libs.googleid)
 
 // Hilt Navigation Compose
-    implementation(libs.androidx.hilt.navigation.compose.v120)
+    implementation(libs.androidx.hilt.navigation.compose)
 
 
 }

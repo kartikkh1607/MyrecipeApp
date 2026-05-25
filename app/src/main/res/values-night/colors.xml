@@ -1,0 +1,9 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+    Dark-mode overrides for the splash screen. Only splash_background changes here;
+    every other color falls back to res/values/colors.xml. This stops the bright
+    forest-green flash before the dark Compose UI loads on cold launch.
+-->
+<resources>
+    <color name="splash_background">@color/midnight</color>
+</resources>

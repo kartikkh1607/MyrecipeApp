@@ -20,48 +20,39 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
-import androidx.compose.foundation.lazy.LazyRow
-import androidx.compose.foundation.lazy.grid.GridCells
-import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.lazy.grid.items
-import androidx.compose.foundation.lazy.items
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Logout
-import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
-import androidx.compose.material.icons.filled.ShoppingCart
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.FilterChip
-import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
-import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
-import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -73,23 +64,37 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.vector.ImageVector
-import androidx.compose.ui.graphics.SolidColor
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
-import com.kartik.mealtime.data.preferences.DietaryPref
-import com.kartik.mealtime.data.preferences.UserPreferences
 import com.kartik.mealtime.ui.navigation.About
 import com.kartik.mealtime.ui.theme.ForestGreen
 import com.kartik.mealtime.ui.viewmodel.AuthViewModel
+import com.kartik.mealtime.ui.viewmodel.FavoritesViewModel
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
 import com.kartik.mealtime.ui.viewmodel.UserViewModel
+import androidx.compose.foundation.text.KeyboardOptions
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
+import androidx.credentials.CredentialManager
+import androidx.credentials.GetCredentialRequest
+import androidx.credentials.exceptions.GetCredentialCancellationException
+import androidx.credentials.exceptions.GetCredentialException
+import androidx.credentials.exceptions.NoCredentialException
+import com.google.android.libraries.identity.googleid.GetGoogleIdOption
+import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
+import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
+import com.kartik.mealtime.R
+import com.kartik.mealtime.data.repository.SignInProvider
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -100,13 +105,69 @@ fun ProfileScreen(
     onNavigateToAuth: () -> Unit,
     userViewModel: UserViewModel = hiltViewModel()
 ) {
-    val favoriteRecipes by viewModel.favoriteRecipes
+    val favoritesViewModel: FavoritesViewModel = hiltViewModel()
+    val favoriteRecipes by favoritesViewModel.favoriteRecipes
     val currentUser by authViewModel.currentUser.collectAsStateWithLifecycle()
     val userPrefs by userViewModel.preferences.collectAsStateWithLifecycle()
     var showSignOutDialog by remember { mutableStateOf(false) }
     var showEditSheet by remember { mutableStateOf(false) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    val deleteState by authViewModel.deleteState.collectAsStateWithLifecycle()
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { visible = true }
+
+    // On successful deletion the auth-state listener clears currentUser and the gate
+    // re-asserts AuthScreen (same path as sign-out) — just reset the transient state.
+    LaunchedEffect(deleteState) {
+        if (deleteState is AuthViewModel.DeleteAccountState.Success) {
+            authViewModel.resetDeleteState()
+        }
+    }
+
+    // ── Inline re-auth wiring for account deletion ─────────────────────────────
+    // When Firebase demands a recent login, we collect a fresh credential here and
+    // retry, so the user never has to leave the screen. Google reauth reuses the same
+    // Credential Manager flow as the sign-in screen.
+    var reauthPassword by remember { mutableStateOf("") }
+    val context = LocalContext.current
+    val reauthScope = rememberCoroutineScope()
+    val webClientId = stringResource(R.string.web_client_id)
+
+    fun launchGoogleReauth() {
+        if (webClientId.isBlank()) {
+            authViewModel.setDeleteError("Google sign-in isn't configured.")
+            return
+        }
+        val credentialManager = CredentialManager.create(context)
+        val googleIdOption = GetGoogleIdOption.Builder()
+            .setFilterByAuthorizedAccounts(false)
+            .setServerClientId(webClientId)
+            .setAutoSelectEnabled(false)
+            .build()
+        val request = GetCredentialRequest.Builder()
+            .addCredentialOption(googleIdOption)
+            .build()
+        reauthScope.launch {
+            try {
+                val result = credentialManager.getCredential(context = context, request = request)
+                val credential = result.credential
+                if (credential.type == GoogleIdTokenCredential.TYPE_GOOGLE_ID_TOKEN_CREDENTIAL) {
+                    val idToken = GoogleIdTokenCredential.createFrom(credential.data).idToken
+                    authViewModel.reauthenticateWithGoogleAndDelete(idToken)
+                } else {
+                    authViewModel.setDeleteError("Unexpected credential type returned.")
+                }
+            } catch (_: GetCredentialCancellationException) {
+                // User dismissed the chooser — stay on the confirm dialog, no error.
+            } catch (_: NoCredentialException) {
+                authViewModel.setDeleteError("No Google accounts found on this device.")
+            } catch (_: GoogleIdTokenParsingException) {
+                authViewModel.setDeleteError("Couldn't read your Google ID token. Try again.")
+            } catch (e: GetCredentialException) {
+                authViewModel.setDeleteError(e.message ?: "Google sign-in failed.")
+            }
+        }
+    }
 
     // ── Edit profile bottom sheet ─────────────────────────────────────────────
     if (showEditSheet) {
@@ -137,6 +198,166 @@ fun ProfileScreen(
             },
             dismissButton = {
                 TextButton(onClick = { showSignOutDialog = false }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // ── Delete-account dialogs ─────────────────────────────────────────────────
+    // Confirmation — destructive, irreversible, so it spells out exactly what is lost.
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            icon = {
+                Icon(
+                    Icons.Default.DeleteForever,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.error
+                )
+            },
+            title = { Text("Delete account?", fontWeight = FontWeight.Bold) },
+            text = {
+                Text(
+                    "This permanently deletes your account and all synced data — your " +
+                        "favorites and shopping list. This can't be undone."
+                )
+            },
+            confirmButton = {
+                Button(
+                    onClick = {
+                        showDeleteDialog = false
+                        authViewModel.deleteAccount()
+                    },
+                    colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                ) { Text("Delete forever") }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) { Text("Cancel") }
+            },
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // Progress — non-dismissable while the cloud + auth deletion runs.
+    if (deleteState is AuthViewModel.DeleteAccountState.Deleting) {
+        AlertDialog(
+            onDismissRequest = { },
+            title = { Text("Deleting account…", fontWeight = FontWeight.Bold) },
+            text = {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                ) {
+                    CircularProgressIndicator(modifier = Modifier.size(22.dp))
+                    Text("Removing your data…")
+                }
+            },
+            confirmButton = { },
+            shape = RoundedCornerShape(20.dp)
+        )
+    }
+
+    // Recent-login required — collect a fresh credential inline, then finish deleting.
+    // The user's data is already removed at this point; only the auth record remains.
+    (deleteState as? AuthViewModel.DeleteAccountState.NeedsReauth)?.let { reauth ->
+        when (reauth.provider) {
+            SignInProvider.PASSWORD -> AlertDialog(
+                onDismissRequest = { authViewModel.resetDeleteState(); reauthPassword = "" },
+                icon = {
+                    Icon(
+                        Icons.Default.DeleteForever,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                },
+                title = { Text("Confirm your password", fontWeight = FontWeight.Bold) },
+                text = {
+                    Column {
+                        Text(
+                            "For your security, re-enter your password to permanently " +
+                                "delete your account. Your synced data has already been removed."
+                        )
+                        Spacer(modifier = Modifier.height(12.dp))
+                        OutlinedTextField(
+                            value = reauthPassword,
+                            onValueChange = { reauthPassword = it },
+                            label = { Text("Password") },
+                            singleLine = true,
+                            visualTransformation = PasswordVisualTransformation(),
+                            keyboardOptions = KeyboardOptions(keyboardType = KeyboardType.Password),
+                            modifier = Modifier.fillMaxWidth()
+                        )
+                    }
+                },
+                confirmButton = {
+                    Button(
+                        onClick = {
+                            val pwd = reauthPassword
+                            reauthPassword = ""
+                            authViewModel.reauthenticateWithPasswordAndDelete(pwd)
+                        },
+                        enabled = reauthPassword.isNotBlank(),
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Delete forever") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { authViewModel.resetDeleteState(); reauthPassword = "" }) { Text("Cancel") }
+                },
+                shape = RoundedCornerShape(20.dp)
+            )
+
+            SignInProvider.GOOGLE -> AlertDialog(
+                onDismissRequest = { authViewModel.resetDeleteState() },
+                icon = {
+                    Icon(
+                        Icons.Default.DeleteForever,
+                        contentDescription = null,
+                        tint = MaterialTheme.colorScheme.error
+                    )
+                },
+                title = { Text("Confirm with Google", fontWeight = FontWeight.Bold) },
+                text = {
+                    Text(
+                        "For your security, confirm your Google account to permanently " +
+                            "delete your account. Your synced data has already been removed."
+                    )
+                },
+                confirmButton = {
+                    Button(
+                        onClick = { launchGoogleReauth() },
+                        colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.error)
+                    ) { Text("Continue with Google") }
+                },
+                dismissButton = {
+                    TextButton(onClick = { authViewModel.resetDeleteState() }) { Text("Cancel") }
+                },
+                shape = RoundedCornerShape(20.dp)
+            )
+
+            SignInProvider.OTHER -> AlertDialog(
+                onDismissRequest = { authViewModel.resetDeleteState() },
+                title = { Text("Please sign in again", fontWeight = FontWeight.Bold) },
+                text = {
+                    Text(
+                        "For your security, sign out and sign back in, then delete your " +
+                            "account again. Your synced data has already been removed."
+                    )
+                },
+                confirmButton = {
+                    Button(onClick = { authViewModel.resetDeleteState() }) { Text("OK") }
+                },
+                shape = RoundedCornerShape(20.dp)
+            )
+        }
+    }
+
+    (deleteState as? AuthViewModel.DeleteAccountState.Error)?.let { err ->
+        AlertDialog(
+            onDismissRequest = { authViewModel.resetDeleteState() },
+            title = { Text("Couldn't delete account", fontWeight = FontWeight.Bold) },
+            text = { Text(err.message) },
+            confirmButton = {
+                Button(onClick = { authViewModel.resetDeleteState() }) { Text("OK") }
             },
             shape = RoundedCornerShape(20.dp)
         )
@@ -573,6 +794,29 @@ fun ProfileScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Text("Sign Out", fontWeight = FontWeight.SemiBold)
                     }
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Permanent account deletion — required by Google Play for apps that
+                    // let users create an account. Low-emphasis text button so it reads as
+                    // the rare, destructive action it is.
+                    TextButton(
+                        onClick = { showDeleteDialog = true },
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Icon(
+                            Icons.Default.DeleteForever,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.error
+                        )
+                        Spacer(modifier = Modifier.width(8.dp))
+                        Text(
+                            "Delete account",
+                            color = MaterialTheme.colorScheme.error,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    }
                 }
             }
         }
@@ -583,357 +827,3 @@ fun ProfileScreen(
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-@Composable
-private fun SectionLabel(text: String) {
-    Text(
-        text = text.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-        letterSpacing = 1.sp
-    )
-}
-
-@Composable
-private fun StatCard(
-    modifier: Modifier = Modifier,
-    icon: ImageVector,
-    iconTint: Color,
-    value: String,
-    label: String
-) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp, horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(iconTint.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Text(
-                value,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-@Composable
-private fun ProfileMenuItem(
-    icon: ImageVector,
-    label: String,
-    value: String,
-    valueColor: Color = Color.Unspecified
-) {
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp, vertical = 14.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Box(
-            modifier = Modifier
-                .size(36.dp)
-                .clip(RoundedCornerShape(10.dp))
-                .background(MaterialTheme.colorScheme.primaryContainer),
-            contentAlignment = Alignment.Center
-        ) {
-            Icon(
-                icon,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier.size(18.dp)
-            )
-        }
-        Spacer(modifier = Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            if (value.isNotBlank()) {
-                Text(
-                    value,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (valueColor == Color.Unspecified)
-                        MaterialTheme.colorScheme.onSurfaceVariant else valueColor,
-                    maxLines = 1
-                )
-            }
-        }
-    }
-}
-
-@Composable
-private fun ProfileMenuButton(
-    icon: ImageVector,
-    label: String,
-    onClick: () -> Unit
-) {
-    Surface(
-        onClick = onClick,
-        modifier = Modifier.fillMaxWidth(),
-        color = Color.Transparent
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(RoundedCornerShape(10.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(18.dp)
-                )
-            }
-            Spacer(modifier = Modifier.width(14.dp))
-            Text(
-                label,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onSurface,
-                modifier = Modifier.weight(1f)
-            )
-            Text(
-                "›",
-                style = MaterialTheme.typography.titleLarge,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
-        }
-    }
-}
-
-// ── Edit Profile bottom sheet ─────────────────────────────────────────────────
-@OptIn(
-    ExperimentalMaterial3Api::class,
-    androidx.compose.foundation.layout.ExperimentalLayoutApi::class
-)
-@Composable
-private fun EditProfileSheet(
-    currentPrefs: UserPreferences,
-    onDismiss: () -> Unit,
-    onSave: (name: String, emoji: String, dietaryPrefs: Set<DietaryPref>) -> Unit
-) {
-    // Local edit state — committed to the repository only when the user taps Save.
-    // Lets the user cancel without partial writes.
-    var draftName by remember { mutableStateOf(currentPrefs.displayName) }
-    var draftEmoji by remember { mutableStateOf(currentPrefs.avatarEmoji) }
-    var draftPrefs by remember { mutableStateOf(currentPrefs.dietaryPrefs) }
-
-    val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
-
-    ModalBottomSheet(
-        onDismissRequest = onDismiss,
-        sheetState = sheetState,
-        containerColor = MaterialTheme.colorScheme.surface,
-        shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-    ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 24.dp)
-                .padding(bottom = 32.dp)
-                .verticalScroll(rememberScrollState()),
-            verticalArrangement = Arrangement.spacedBy(20.dp)
-        ) {
-            Text(
-                "Edit profile",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-
-            // ── Avatar picker ────────────────────────────────────────────────
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    "Avatar",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                // Current selection preview — large emoji in a primary-tinted circle.
-                Box(
-                    modifier = Modifier
-                        .size(76.dp)
-                        .clip(CircleShape)
-                        .background(MaterialTheme.colorScheme.primaryContainer),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Text(text = draftEmoji, fontSize = 40.sp)
-                }
-                Spacer(modifier = Modifier.height(4.dp))
-                // 4-column grid of available emojis. Selected one gets a primary ring.
-                LazyVerticalGrid(
-                    columns = GridCells.Fixed(4),
-                    modifier = Modifier.height(180.dp),
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp)
-                ) {
-                    items(UserPreferences.AVAILABLE_AVATARS, key = { it }) { emoji ->
-                        val selected = emoji == draftEmoji
-                        Surface(
-                            onClick = { draftEmoji = emoji },
-                            shape = CircleShape,
-                            color = if (selected) MaterialTheme.colorScheme.primaryContainer
-                                    else MaterialTheme.colorScheme.surfaceVariant,
-                            border = if (selected) androidx.compose.foundation.BorderStroke(
-                                2.dp, MaterialTheme.colorScheme.primary
-                            ) else null,
-                            modifier = Modifier.size(56.dp)
-                        ) {
-                            Box(contentAlignment = Alignment.Center) {
-                                Text(text = emoji, fontSize = 28.sp)
-                            }
-                        }
-                    }
-                }
-            }
-
-            // ── Display name ─────────────────────────────────────────────────
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Text(
-                    "Your name",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Surface(
-                    shape = RoundedCornerShape(14.dp),
-                    color = MaterialTheme.colorScheme.surfaceVariant,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    BasicTextField(
-                        value = draftName,
-                        onValueChange = { draftName = it.take(30) },  // cap at 30 chars
-                        singleLine = true,
-                        textStyle = MaterialTheme.typography.bodyLarge.copy(
-                            color = MaterialTheme.colorScheme.onSurface
-                        ),
-                        cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                        keyboardOptions = KeyboardOptions(
-                            capitalization = KeyboardCapitalization.Words
-                        ),
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .padding(horizontal = 16.dp, vertical = 14.dp),
-                        decorationBox = { inner ->
-                            if (draftName.isEmpty()) {
-                                Text(
-                                    "e.g. Kartik",
-                                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
-                                    style = MaterialTheme.typography.bodyLarge
-                                )
-                            }
-                            inner()
-                        }
-                    )
-                }
-            }
-
-            // ── Dietary preferences ──────────────────────────────────────────
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                Text(
-                    "Dietary preferences",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-                Text(
-                    "Helps the AI Chef suggest recipes you'll love.",
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
-                )
-                // Flow of toggleable filter chips.
-                androidx.compose.foundation.layout.FlowRow(
-                    horizontalArrangement = Arrangement.spacedBy(8.dp),
-                    verticalArrangement = Arrangement.spacedBy(8.dp),
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    DietaryPref.entries.forEach { pref ->
-                        val selected = pref in draftPrefs
-                        FilterChip(
-                            selected = selected,
-                            onClick = {
-                                draftPrefs = if (selected) draftPrefs - pref else draftPrefs + pref
-                            },
-                            label = {
-                                Text(
-                                    "${pref.emoji}  ${pref.label}",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            },
-                            shape = RoundedCornerShape(50),
-                            colors = FilterChipDefaults.filterChipColors(
-                                selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
-                                selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
-                            )
-                        )
-                    }
-                }
-            }
-
-            // ── Actions ──────────────────────────────────────────────────────
-            Spacer(modifier = Modifier.height(4.dp))
-            Button(
-                onClick = { onSave(draftName, draftEmoji, draftPrefs) },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(52.dp),
-                shape = RoundedCornerShape(14.dp),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = MaterialTheme.colorScheme.primary
-                )
-            ) {
-                Text(
-                    "Save",
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
-            TextButton(
-                onClick = onDismiss,
-                modifier = Modifier.fillMaxWidth()
-            ) {
-                Text("Cancel")
-            }
-        }
-    }
-}

@@ -3,8 +3,6 @@ package com.kartik.mealtime.ui.screens
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
@@ -14,10 +12,6 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
-import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
-import androidx.compose.foundation.interaction.MutableInteractionSource
-import androidx.compose.foundation.interaction.collectIsFocusedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -35,21 +29,15 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.foundation.text.BasicTextField
-import androidx.compose.foundation.text.KeyboardActions
-import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
-import androidx.compose.material.icons.filled.Visibility
-import androidx.compose.material.icons.filled.VisibilityOff
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
@@ -63,6 +51,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -71,8 +60,6 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.graphics.SolidColor
-import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
@@ -81,8 +68,6 @@ import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
-import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.credentials.CredentialManager
@@ -91,17 +76,16 @@ import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.compose.runtime.rememberCoroutineScope
-import com.kartik.mealtime.R
-import com.kartik.mealtime.ui.theme.ForestGreen
-import com.kartik.mealtime.ui.viewmodel.AuthViewModel
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
+import com.kartik.mealtime.R
+import com.kartik.mealtime.ui.theme.ForestGreen
+import com.kartik.mealtime.ui.viewmodel.AuthViewModel
 import kotlinx.coroutines.launch
 
 /** Which auth path is mid-flight (drives per-button spinner). */
-private enum class AuthPath { None, Email, Google }
+internal enum class AuthPath { None, Email, Google }
 
 @Composable
 fun AuthScreen(
@@ -193,16 +177,19 @@ fun AuthScreen(
                 activePath = AuthPath.None
                 onAuthSuccess()
             }
+
             is AuthViewModel.AuthUiState.Error -> {
                 activePath = AuthPath.None
                 snackbarHostState.showSnackbar(state.message)
                 viewModel.resetState()
             }
+
             is AuthViewModel.AuthUiState.Info -> {
                 activePath = AuthPath.None
                 snackbarHostState.showSnackbar(state.message)
                 viewModel.resetState()
             }
+
             else -> Unit
         }
     }
@@ -323,7 +310,9 @@ fun AuthScreen(
                         targetState = selectedTab,
                         transitionSpec = {
                             (slideInVertically(tween(300)) { it / 8 } + fadeIn(tween(300)))
-                                .togetherWith(slideOutVertically(tween(200)) { -it / 8 } + fadeOut(tween(200)))
+                                .togetherWith(slideOutVertically(tween(200)) { -it / 8 } + fadeOut(
+                                    tween(200)
+                                ))
                         },
                         label = "auth_fields"
                     ) { tab ->
@@ -373,7 +362,9 @@ fun AuthScreen(
                                     imeAction = ImeAction.Done,
                                     isPassword = true,
                                     passwordVisible = confirmPasswordVisible,
-                                    onTogglePassword = { confirmPasswordVisible = !confirmPasswordVisible },
+                                    onTogglePassword = {
+                                        confirmPasswordVisible = !confirmPasswordVisible
+                                    },
                                     onDone = {
                                         focusManager.clearFocus()
                                         if (password == confirmPassword) {
@@ -592,147 +583,3 @@ fun AuthScreen(
 
 // ── Pill Tab Switcher ─────────────────────────────────────────────────────────
 
-@Composable
-private fun PillTabSwitcher(selectedTab: Int, onTabSelected: (Int) -> Unit) {
-    val tabs = listOf("Sign In", "Register")
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clip(RoundedCornerShape(50))
-            .background(MaterialTheme.colorScheme.surfaceVariant)
-            .padding(4.dp),
-        horizontalArrangement = Arrangement.spacedBy(4.dp)
-    ) {
-        tabs.forEachIndexed { index, label ->
-            val selected = selectedTab == index
-            val weight by animateFloatAsState(
-                targetValue = if (selected) 1.05f else 0.95f,
-                animationSpec = spring(Spring.DampingRatioMediumBouncy),
-                label = "tab_weight_$index"
-            )
-            Box(
-                modifier = Modifier
-                    .weight(weight)
-                    .clip(RoundedCornerShape(50))
-                    .background(
-                        if (selected) MaterialTheme.colorScheme.primary
-                        else Color.Transparent
-                    )
-                    .clickable(
-                        interactionSource = remember { MutableInteractionSource() },
-                        indication = null
-                    ) { onTabSelected(index) }
-                    .padding(vertical = 10.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = if (selected) FontWeight.Bold else FontWeight.Normal,
-                    color = if (selected) MaterialTheme.colorScheme.onPrimary
-                    else MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-// ── Custom Auth Field ─────────────────────────────────────────────────────────
-
-@Composable
-private fun AuthField(
-    value: String,
-    onValueChange: (String) -> Unit,
-    placeholder: String,
-    leadingIcon: ImageVector,
-    keyboardType: KeyboardType = KeyboardType.Text,
-    imeAction: ImeAction = ImeAction.Next,
-    isPassword: Boolean = false,
-    passwordVisible: Boolean = false,
-    onTogglePassword: (() -> Unit)? = null,
-    onNext: (() -> Unit)? = null,
-    onDone: (() -> Unit)? = null
-) {
-    val interactionSource = remember { MutableInteractionSource() }
-    val isFocused by interactionSource.collectIsFocusedAsState()
-
-    val borderColor by animateFloatAsState(
-        targetValue = if (isFocused) 1f else 0f,
-        animationSpec = tween(200),
-        label = "border_alpha"
-    )
-    val elevation by animateDpAsState(
-        targetValue = if (isFocused) 4.dp else 1.dp,
-        animationSpec = spring(Spring.DampingRatioMediumBouncy),
-        label = "field_elevation"
-    )
-
-    Box(
-        modifier = Modifier
-            .fillMaxWidth()
-            .shadow(elevation, RoundedCornerShape(14.dp))
-            .clip(RoundedCornerShape(14.dp))
-            .background(MaterialTheme.colorScheme.surface)
-            .border(
-                width = 1.5.dp,
-                color = MaterialTheme.colorScheme.primary.copy(alpha = borderColor),
-                shape = RoundedCornerShape(14.dp)
-            )
-            .padding(horizontal = 16.dp, vertical = 14.dp)
-    ) {
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Icon(
-                imageVector = leadingIcon,
-                contentDescription = null,
-                tint = if (isFocused) MaterialTheme.colorScheme.primary
-                else MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier.size(20.dp)
-            )
-            Spacer(Modifier.width(12.dp))
-            Box(modifier = Modifier.weight(1f)) {
-                if (value.isEmpty()) {
-                    Text(
-                        text = placeholder,
-                        style = MaterialTheme.typography.bodyLarge,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
-                    )
-                }
-                BasicTextField(
-                    value = value,
-                    onValueChange = onValueChange,
-                    singleLine = true,
-                    textStyle = MaterialTheme.typography.bodyLarge.copy(
-                        color = MaterialTheme.colorScheme.onSurface
-                    ),
-                    cursorBrush = SolidColor(MaterialTheme.colorScheme.primary),
-                    visualTransformation = if (isPassword && !passwordVisible)
-                        PasswordVisualTransformation() else VisualTransformation.None,
-                    keyboardOptions = KeyboardOptions(
-                        keyboardType = keyboardType,
-                        imeAction = imeAction
-                    ),
-                    keyboardActions = KeyboardActions(
-                        onNext = { onNext?.invoke() },
-                        onDone = { onDone?.invoke() }
-                    ),
-                    interactionSource = interactionSource,
-                    modifier = Modifier.fillMaxWidth()
-                )
-            }
-            if (isPassword && onTogglePassword != null) {
-                IconButton(
-                    onClick = onTogglePassword,
-                    modifier = Modifier.size(20.dp)
-                ) {
-                    Icon(
-                        imageVector = if (passwordVisible) Icons.Default.VisibilityOff
-                        else Icons.Default.Visibility,
-                        contentDescription = null,
-                        tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-            }
-        }
-    }
-}

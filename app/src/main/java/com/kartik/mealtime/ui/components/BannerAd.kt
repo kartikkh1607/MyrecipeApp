@@ -19,6 +19,8 @@ import com.google.android.gms.ads.AdView
  */
 @Composable
 fun BannerAd(modifier: Modifier = Modifier) {
+    if (!AdConfig.adsEnabled) return
+
     val configuration = LocalConfiguration.current
     val adWidthPx = configuration.screenWidthDp
 

@@ -42,3 +42,9 @@ class GetRecipesByCategoryUseCase(
             repository.getRecipesByCategory(categoryId, limit, offset, append)
         }
 }
+
+class FindRecipeVideoUseCase(private val repository: RecipeRepository) {
+    suspend operator fun invoke(recipeName: String): Result<String?> = runCatching {
+        repository.findRecipeVideoId(recipeName)
+    }
+}

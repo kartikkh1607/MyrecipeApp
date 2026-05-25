@@ -57,6 +57,19 @@ class UserPreferencesRepository @Inject constructor(
     }
 
     /**
+     * Single-transaction profile save. Writes name, avatar, and dietary prefs in one
+     * DataStore [edit] so observers receive exactly one emission instead of three —
+     * prevents the Profile screen from flickering through partially-updated state.
+     */
+    suspend fun saveProfile(name: String, emoji: String, dietaryPrefs: Set<DietaryPref>) {
+        context.userPrefsDataStore.edit {
+            it[KEY_DISPLAY_NAME] = name.trim()
+            it[KEY_AVATAR] = emoji
+            it[KEY_DIETARY_PREFS] = dietaryPrefs.joinToString(",") { p -> p.name }
+        }
+    }
+
+    /**
      * Whether the user has already passed the first-launch auth gate (either by
      * signing in or by tapping "Maybe later"). Reset to false on sign-out so the
      * gate appears again on the next cold launch.

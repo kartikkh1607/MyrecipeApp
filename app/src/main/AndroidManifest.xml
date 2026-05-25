@@ -21,12 +21,13 @@
         android:supportsRtl="true"
         android:theme="@style/Theme.MyrecipeApp">
 
-        <!-- AdMob App ID — current value is Google's official TEST app ID.
-             Replace with your production App ID from AdMob Console before publishing.
+        <!-- AdMob App ID — supplied by the ${admobAppId} manifest placeholder
+             (see app/build.gradle.kts). Defaults to Google's TEST App ID; the release
+             build swaps in your production App ID from local.properties (admob.app.id).
              Get yours at: https://apps.admob.com/ -->
         <meta-data
             android:name="com.google.android.gms.ads.APPLICATION_ID"
-            android:value="ca-app-pub-3940256099942544~3347511713" />
+            android:value="${admobAppId}" />
 
         <!-- Resolve manifest merger conflict between play-services-ads-lite
              (gma_ad_services_config) and play-services-measurement-api

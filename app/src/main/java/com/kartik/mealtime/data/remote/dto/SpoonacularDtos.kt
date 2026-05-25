@@ -18,6 +18,17 @@ data class SpoonacularSearchResponse(
     @SerializedName("totalResults") val totalResults: Int
 )
 
+// Response for GET /food/videos/search — recipe videos sourced from YouTube
+data class SpoonacularVideoSearchResponse(
+    @SerializedName("videos") val videos: List<SpoonacularVideoDto>? = emptyList()
+)
+
+data class SpoonacularVideoDto(
+    @SerializedName("title") val title: String?,
+    // YouTube video id — build a watch URL as https://www.youtube.com/watch?v=<id>
+    @SerializedName("youTubeId") val youTubeId: String?
+)
+
 // The main recipe DTO — used in both list and detail responses
 data class SpoonacularRecipeDto(
     @SerializedName("id") val id: Int,

@@ -33,8 +33,4 @@ interface ShoppingDao {
 
     @Query("DELETE FROM shopping_items")
     suspend fun deleteAll()
-
-    /** Removes all recipe items (preserves "Custom" items the user added manually). */
-    @Query("DELETE FROM shopping_items WHERE recipeName != :customLabel")
-    suspend fun deleteByRecipeExcluding(customLabel: String = "Custom")
 }

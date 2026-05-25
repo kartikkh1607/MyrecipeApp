@@ -10,4 +10,10 @@
     <color name="linen">#FAF7F5</color>
     <!-- Status bar tint used during splash so the bar matches the brand background -->
     <color name="splash_status_bar">#2D5A5A</color>
+    <!-- Dark-theme background — mirrors Compose's Midnight (Color.kt) so the system
+         splash matches the dark UI that loads right after it. -->
+    <color name="midnight">#1B1D21</color>
+    <!-- Splash background — defaults to forest green, overridden to @color/midnight in
+         values-night/ so dark-mode users don't get a bright green flash on cold launch. -->
+    <color name="splash_background">@color/forest_green</color>
 </resources>

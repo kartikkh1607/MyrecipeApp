@@ -4,6 +4,7 @@ import com.kartik.mealtime.data.local.FavoriteDao
 import com.kartik.mealtime.data.local.FavoriteEntity
 import com.kartik.mealtime.data.local.ShoppingDao
 import com.kartik.mealtime.data.local.ShoppingItemEntity
+import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
@@ -51,10 +52,7 @@ class SyncRepository @Inject constructor(
     }
 
     suspend fun clearShoppingList(uid: String) {
-        val docs = shoppingRef(uid).get().await()
-        val batch = firestore.batch()
-        docs.documents.forEach { batch.delete(it.reference) }
-        batch.commit().await()
+        deleteCollection(shoppingRef(uid))
     }
 
     /** Pull all shopping items from Firestore and upsert into local Room DB. */
@@ -64,6 +62,42 @@ class SyncRepository @Inject constructor(
             val entity = doc.toShoppingItemEntity() ?: return@forEach
             shoppingDao.insert(entity)
         }
+    }
+
+    // ── Account deletion ────────────────────────────────────────────────────────
+
+    /**
+     * Removes every trace of the user: their Firestore favorites + shopping subcollections,
+     * the parent `users/{uid}` document, and the local Room mirrors. Call this BEFORE
+     * deleting the Auth account (while the session is still valid) so no orphaned PII is
+     * left in Firestore if the auth deletion later needs a fresh sign-in.
+     */
+    suspend fun deleteAllUserData(uid: String) {
+        deleteCollection(favoritesRef(uid))
+        deleteCollection(shoppingRef(uid))
+        firestore.collection("users").document(uid).delete().await()
+        favoriteDao.deleteAll()
+        shoppingDao.deleteAll()
+    }
+
+    /**
+     * Deletes all documents in [collection] in chunks of [BATCH_LIMIT] (Firestore's
+     * per-batch cap), looping until the collection is empty — so it scales past 500 docs
+     * and bills only one read page per chunk instead of fetching the whole collection.
+     */
+    private suspend fun deleteCollection(collection: CollectionReference) {
+        while (true) {
+            val snapshot = collection.limit(BATCH_LIMIT.toLong()).get().await()
+            if (snapshot.isEmpty) break
+            val batch = firestore.batch()
+            snapshot.documents.forEach { batch.delete(it.reference) }
+            batch.commit().await()
+            if (snapshot.size() < BATCH_LIMIT) break
+        }
+    }
+
+    private companion object {
+        const val BATCH_LIMIT = 500
     }
 }
 

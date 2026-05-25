@@ -1,8 +1,10 @@
 package com.kartik.mealtime.domain.model
 
 import android.os.Parcelable
+import androidx.compose.runtime.Immutable
 import kotlinx.parcelize.Parcelize
 
+@Immutable
 @Parcelize
 data class Recipe(
     val id: String,
@@ -31,6 +33,7 @@ data class Recipe(
     val isLowCarb: Boolean = false
 ) : Parcelable
 
+@Immutable
 @Parcelize
 data class Ingredient(
     val id: String = "",
@@ -40,6 +43,7 @@ data class Ingredient(
     val isOptional: Boolean = false
 ) : Parcelable
 
+@Immutable
 @Parcelize
 data class RecipeStep(
     val stepNumber: Int,
@@ -48,6 +52,7 @@ data class RecipeStep(
     val tips: String? = null
 ) : Parcelable
 
+@Immutable
 @Parcelize
 data class NutritionInfo(
     val calories: Int,
@@ -82,6 +87,7 @@ enum class FeaturedType {
     QUICK_MEALS
 }
 
+@Immutable
 @Parcelize
 data class FeaturedRecipe(
     val recipe: Recipe,

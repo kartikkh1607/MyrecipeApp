@@ -16,6 +16,7 @@ import retrofit2.Retrofit
 import retrofit2.converter.gson.GsonConverterFactory
 import java.io.File
 import java.util.concurrent.TimeUnit
+import javax.inject.Named
 import javax.inject.Singleton
 
 @Module
@@ -90,6 +91,22 @@ object NetworkModule {
             .writeTimeout(15, TimeUnit.SECONDS)
             .build()
     }
+
+    /**
+     * Plain OkHttp client for the AI providers (Gemini, Groq). Kept separate from the
+     * Spoonacular client above, whose ApiKeyInterceptor appends the Spoonacular apiKey
+     * to every request — that must never touch AI calls. Shared as a singleton so Gemini
+     * and Groq don't each spin up their own thread + connection pools.
+     */
+    @Provides
+    @Singleton
+    @Named("ai")
+    fun provideAiOkHttpClient(): OkHttpClient =
+        OkHttpClient.Builder()
+            .connectTimeout(30, TimeUnit.SECONDS)
+            .readTimeout(60, TimeUnit.SECONDS)
+            .writeTimeout(60, TimeUnit.SECONDS)
+            .build()
 
     @Provides
     @Singleton

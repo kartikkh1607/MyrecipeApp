@@ -75,14 +75,13 @@ class UserViewModel @Inject constructor(
     }
 
     /**
-     * Atomic profile save — used by the EditProfileSheet's Save button.
-     * Avoids three sequential DataStore writes that would each emit a Flow update.
+     * Atomic profile save — used by the EditProfileSheet's Save button. Delegates to a
+     * single DataStore transaction in the repository, so observers see one emission
+     * instead of three (no UI flicker through partially-updated state).
      */
     fun saveProfile(name: String, emoji: String, dietaryPrefs: Set<DietaryPref>) {
         viewModelScope.launch {
-            userPrefsRepo.updateDisplayName(name)
-            userPrefsRepo.updateAvatar(emoji)
-            userPrefsRepo.updateDietaryPrefs(dietaryPrefs)
+            userPrefsRepo.saveProfile(name, emoji, dietaryPrefs)
         }
     }
 }

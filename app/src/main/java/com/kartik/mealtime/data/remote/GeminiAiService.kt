@@ -9,26 +9,41 @@ import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
-import java.util.concurrent.TimeUnit
 import javax.inject.Inject
+import javax.inject.Named
 
 /**
  * Gemini AI API client for recipe chat and recommendations.
  * Uses the Gemini 2.0 Flash model via the REST API.
  */
-class GeminiAiService @Inject constructor() {
-
-    private val client = OkHttpClient.Builder()
-        .connectTimeout(30, TimeUnit.SECONDS)
-        .readTimeout(60, TimeUnit.SECONDS)
-        .writeTimeout(60, TimeUnit.SECONDS)
-        .build()
+class GeminiAiService @Inject constructor(
+    @Named("ai") private val client: OkHttpClient
+) : AiService {
 
     private val gson = Gson()
 
     companion object {
         private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
         private const val SAFETY_BLOCKED = " SAFETY_BLOCKED"
+    }
+
+    // Maps Gemini HTTP errors to messages users can act on, instead of "API error: 429".
+    private fun friendlyError(code: Int, body: String?): Exception {
+        // Gemini error JSON shape: { "error": { "code": ..., "message": "...", "status": "..." } }
+        val geminiMsg = runCatching {
+            gson.fromJson(body, GeminiErrorEnvelope::class.java)?.error?.message
+        }.getOrNull()
+        val suffix = if (!geminiMsg.isNullOrBlank()) " ($geminiMsg)" else ""
+        return Exception(
+            when (code) {
+                400 -> "Couldn't reach the AI assistant (bad request). The API key may be invalid — check local.properties.$suffix"
+                401, 403 -> "AI assistant is unavailable: the API key is missing, restricted, or the Generative Language API isn't enabled.$suffix"
+                404 -> "AI model not found. The 'gemini-2.0-flash' model may have changed — try updating the app.$suffix"
+                429 -> "AI assistant quota exceeded. Free tier allows 15 req/min and 1500 req/day per project. Check Google Cloud quotas or enable billing.$suffix"
+                in 500..599 -> "Gemini is having trouble right now. Please try again in a moment.$suffix"
+                else -> "AI assistant error ($code).$suffix"
+            }
+        )
     }
 
     /**
@@ -38,13 +53,13 @@ class GeminiAiService @Inject constructor() {
      * read from the user's profile. Prepended to the system prompt so Gemini
      * filters suggestions to match the user's diet.
      */
-    suspend fun sendChatMessage(
+    override suspend fun sendChatMessage(
         message: String,
-        conversationHistory: List<ChatMessage> = emptyList(),
-        dietaryPreferences: String = ""
+        conversationHistory: List<ChatMessage>,
+        dietaryPreferences: String
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = buildPrompt(conversationHistory, message, dietaryPreferences)
+            val prompt = AiPrompts.buildChatPrompt(conversationHistory, message, dietaryPreferences)
             val requestBody = GenerateContentRequest(
                 contents = listOf(
                     Content(
@@ -73,9 +88,7 @@ class GeminiAiService @Inject constructor() {
             )
 
             if (!response.isSuccessful) {
-                return@withContext Result.failure(
-                    Exception("API error: ${response.code} - ${response.message}")
-                )
+                return@withContext Result.failure(friendlyError(response.code, responseBody))
             }
 
             val parseResponse = gson.fromJson(responseBody, GenerateContentResponse::class.java)
@@ -106,12 +119,12 @@ class GeminiAiService @Inject constructor() {
     /**
      * Generate smart recipe recommendations based on user preferences.
      */
-    suspend fun getRecipeRecommendations(
+    override suspend fun getRecipeRecommendations(
         favoriteRecipes: List<String>,  // List of recipe names user has liked
-        dietaryPreferences: String = ""
+        dietaryPreferences: String
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
-            val prompt = buildRecommendationPrompt(favoriteRecipes, dietaryPreferences)
+            val prompt = AiPrompts.buildRecommendationPrompt(favoriteRecipes, dietaryPreferences)
             val requestBody = GenerateContentRequest(
                 contents = listOf(
                     Content(
@@ -140,7 +153,7 @@ class GeminiAiService @Inject constructor() {
             )
 
             if (!response.isSuccessful) {
-                return@withContext Result.failure(Exception("API error: ${response.code}"))
+                return@withContext Result.failure(friendlyError(response.code, responseBody))
             }
 
             val parseResponse = gson.fromJson(responseBody, GenerateContentResponse::class.java)
@@ -158,57 +171,6 @@ class GeminiAiService @Inject constructor() {
         } catch (e: Exception) {
             Result.failure(e)
         }
-    }
-
-    private fun buildPrompt(
-        history: List<ChatMessage>,
-        newMessage: String,
-        dietaryPreferences: String = ""
-    ): String {
-        val sb = StringBuilder()
-        sb.appendLine("You are a friendly and knowledgeable recipe assistant. You help users:")
-        sb.appendLine("- Find recipes based on ingredients they have")
-        sb.appendLine("- Suggest recipe variations and substitutions")
-        sb.appendLine("- Answer cooking questions and provide tips")
-        sb.appendLine("- Suggest recipes based on preferences and dietary needs")
-        sb.appendLine()
-        // Per-user dietary context — only emitted when the user has set preferences.
-        if (dietaryPreferences.isNotBlank()) {
-            sb.appendLine("IMPORTANT — User's dietary preferences: $dietaryPreferences.")
-            sb.appendLine("ONLY suggest recipes that match these preferences. If asked about")
-            sb.appendLine("recipes that conflict, gently note the conflict and offer alternatives.")
-            sb.appendLine()
-        }
-        sb.appendLine("Keep responses conversational, helpful, and concise.")
-        sb.appendLine("When suggesting recipes, mention the recipe name in **bold**.")
-        sb.appendLine()
-        sb.appendLine("Conversation:")
-        history.takeLast(6).forEach { msg ->
-            sb.appendLine("${if (msg.isUser) "User" else "Assistant"}: ${msg.content}")
-        }
-        sb.appendLine()
-        sb.appendLine("User: $newMessage")
-        sb.appendLine("Assistant:")
-        return sb.toString()
-    }
-
-    private fun buildRecommendationPrompt(
-        favoriteRecipes: List<String>,
-        dietaryPreferences: String
-    ): String {
-        val favList = favoriteRecipes.take(10).joinToString(", ")
-        return """
-            |You are a recipe recommendation expert. Based on the user's taste preferences,
-            |suggest 3-5 personalized recipes they might enjoy.
-            |
-            |User's favorite recipes: $favList
-            |${if (dietaryPreferences.isNotBlank()) "Dietary preferences: $dietaryPreferences" else ""}
-            |
-            |Format your response like this:
-            |• **Recipe Name** - Brief description of why they'd like it
-            |
-            |Keep suggestions varied and interesting. Do not repeat the same cuisine or style.
-        """.trimMargin()
     }
 }
 
@@ -242,8 +204,6 @@ data class Candidate(
     val finishReason: String?
 )
 
-data class ChatMessage(
-    val content: String,
-    val isUser: Boolean,
-    val timestamp: Long = System.currentTimeMillis()
-)
+// Gemini error response shape — used to surface the underlying reason in the chat.
+data class GeminiErrorEnvelope(val error: GeminiErrorBody?)
+data class GeminiErrorBody(val code: Int?, val message: String?, val status: String?)

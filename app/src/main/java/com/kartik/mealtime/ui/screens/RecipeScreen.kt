@@ -50,10 +50,10 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -246,7 +246,7 @@ fun CategoryGridItem(
             modifier = Modifier
                 .fillMaxWidth()
                 .aspectRatio(0.8f)
-                .scale(scale)
+                .graphicsLayer { scaleX = scale; scaleY = scale }
                 .shadow(
                     elevation = elevation, shape = RoundedCornerShape(20.dp),
                     ambientColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f),
@@ -401,7 +401,7 @@ fun ErrorDisplay(message: String, onRetry: () -> Unit = {}, modifier: Modifier =
                 contentDescription = null,
                 modifier = Modifier
                     .size(48.dp)
-                    .scale(iconScale),
+                    .graphicsLayer { scaleX = iconScale; scaleY = iconScale },
                 tint = MaterialTheme.colorScheme.error
             )
         }

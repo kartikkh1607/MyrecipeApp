@@ -48,7 +48,7 @@ class InterstitialAdManager @Inject constructor(
 
     init {
         // Warm cache so the first eligible recipe view has an ad ready.
-        loadAd()
+        if (AdConfig.adsEnabled) loadAd()
     }
 
     /**
@@ -57,6 +57,7 @@ class InterstitialAdManager @Inject constructor(
      * because interstitials must show from one.
      */
     fun maybeShowOnRecipeView(activity: Activity) {
+        if (!AdConfig.adsEnabled) return
         recipeViewCount++
         if (recipeViewCount % AdConfig.INTERSTITIAL_FREQUENCY != 0) return
 

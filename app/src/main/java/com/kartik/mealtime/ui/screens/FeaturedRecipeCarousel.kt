@@ -45,7 +45,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
@@ -162,7 +161,8 @@ fun FeaturedRecipeCarousel(
                 onClick = onCardClick,
                 // Reads pagerState inside graphicsLayer (draw phase) — avoids per-frame recomposition
                 modifier = Modifier.graphicsLayer {
-                    val pageOffset = (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
+                    val pageOffset =
+                        (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
                     val fraction = pageOffset.absoluteValue.coerceIn(0f, 1f)
                     scaleX = lerp(0.85f, 1f, 1f - fraction)
                     scaleY = lerp(0.85f, 1f, 1f - fraction)
@@ -195,7 +195,11 @@ fun FeaturedRecipeCard(
     // Cache static gradient brush — avoids allocating a new Brush + List on every recompose
     val overlayGradient = remember {
         Brush.verticalGradient(
-            colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.3f), Color.Black.copy(alpha = 0.8f)),
+            colors = listOf(
+                Color.Transparent,
+                Color.Black.copy(alpha = 0.3f),
+                Color.Black.copy(alpha = 0.8f)
+            ),
             startY = 0f,
             endY = 1000f
         )
@@ -212,7 +216,7 @@ fun FeaturedRecipeCard(
     Card(
         modifier = modifier
             .fillMaxSize()
-            .scale(pressScale)
+            .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
             .clickable {
                 isPressed = true
                 onClick()

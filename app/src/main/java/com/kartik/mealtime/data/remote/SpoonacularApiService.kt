@@ -3,6 +3,7 @@ package com.kartik.mealtime.data.remote
 import com.kartik.mealtime.data.remote.dto.SpoonacularGetRecipesResponse
 import com.kartik.mealtime.data.remote.dto.SpoonacularRecipeDto
 import com.kartik.mealtime.data.remote.dto.SpoonacularSearchResponse
+import com.kartik.mealtime.data.remote.dto.SpoonacularVideoSearchResponse
 import retrofit2.http.GET
 import retrofit2.http.Path
 import retrofit2.http.Query
@@ -58,4 +59,15 @@ interface SpoonacularApiService {
         // Only return recipes that have cooking steps — prevents empty CookingModeScreen
         @Query("instructionsRequired") instructionsRequired: Boolean = true
     ): SpoonacularGetRecipesResponse
+
+    /**
+     * GET /food/videos/search
+     * Find recipe videos (sourced from YouTube) matching [query]. The response's
+     * youTubeId builds a watch URL. Costs ~1 API point — call only on user action.
+     */
+    @GET("food/videos/search")
+    suspend fun searchFoodVideos(
+        @Query("query") query: String,
+        @Query("number") number: Int = 1
+    ): SpoonacularVideoSearchResponse
 }

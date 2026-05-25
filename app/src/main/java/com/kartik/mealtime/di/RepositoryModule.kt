@@ -1,9 +1,12 @@
 package com.kartik.mealtime.di
 
+import com.kartik.mealtime.data.remote.AiService
+import com.kartik.mealtime.data.remote.AiServiceRouter
 import com.kartik.mealtime.data.repository.RecipeRepositoryImpl
 import com.kartik.mealtime.domain.repository.RecipeRepository
 import com.kartik.mealtime.domain.usecase.GetCategoriesUseCase
 import com.kartik.mealtime.domain.usecase.GetFeaturedRecipesUseCase
+import com.kartik.mealtime.domain.usecase.FindRecipeVideoUseCase
 import com.kartik.mealtime.domain.usecase.GetRecipeDetailsUseCase
 import com.kartik.mealtime.domain.usecase.GetRecipesByCategoryUseCase
 import com.kartik.mealtime.domain.usecase.SearchRecipesUseCase
@@ -21,6 +24,15 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindRecipeRepository(impl: RecipeRepositoryImpl): RecipeRepository
+
+    /**
+     * Lets the presentation layer depend on the [AiService] abstraction rather than
+     * the concrete [AiServiceRouter] — keeps [com.kartik.mealtime.ui.viewmodel.AiViewModel]
+     * unit-testable with a fake AI service.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindAiService(impl: AiServiceRouter): AiService
 
     companion object {
         @Provides
@@ -42,5 +54,9 @@ abstract class RepositoryModule {
         @Provides
         fun provideGetRecipesByCategoryUseCase(repo: RecipeRepository): GetRecipesByCategoryUseCase =
             GetRecipesByCategoryUseCase(repo)
+
+        @Provides
+        fun provideFindRecipeVideoUseCase(repo: RecipeRepository): FindRecipeVideoUseCase =
+            FindRecipeVideoUseCase(repo)
     }
 }

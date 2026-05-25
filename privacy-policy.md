@@ -1,6 +1,6 @@
 # Privacy Policy for MealTime
 
-**Last updated: May 13, 2026**
+**Last updated: May 25, 2026**
 
 Kartik Khandelwal ("we", "us", or "our") operates the MealTime mobile
 application (the "App"). This page explains what information the App
@@ -56,7 +56,22 @@ commands (e.g. "next", "back", "repeat").
   attached to these requests by the App. Do not enter personal
   information into AI prompts.
 
-### 1.5 Diagnostics and analytics
+### 1.5 Advertising
+The free version of the App displays ads served by **Google AdMob**.
+- To request and measure ads, the Google Mobile Ads SDK collects your
+  device's **Advertising ID** (a resettable identifier), along with
+  basic device and ad-interaction information. This is declared in the
+  App via the `com.google.android.gms.permission.AD_ID` permission.
+- This information may be used by Google to deliver and personalize ads
+  and to measure ad performance, in accordance with Google's policies.
+- You can reset your Advertising ID or opt out of ad personalization at
+  any time in your device settings:
+  **Settings → Google → Ads** (on most Android devices).
+- For details on how Google uses this data, see
+  https://support.google.com/admob/answer/6128543 and
+  https://policies.google.com/technologies/partner-sites.
+
+### 1.6 Diagnostics and analytics
 The App uses the following Google services:
 - **Firebase Analytics** — anonymous usage events (screen views,
   feature usage) used to improve the App. No personally identifying
@@ -68,7 +83,7 @@ The App uses the following Google services:
 Both services may collect a Firebase installation identifier and basic
 device information per Google's policies.
 
-### 1.6 Network requests
+### 1.7 Network requests
 All network traffic uses **HTTPS**. The App does not allow cleartext
 HTTP traffic.
 
@@ -78,8 +93,12 @@ HTTP traffic.
 - We do not collect your real name, phone number, or address.
 - We do not collect location data.
 - We do not collect contacts, photos, files, or other personal media.
-- We do not show ads and do not use advertising or tracking SDKs.
-- We do not sell your data to third parties.
+- We do not sell your personal information for money. Note that, to show
+  personalized ads, the Google Mobile Ads SDK shares your Advertising ID
+  and ad-interaction data with Google; under some privacy laws (e.g. the
+  California CCPA) this may be considered a "sale" or "sharing" of
+  personal information. You can opt out of ad personalization as
+  described in Section 1.5.
 
 ---
 
@@ -90,6 +109,7 @@ privacy policy:
 | Service | Purpose | Privacy policy |
 |---|---|---|
 | Firebase (Google) | Auth, Firestore, Analytics, Crashlytics | https://policies.google.com/privacy |
+| Google AdMob | In-app advertising | https://support.google.com/admob/answer/6128543 |
 | Google Gemini API | AI recipe generation and chat | https://policies.google.com/privacy |
 | Spoonacular | Recipe search and detail data | https://spoonacular.com/food-api/terms |
 | Android Speech Recognizer (Google) | Voice command transcription | https://policies.google.com/privacy |
@@ -98,10 +118,12 @@ privacy policy:
 
 ## 4. Data retention and deletion
 - **Account and synced content** is kept while your account is active.
-- **You can delete your account at any time** from the Profile screen
-  in the App, which removes your authentication record and your
-  synced data from our Firestore database.
-- You can also email us at the address below to request deletion.
+- **You can delete your account and all synced data at any time, directly
+  in the App** — go to **Profile → Delete account**. This immediately
+  removes your synced data (favorites and shopping list) from our
+  Firestore database and deletes your authentication record.
+- Alternatively, you can request deletion by emailing us at the address in
+  Section 9; we will process such requests within 30 days.
 - **Crash and analytics data** is retained for up to 90 days
   (Crashlytics) and up to 14 months (Analytics) per Google's defaults.
 
@@ -109,9 +131,9 @@ privacy policy:
 
 ## 5. Children's privacy
 The App is not directed at children under 13, and we do not knowingly
-collect personal information from children under 13. If you believe a
-child has provided us information, please contact us and we will
-delete it.
+collect personal information from children under 13. The ads shown in
+the App are not directed at children. If you believe a child has
+provided us information, please contact us and we will delete it.
 
 ---
 
@@ -119,6 +141,8 @@ delete it.
 - `INTERNET` — required to load recipes, sign in, and sync data.
 - `RECORD_AUDIO` — used only when you activate voice commands in
   Cooking Mode; can be denied without affecting the rest of the App.
+- `AD_ID` (Advertising ID) — used by the Google Mobile Ads SDK to
+  request and measure ads (see Section 1.5).
 
 ---
 
@@ -128,6 +152,7 @@ have the right to:
 - Access the personal data we hold about you.
 - Correct or delete that data.
 - Object to or restrict its processing.
+- Opt out of personalized advertising.
 - Receive a copy of your data in a portable format.
 
 To exercise any of these rights, contact us at the email below.

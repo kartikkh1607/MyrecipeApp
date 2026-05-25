@@ -1,5 +1,6 @@
 package com.kartik.mealtime.ui.viewmodel
 
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.State
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
@@ -7,8 +8,8 @@ import androidx.lifecycle.viewModelScope
 import com.kartik.mealtime.data.analytics.AnalyticsHelper
 import com.kartik.mealtime.data.local.FavoriteDao
 import com.kartik.mealtime.data.preferences.UserPreferencesRepository
+import com.kartik.mealtime.data.remote.AiService
 import com.kartik.mealtime.data.remote.ChatMessage
-import com.kartik.mealtime.data.remote.GeminiAiService
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -17,12 +18,13 @@ import javax.inject.Inject
 @HiltViewModel
 class AiViewModel @Inject constructor(
     private val favoriteDao: FavoriteDao,
-    private val aiService: GeminiAiService,
+    private val aiService: AiService,
     private val analytics: AnalyticsHelper,
     private val userPrefsRepo: UserPreferencesRepository
 ) : ViewModel() {
 
     // ── Chat State ─────────────────────────────────────────────────────────────
+    @Immutable
     data class ChatState(
         val messages: List<ChatUiMessage> = emptyList(),
         val isLoading: Boolean = false,
@@ -30,6 +32,7 @@ class AiViewModel @Inject constructor(
         val isTyping: Boolean = false  // AI is "typing" response
     )
 
+    @Immutable
     data class ChatUiMessage(
         val id: String = java.util.UUID.randomUUID().toString(),
         val content: String,
@@ -38,6 +41,7 @@ class AiViewModel @Inject constructor(
         val suggestedRecipes: List<SuggestedRecipe> = emptyList()
     )
 
+    @Immutable
     data class SuggestedRecipe(
         val name: String,
         val description: String
@@ -58,6 +62,19 @@ class AiViewModel @Inject constructor(
 
     private val conversationHistory = mutableListOf<ChatMessage>()
 
+    /** Monotonic timestamp of the last accepted send, used by the cooldown guard. */
+    private var lastSendElapsed = 0L
+
+    private companion object {
+        /** Minimum gap between accepted sends — blocks double-taps / rapid spam that
+         *  would burn the shared Gemini key's 15-req/min free-tier quota for everyone. */
+        const val SEND_COOLDOWN_MS = 1_500L
+
+        /** Sliding window: only the most recent turns are sent to Gemini, keeping the
+         *  prompt bounded so long chats don't exceed the context window or inflate cost. */
+        const val MAX_HISTORY_MESSAGES = 20
+    }
+
     init {
         // Welcome message
         _chatState.value = ChatState(
@@ -74,6 +91,13 @@ class AiViewModel @Inject constructor(
         val trimmed = text.trim()
         if (trimmed.isBlank()) return
 
+        // Rate-limit: drop the send if a response is still streaming or we're inside the
+        // cooldown window. The send button is also disabled while isTyping, so this is
+        // defense-in-depth against double-taps and programmatic spam.
+        val now = android.os.SystemClock.elapsedRealtime()
+        if (_chatState.value.isTyping || now - lastSendElapsed < SEND_COOLDOWN_MS) return
+        lastSendElapsed = now
+
         viewModelScope.launch {
             // Add user message
             val userMsg = ChatUiMessage(content = trimmed, isUser = true)
@@ -84,6 +108,7 @@ class AiViewModel @Inject constructor(
             )
 
             conversationHistory.add(ChatMessage(content = trimmed, isUser = true))
+            trimHistory()
             analytics.logAiChatMessageSent()
 
             // Personalization: include the user's dietary prefs so Gemini
@@ -103,6 +128,7 @@ class AiViewModel @Inject constructor(
             result.fold(
                 onSuccess = { response ->
                     conversationHistory.add(ChatMessage(content = response, isUser = false))
+                    trimHistory()
 
                     val suggestions = extractRecipeSuggestions(response)
 
@@ -163,6 +189,13 @@ class AiViewModel @Inject constructor(
 
     fun refreshRecommendations() {
         loadRecommendations()
+    }
+
+    /** Caps [conversationHistory] at [MAX_HISTORY_MESSAGES], dropping the oldest turns. */
+    private fun trimHistory() {
+        while (conversationHistory.size > MAX_HISTORY_MESSAGES) {
+            conversationHistory.removeAt(0)
+        }
     }
 
     private fun extractRecipeSuggestions(text: String): List<SuggestedRecipe> {

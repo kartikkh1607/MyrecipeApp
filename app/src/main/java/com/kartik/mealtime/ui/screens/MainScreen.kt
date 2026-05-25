@@ -34,10 +34,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.scale
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.currentBackStackEntryAsState
@@ -52,13 +54,18 @@ import com.kartik.mealtime.ui.navigation.Settings
 import com.kartik.mealtime.ui.navigation.TabReselectEvents
 import com.kartik.mealtime.ui.viewmodel.AuthViewModel
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
-import androidx.hilt.navigation.compose.hiltViewModel
+import com.kartik.mealtime.ui.viewmodel.SearchViewModel
+import com.kartik.mealtime.ui.viewmodel.ShoppingListViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun MainScreen(viewModel: MainViewModel) {
     val navController = rememberNavController()
     val authViewModel: AuthViewModel = hiltViewModel()
+    // Shared (activity-scoped) so RecipeDetail's addToShoppingList and the
+    // ShoppingList screen see the same in-memory lastAddedRecipeName hint.
+    val shoppingListViewModel: ShoppingListViewModel = hiltViewModel()
+    val searchViewModel: SearchViewModel = hiltViewModel()
 
     // Only show the bottom nav on the 5 main tab destinations.
     // Any detail / full-screen route gets a hidden nav bar.
@@ -103,7 +110,9 @@ fun MainScreen(viewModel: MainViewModel) {
                 Navigation(
                     navController = navController,
                     viewModel = viewModel,
-                    authViewModel = authViewModel
+                    authViewModel = authViewModel,
+                    shoppingListViewModel = shoppingListViewModel,
+                    searchViewModel = searchViewModel
                 )
             }
         }
@@ -199,7 +208,7 @@ fun BottomNavigationBar(
                             contentDescription = item.label,
                             modifier = Modifier
                                 .size(28.dp)
-                                .scale(iconScale)
+                                .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
                         )
                     }
                 } else {
@@ -210,7 +219,7 @@ fun BottomNavigationBar(
                                 contentDescription = item.label,
                                 modifier = Modifier
                                     .size(24.dp)
-                                    .scale(iconScale)
+                                    .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
                             )
                         },
                         label = {

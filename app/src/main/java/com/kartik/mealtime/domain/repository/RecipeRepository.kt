@@ -46,4 +46,11 @@ interface RecipeRepository {
         offset: Int,
         append: Boolean
     ): List<Recipe>
+
+    /**
+     * Finds a YouTube video id for [recipeName] via Spoonacular's video search,
+     * or null when no match is found or the API is unavailable. Costs ~1 API
+     * point, so only call on explicit user action (e.g. a "Watch Video" tap).
+     */
+    suspend fun findRecipeVideoId(recipeName: String): String?
 }

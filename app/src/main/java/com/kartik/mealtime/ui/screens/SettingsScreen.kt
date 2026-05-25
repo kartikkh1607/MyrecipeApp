@@ -60,9 +60,9 @@ import com.kartik.mealtime.domain.model.ThemeMode
 import com.kartik.mealtime.ui.navigation.About
 import com.kartik.mealtime.ui.navigation.LocalTabReselectEvents
 import com.kartik.mealtime.ui.navigation.Profile
-import com.kartik.mealtime.ui.navigation.Settings as SettingsRoute
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.flow.filter
+import com.kartik.mealtime.ui.navigation.Settings as SettingsRoute
 
 @Composable
 fun SettingsScreen(

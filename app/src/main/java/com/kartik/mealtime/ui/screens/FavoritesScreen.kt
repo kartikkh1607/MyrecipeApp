@@ -72,15 +72,16 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.draw.scale
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.kartik.mealtime.domain.model.Recipe
@@ -89,6 +90,7 @@ import com.kartik.mealtime.ui.navigation.Favorites
 import com.kartik.mealtime.ui.navigation.LocalTabReselectEvents
 import com.kartik.mealtime.ui.navigation.RecipeDetail
 import com.kartik.mealtime.ui.navigation.Search
+import com.kartik.mealtime.ui.viewmodel.FavoritesViewModel
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
@@ -100,11 +102,12 @@ fun FavoritesScreen(
     navController: NavHostController,
     viewModel: MainViewModel
 ) {
-    val favoriteRecipes by viewModel.favoriteRecipes
-    val sortedFavorites by viewModel.sortedFavoriteRecipes
-    val favoriteIds by viewModel.favoriteIds
-    val isGridMode by viewModel.favoritesGridMode
-    val currentSort by viewModel.favoritesSortOrder
+    val favoritesViewModel: FavoritesViewModel = hiltViewModel()
+    val favoriteRecipes by favoritesViewModel.favoriteRecipes
+    val sortedFavorites by favoritesViewModel.sortedFavoriteRecipes
+    val favoriteIds by favoritesViewModel.favoriteIds
+    val isGridMode by favoritesViewModel.favoritesGridMode
+    val currentSort by favoritesViewModel.favoritesSortOrder
     val hapticFeedback = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = androidx.compose.runtime.rememberCoroutineScope()
@@ -162,7 +165,7 @@ fun FavoritesScreen(
                 if (favoriteRecipes.isNotEmpty()) {
                     IconButton(
                         onClick = {
-                            viewModel.toggleFavoritesGridMode()
+                            favoritesViewModel.toggleFavoritesGridMode()
                             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                         },
                         colors = IconButtonDefaults.iconButtonColors(
@@ -184,15 +187,15 @@ fun FavoritesScreen(
                     currentSort = currentSort,
                     onSortSelected = { order ->
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        viewModel.setFavoritesSortOrder(order)
+                        favoritesViewModel.setFavoritesSortOrder(order)
                     }
                 )
                 Spacer(modifier = Modifier.height(14.dp))
             }
 
             // Stable method references hoisted to avoid recomposition of list items
-            val onRemoveFavorite = remember { viewModel::removeFavorite }
-            val onAddFavorite = remember { viewModel::addFavorite }
+            val onRemoveFavorite = remember { favoritesViewModel::removeFavorite }
+            val onAddFavorite = remember { favoritesViewModel::addFavorite }
 
             // ── Content ──────────────────────────────────────────────────────────
             AnimatedContent(
@@ -341,18 +344,18 @@ fun FavoritesScreen(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 private fun FavoritesSortBar(
-    currentSort: MainViewModel.FavoritesSortOrder,
-    onSortSelected: (MainViewModel.FavoritesSortOrder) -> Unit
+    currentSort: FavoritesViewModel.FavoritesSortOrder,
+    onSortSelected: (FavoritesViewModel.FavoritesSortOrder) -> Unit
 ) {
-    val sortOptions = remember { MainViewModel.FavoritesSortOrder.values().toList() }
+    val sortOptions = remember { FavoritesViewModel.FavoritesSortOrder.values().toList() }
     val sortEmojis = remember {
         mapOf(
-            MainViewModel.FavoritesSortOrder.RECENTLY_ADDED to "🕐",
-            MainViewModel.FavoritesSortOrder.NAME_AZ to "🔤",
-            MainViewModel.FavoritesSortOrder.NAME_ZA to "🔡",
-            MainViewModel.FavoritesSortOrder.RATING to "★",
-            MainViewModel.FavoritesSortOrder.COOK_TIME to "⏱",
-            MainViewModel.FavoritesSortOrder.DIFFICULTY to "💪"
+            FavoritesViewModel.FavoritesSortOrder.RECENTLY_ADDED to "🕐",
+            FavoritesViewModel.FavoritesSortOrder.NAME_AZ to "🔤",
+            FavoritesViewModel.FavoritesSortOrder.NAME_ZA to "🔡",
+            FavoritesViewModel.FavoritesSortOrder.RATING to "★",
+            FavoritesViewModel.FavoritesSortOrder.COOK_TIME to "⏱",
+            FavoritesViewModel.FavoritesSortOrder.DIFFICULTY to "💪"
         )
     }
 
@@ -438,7 +441,7 @@ private fun SwipeToDeleteFavoriteCard(
                         tint = MaterialTheme.colorScheme.error,
                         modifier = Modifier
                             .size(28.dp)
-                            .scale(iconScale)
+                            .graphicsLayer { scaleX = iconScale; scaleY = iconScale }
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
@@ -490,7 +493,7 @@ private fun CompactFavoriteCard(
         modifier = Modifier
             .fillMaxWidth()
             .height(180.dp)
-            .scale(scale),
+            .graphicsLayer { scaleX = scale; scaleY = scale },
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
@@ -507,7 +510,9 @@ private fun CompactFavoriteCard(
                     contentScale = androidx.compose.ui.layout.ContentScale.Crop,
                 )
             }
-            Box(modifier = Modifier.fillMaxSize().background(cardOverlay))
+            Box(modifier = Modifier
+                .fillMaxSize()
+                .background(cardOverlay))
             IconButton(
                 onClick = onRemove,
                 modifier = Modifier

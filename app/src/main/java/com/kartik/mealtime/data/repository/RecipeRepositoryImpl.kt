@@ -176,6 +176,23 @@ class RecipeRepositoryImpl @Inject constructor(
         if (sampleFallbackEnabled) sampleRecipes.find { it.id == id } else null
 
     // ─────────────────────────────────────────────────────────────────────────
+    // Recipe Video (YouTube)
+    // ─────────────────────────────────────────────────────────────────────────
+
+    override suspend fun findRecipeVideoId(recipeName: String): String? {
+        // No key → no video; caller falls back to a plain YouTube search.
+        if (!apiConfigured) return null
+        return try {
+            val response = apiService.searchFoodVideos(query = recipeName, number = 1)
+            response.videos?.firstOrNull()?.youTubeId?.takeIf { it.isNotBlank() }
+        } catch (e: Exception) {
+            // Soft-fail: a missing video should never surface an error to the user.
+            Log.w(TAG, "Video search failed for \"$recipeName\": ${e.message}")
+            null
+        }
+    }
+
+    // ─────────────────────────────────────────────────────────────────────────
     // Categories
     // ─────────────────────────────────────────────────────────────────────────
 

@@ -36,6 +36,8 @@ import com.kartik.mealtime.ui.screens.SettingsScreen
 import com.kartik.mealtime.ui.screens.ShoppingListScreen
 import com.kartik.mealtime.ui.viewmodel.AuthViewModel
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
+import com.kartik.mealtime.ui.viewmodel.SearchViewModel
+import com.kartik.mealtime.ui.viewmodel.ShoppingListViewModel
 
 // ── iOS-style spring specs ────────────────────────────────────────────────────
 // No bounce, critically damped — mirrors UIKit UISpringTimingParameters
@@ -60,7 +62,9 @@ private val searchSpring = spring<Float>(
 fun Navigation(
     navController: NavHostController,
     viewModel: MainViewModel,
-    authViewModel: AuthViewModel
+    authViewModel: AuthViewModel,
+    shoppingListViewModel: ShoppingListViewModel,
+    searchViewModel: SearchViewModel
 ) {
     NavHost(
         navController = navController,
@@ -119,7 +123,7 @@ fun Navigation(
             popEnterTransition = { scaleIn(initialScale = 0.92f, animationSpec = searchSpring) + fadeIn(animationSpec = tween(300)) },
             popExitTransition  = { scaleOut(targetScale = 0.92f, animationSpec = searchSpring) + fadeOut(animationSpec = tween(250)) }
         ) {
-            SearchScreen(navController = navController, viewModel = viewModel)
+            SearchScreen(navController = navController, viewModel = viewModel, searchViewModel = searchViewModel)
         }
 
         composable<Favorites> {
@@ -182,7 +186,8 @@ fun Navigation(
             RecipeDetailScreen(
                 recipeId = args.recipeId,
                 navController = navController,
-                viewModel = viewModel
+                viewModel = viewModel,
+                shoppingListViewModel = shoppingListViewModel
             )
         }
 
@@ -213,7 +218,7 @@ fun Navigation(
         composable<ShoppingList> {
             ShoppingListScreen(
                 navController = navController,
-                viewModel = viewModel,
+                viewModel = shoppingListViewModel,
                 aiViewModel = hiltViewModel()
             )
         }

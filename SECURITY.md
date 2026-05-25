@@ -83,10 +83,22 @@ Test by opening the Rules Playground and trying to `get /users/SOMEONE_ELSES_UID
 ### 3. Spoonacular Quota
 Log into Spoonacular dashboard → set daily quota at a level you can afford if the key leaks. ~150 requests/day is reasonable for a free tier launch.
 
-### 4. AdMob — Replace Test IDs
-Before Play Store upload:
-- `app/src/main/java/com/example/myrecipeapp/data/ads/AdConfig.kt` → set `PROD_BANNER_ID` and `PROD_INTERSTITIAL_ID`
-- `AndroidManifest.xml` → replace the test `APPLICATION_ID` meta-data value
+### 4. AdMob — Configure Production IDs
+Before Play Store upload, add your production AdMob IDs to `local.properties`
+(this file is git-ignored, so the IDs never enter source control):
+
+```properties
+admob.app.id=ca-app-pub-XXXXXXXXXXXXXXXX~YYYYYYYYYY
+admob.banner.id=ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY
+admob.interstitial.id=ca-app-pub-XXXXXXXXXXXXXXXX/YYYYYYYYYY
+```
+
+The build injects these via `BuildConfig` (ad-unit IDs) and the
+`${admobAppId}` manifest placeholder (App ID) — see `app/build.gradle.kts`.
+Debug builds always use Google's test IDs. **If the production unit IDs are
+missing, release builds disable ads entirely** rather than serve test IDs as
+production (`AdConfig.adsEnabled`), so a misconfigured release can never ship
+test ads. Do not hardcode production IDs in `AdConfig.kt`.
 
 ### 5. Privacy Policy — REQUIRED
 You must host a Privacy Policy and link it in the Play Console. It must disclose:

@@ -2,6 +2,7 @@ package com.kartik.mealtime.domain.model
 
 import android.os.Parcelable
 import androidx.annotation.DrawableRes
+import androidx.compose.runtime.Immutable
 import kotlinx.parcelize.Parcelize
 
 enum class DietaryFilter {
@@ -20,6 +21,7 @@ enum class CuisineType {
     INTERNATIONAL, INDIAN, ITALIAN, CONTINENTAL, CHINESE, MEXICAN, THAI, FRENCH, AMERICAN, MEDITERRANEAN
 }
 
+@Immutable
 @Parcelize
 data class RecipeCategory(
     val id: String,
