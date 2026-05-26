@@ -1,3 +1,9 @@
+---
+layout: default
+title: Terms of Service
+permalink: /terms-of-service/
+---
+
 # Terms of Service for MealTime
 
 **Last updated: May 25, 2026**

@@ -3,7 +3,7 @@
 **Purpose:** fill-in guide for the Play Console **Data safety** section
 (Policy → App content → Data safety). This is derived from what the app
 *actually* does — verified against `AndroidManifest.xml`, `app/build.gradle.kts`,
-and the source — and is consistent with `privacy-policy.md`.
+and the source — and is consistent with `docs/privacy-policy.md`.
 
 > ⚠️ You are responsible for the final declaration. Re-check it whenever you
 > add an SDK or a feature that sends data off the device. Google audits these.
@@ -103,8 +103,9 @@ web browsing history, installed apps.
    Device or other IDs, Crash logs, Diagnostics** (+ your decision on search/AI text).
 4. For each: set Collected/Shared/Optional + purposes per Part 2.
 5. Make sure the **Privacy policy URL** field (separate, in the store listing)
-   points to the hosted `privacy-policy.md`.
+   points to the hosted `docs/privacy-policy.md`
+   (https://kartikkh1607.github.io/MyrecipeApp/privacy-policy/).
 
 ---
 
-*Maps to `privacy-policy.md`. If you change SDKs or AI providers, update both.*
+*Maps to `docs/privacy-policy.md`. If you change SDKs or AI providers, update both.*

@@ -12,14 +12,14 @@
     <string name="web_client_id" translatable="false"></string>
 
     <!--
-        Public URLs for the legal documents (privacy-policy.md / terms-of-service.md
-        in the repo root). Host them somewhere public (e.g. GitHub Pages) and paste
-        the URLs here. The About screen shows a "Privacy Policy" / "Terms of Service"
-        row only when the matching URL is non-blank. The Privacy Policy URL is also
-        REQUIRED in the Play Console listing.
+        Public URLs for the legal documents. Source lives in the docs/ folder and is
+        published via GitHub Pages (Settings → Pages → Deploy from branch: master /docs).
+        The About screen shows a "Privacy Policy" / "Terms of Service" row only when the
+        matching URL is non-blank. The Privacy Policy URL is also REQUIRED in the Play
+        Console listing.
     -->
-    <string name="privacy_policy_url" translatable="false"></string>
-    <string name="terms_of_service_url" translatable="false"></string>
+    <string name="privacy_policy_url" translatable="false">https://kartikkh1607.github.io/MyrecipeApp/privacy-policy/</string>
+    <string name="terms_of_service_url" translatable="false">https://kartikkh1607.github.io/MyrecipeApp/terms-of-service/</string>
 
     <!-- Popular search tags shown on the Search idle state and as "Try instead" suggestions. -->
     <string-array name="search_popular_tags" translatable="false">
