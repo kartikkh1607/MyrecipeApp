@@ -40,15 +40,17 @@ interface InterstitialAdEntryPoint {
  */
 @Singleton
 class InterstitialAdManager @Inject constructor(
-    @ApplicationContext private val context: Context
+    @ApplicationContext private val context: Context,
+    private val consentManager: ConsentManager
 ) {
     private var ad: InterstitialAd? = null
     private var isLoading = false
     private var recipeViewCount = 0
 
     init {
-        // Warm cache so the first eligible recipe view has an ad ready.
-        if (AdConfig.adsEnabled) loadAd()
+        // Warm cache so the first eligible recipe view has an ad ready — but only once
+        // UMP consent already allows ad requests (true for returning/non-EEA users).
+        if (AdConfig.adsEnabled && consentManager.canRequestAds.value) loadAd()
     }
 
     /**
@@ -57,7 +59,7 @@ class InterstitialAdManager @Inject constructor(
      * because interstitials must show from one.
      */
     fun maybeShowOnRecipeView(activity: Activity) {
-        if (!AdConfig.adsEnabled) return
+        if (!AdConfig.adsEnabled || !consentManager.canRequestAds.value) return
         recipeViewCount++
         if (recipeViewCount % AdConfig.INTERSTITIAL_FREQUENCY != 0) return
 
@@ -84,6 +86,7 @@ class InterstitialAdManager @Inject constructor(
     }
 
     private fun loadAd() {
+        if (!AdConfig.adsEnabled || !consentManager.canRequestAds.value) return
         if (isLoading || ad != null) return
         isLoading = true
         InterstitialAd.load(

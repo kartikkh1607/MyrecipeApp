@@ -119,10 +119,9 @@ class AiViewModel @Inject constructor(
             trimHistory()
             analytics.logAiChatMessageSent()
 
-            // Personalization: include the user's dietary prefs so Gemini
-            // filters suggestions accordingly. "" if user hasn't set any.
-            val dietaryPrefs = userPrefsRepo.preferences.first().dietaryPrefs
-                .joinToString(", ") { it.label }
+            // Personalization: include the user's full food profile (diet, allergies,
+            // skill, servings, spice, units) so Gemini tailors suggestions accordingly.
+            val personalization = userPrefsRepo.preferences.first().aiPersonalizationContext()
 
             // Send to AI
             val result = aiService.sendChatMessage(
@@ -130,7 +129,7 @@ class AiViewModel @Inject constructor(
                 conversationHistory = conversationHistory.map {
                     ChatMessage(content = it.content, isUser = it.isUser)
                 },
-                dietaryPreferences = dietaryPrefs
+                dietaryPreferences = personalization
             )
 
             result.fold(
@@ -177,10 +176,9 @@ class AiViewModel @Inject constructor(
             _recommendationState.value = RecommendationState.Loading
 
             val favoriteNames = favoriteDao.getAllSync().map { it.name }
-            val dietaryPrefs = userPrefsRepo.preferences.first().dietaryPrefs
-                .joinToString(", ") { it.label }
+            val personalization = userPrefsRepo.preferences.first().aiPersonalizationContext()
 
-            val result = aiService.getRecipeRecommendations(favoriteNames, dietaryPrefs)
+            val result = aiService.getRecipeRecommendations(favoriteNames, personalization)
             result.fold(
                 onSuccess = { response ->
                     val suggestions = parseRecommendations(response)

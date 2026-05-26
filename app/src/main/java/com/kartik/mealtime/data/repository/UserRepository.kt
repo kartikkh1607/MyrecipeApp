@@ -4,6 +4,7 @@ import com.google.firebase.auth.EmailAuthProvider
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.auth.FirebaseUser
 import com.google.firebase.auth.GoogleAuthProvider
+import com.google.firebase.auth.UserProfileChangeRequest
 import kotlinx.coroutines.channels.awaitClose
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.callbackFlow
@@ -30,8 +31,27 @@ class UserRepository @Inject constructor(
         auth.signInWithEmailAndPassword(email, password).await().user!!
     }
 
-    suspend fun register(email: String, password: String): Result<FirebaseUser> = runCatching {
-        auth.createUserWithEmailAndPassword(email, password).await().user!!
+    /**
+     * Creates a new email/password account. When [displayName] is provided, it is also
+     * written to the Firebase Auth profile so the name follows the user across devices
+     * (and any future Firestore sync). A failed profile update never fails the
+     * registration — the account already exists and the name is also persisted locally.
+     */
+    suspend fun register(
+        email: String,
+        password: String,
+        displayName: String = ""
+    ): Result<FirebaseUser> = runCatching {
+        val user = auth.createUserWithEmailAndPassword(email, password).await().user!!
+        if (displayName.isNotBlank()) {
+            runCatching {
+                val update = UserProfileChangeRequest.Builder()
+                    .setDisplayName(displayName)
+                    .build()
+                user.updateProfile(update).await()
+            }
+        }
+        user
     }
 
     /**

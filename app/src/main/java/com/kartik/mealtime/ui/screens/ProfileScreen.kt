@@ -25,6 +25,7 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
@@ -33,7 +34,6 @@ import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.DeleteForever
 import androidx.compose.material.icons.filled.Edit
 import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
@@ -50,6 +50,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -58,42 +59,39 @@ import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.input.KeyboardType
+import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.hilt.navigation.compose.hiltViewModel
-import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.navigation.NavHostController
-import com.kartik.mealtime.ui.navigation.About
-import com.kartik.mealtime.ui.theme.ForestGreen
-import com.kartik.mealtime.ui.viewmodel.AuthViewModel
-import com.kartik.mealtime.ui.viewmodel.FavoritesViewModel
-import com.kartik.mealtime.ui.viewmodel.MainViewModel
-import com.kartik.mealtime.ui.viewmodel.UserViewModel
-import androidx.compose.foundation.text.KeyboardOptions
-import androidx.compose.material3.OutlinedTextField
-import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.text.input.KeyboardType
-import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.credentials.CredentialManager
 import androidx.credentials.GetCredentialRequest
 import androidx.credentials.exceptions.GetCredentialCancellationException
 import androidx.credentials.exceptions.GetCredentialException
 import androidx.credentials.exceptions.NoCredentialException
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavHostController
 import com.google.android.libraries.identity.googleid.GetGoogleIdOption
 import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import com.kartik.mealtime.R
 import com.kartik.mealtime.data.repository.SignInProvider
+import com.kartik.mealtime.ui.theme.ForestGreen
+import com.kartik.mealtime.ui.viewmodel.AuthViewModel
+import com.kartik.mealtime.ui.viewmodel.FavoritesViewModel
+import com.kartik.mealtime.ui.viewmodel.MainViewModel
+import com.kartik.mealtime.ui.viewmodel.UserViewModel
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -174,8 +172,8 @@ fun ProfileScreen(
         EditProfileSheet(
             currentPrefs = userPrefs,
             onDismiss = { showEditSheet = false },
-            onSave = { name, emoji, dietaryPrefs ->
-                userViewModel.saveProfile(name, emoji, dietaryPrefs)
+            onSave = { updated ->
+                userViewModel.saveProfile(updated)
                 showEditSheet = false
             }
         )
@@ -219,7 +217,7 @@ fun ProfileScreen(
             text = {
                 Text(
                     "This permanently deletes your account and all synced data — your " +
-                        "favorites and shopping list. This can't be undone."
+                            "favorites and shopping list. This can't be undone."
                 )
             },
             confirmButton = {
@@ -275,7 +273,7 @@ fun ProfileScreen(
                     Column {
                         Text(
                             "For your security, re-enter your password to permanently " +
-                                "delete your account. Your synced data has already been removed."
+                                    "delete your account. Your synced data has already been removed."
                         )
                         Spacer(modifier = Modifier.height(12.dp))
                         OutlinedTextField(
@@ -301,7 +299,9 @@ fun ProfileScreen(
                     ) { Text("Delete forever") }
                 },
                 dismissButton = {
-                    TextButton(onClick = { authViewModel.resetDeleteState(); reauthPassword = "" }) { Text("Cancel") }
+                    TextButton(onClick = {
+                        authViewModel.resetDeleteState(); reauthPassword = ""
+                    }) { Text("Cancel") }
                 },
                 shape = RoundedCornerShape(20.dp)
             )
@@ -319,7 +319,7 @@ fun ProfileScreen(
                 text = {
                     Text(
                         "For your security, confirm your Google account to permanently " +
-                            "delete your account. Your synced data has already been removed."
+                                "delete your account. Your synced data has already been removed."
                     )
                 },
                 confirmButton = {
@@ -340,7 +340,7 @@ fun ProfileScreen(
                 text = {
                     Text(
                         "For your security, sign out and sign back in, then delete your " +
-                            "account again. Your synced data has already been removed."
+                                "account again. Your synced data has already been removed."
                     )
                 },
                 confirmButton = {
@@ -475,38 +475,41 @@ fun ProfileScreen(
                                 color = Color.White.copy(alpha = 0.7f)
                             )
                         }
-                        Spacer(modifier = Modifier.height(10.dp))
-                        // Edit profile pill — opens the bottom sheet.
-                        Surface(
-                            onClick = { showEditSheet = true },
-                            shape = RoundedCornerShape(50),
-                            color = Color.White.copy(alpha = 0.20f),
-                            border = androidx.compose.foundation.BorderStroke(
-                                1.dp,
-                                Color.White.copy(alpha = 0.35f)
-                            )
-                        ) {
-                            Row(
-                                modifier = Modifier.padding(horizontal = 14.dp, vertical = 7.dp),
-                                verticalAlignment = Alignment.CenterVertically,
-                                horizontalArrangement = Arrangement.spacedBy(6.dp)
-                            ) {
-                                Icon(
-                                    Icons.Default.Edit,
-                                    contentDescription = null,
-                                    tint = Color.White,
-                                    modifier = Modifier.size(14.dp)
-                                )
-                                Text(
-                                    "Edit profile",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    color = Color.White,
-                                    fontWeight = FontWeight.SemiBold
-                                )
-                            }
-                        }
                     }
                 }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // ── Edit Profile button ────────────────────────────────────────────────
+        // Pulled out of the cramped gradient header into a clear, high-contrast
+        // filled button so it's unmistakable. Opens the edit bottom sheet.
+        AnimatedVisibility(
+            visible = visible,
+            enter = scaleIn(
+                initialScale = 0.85f,
+                animationSpec = spring(stiffness = 300f)
+            ) + fadeIn()
+        ) {
+            Button(
+                onClick = { showEditSheet = true },
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp)
+                    .height(52.dp),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = MaterialTheme.colorScheme.primary
+                )
+            ) {
+                Icon(
+                    Icons.Default.Edit,
+                    contentDescription = null,
+                    modifier = Modifier.size(18.dp)
+                )
+                Spacer(modifier = Modifier.width(10.dp))
+                Text("Edit Profile", fontWeight = FontWeight.SemiBold)
             }
         }
 
@@ -551,6 +554,62 @@ fun ProfileScreen(
         }
 
         Spacer(modifier = Modifier.height(24.dp))
+
+        // ── Achievements ───────────────────────────────────────────────────────
+        // Derived purely from the already-tracked stats — locked badges show what's
+        // still to earn, giving the streak/views counters something to build toward.
+        AnimatedVisibility(
+            visible = visible,
+            enter = slideInVertically(
+                initialOffsetY = { 45 },
+                animationSpec = spring(stiffness = 250f)
+            ) + fadeIn()
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                val achievements = remember(
+                    userPrefs.cookingStreakDays,
+                    userPrefs.totalRecipesViewed,
+                    favoriteRecipes.size
+                ) {
+                    buildAchievements(
+                        streakDays = userPrefs.cookingStreakDays,
+                        recipesViewed = userPrefs.totalRecipesViewed,
+                        favorites = favoriteRecipes.size
+                    )
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SectionLabel("Achievements")
+                    Text(
+                        "${achievements.count { it.unlocked }} / ${achievements.size}",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.SemiBold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    LazyRow(
+                        contentPadding = PaddingValues(16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(achievements, key = { it.title }) { achievement ->
+                            AchievementBadge(achievement)
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
 
         // ── Account Section ────────────────────────────────────────────────────
         AnimatedVisibility(
@@ -624,6 +683,73 @@ fun ProfileScreen(
                                 )
                             ) {
                                 Text("Sign In / Register", fontWeight = FontWeight.SemiBold)
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        Spacer(modifier = Modifier.height(20.dp))
+
+        // ── Cooking profile ────────────────────────────────────────────────────
+        // Compact pill summary of the cook's skill, portions, heat, and units — all
+        // editable from the same sheet and all fed to the AI Chef.
+        AnimatedVisibility(
+            visible = visible,
+            enter = slideInVertically(
+                initialOffsetY = { 52 },
+                animationSpec = spring(stiffness = 235f)
+            ) + fadeIn()
+        ) {
+            Column(modifier = Modifier.padding(horizontal = 20.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SectionLabel("Cooking profile")
+                    TextButton(onClick = { showEditSheet = true }) {
+                        Text(
+                            "Edit",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
+                Spacer(modifier = Modifier.height(10.dp))
+                Card(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(16.dp),
+                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                ) {
+                    val servingsText =
+                        if (userPrefs.defaultServings == 1) "1 serving"
+                        else "${userPrefs.defaultServings} servings"
+                    val cookingPills = listOf(
+                        "${userPrefs.skillLevel.emoji}  ${userPrefs.skillLevel.label}",
+                        "🍽️  $servingsText",
+                        "${userPrefs.spiceLevel.emoji}  ${userPrefs.spiceLevel.label}",
+                        "📏  ${userPrefs.unitSystem.label}"
+                    )
+                    LazyRow(
+                        modifier = Modifier.padding(12.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp)
+                    ) {
+                        items(cookingPills, key = { it }) { pill ->
+                            Surface(
+                                shape = RoundedCornerShape(50),
+                                color = MaterialTheme.colorScheme.primaryContainer
+                            ) {
+                                Text(
+                                    pill,
+                                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                                    style = MaterialTheme.typography.labelMedium,
+                                    color = MaterialTheme.colorScheme.onPrimaryContainer,
+                                    fontWeight = FontWeight.SemiBold
+                                )
                             }
                         }
                     }
@@ -730,30 +856,87 @@ fun ProfileScreen(
 
         Spacer(modifier = Modifier.height(20.dp))
 
-        // ── App Section ────────────────────────────────────────────────────────
+        // ── Allergies & avoidances ─────────────────────────────────────────────
         AnimatedVisibility(
             visible = visible,
             enter = slideInVertically(
-                initialOffsetY = { 60 },
-                animationSpec = spring(stiffness = 220f)
+                initialOffsetY = { 58 },
+                animationSpec = spring(stiffness = 225f)
             ) + fadeIn()
         ) {
             Column(modifier = Modifier.padding(horizontal = 20.dp)) {
-                SectionLabel("App")
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.SpaceBetween,
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    SectionLabel("Allergies & avoidances")
+                    TextButton(onClick = { showEditSheet = true }) {
+                        Text(
+                            "Edit",
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = MaterialTheme.colorScheme.primary
+                        )
+                    }
+                }
                 Spacer(modifier = Modifier.height(10.dp))
-
                 Card(
                     modifier = Modifier.fillMaxWidth(),
                     shape = RoundedCornerShape(16.dp),
                     colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                     elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
                 ) {
-                    Column(modifier = Modifier.padding(4.dp)) {
-                        ProfileMenuButton(
-                            icon = Icons.Default.Info,
-                            label = "About MealTime",
-                            onClick = { navController.navigate(About) }
-                        )
+                    if (userPrefs.allergies.isEmpty()) {
+                        Column(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .padding(20.dp),
+                            horizontalAlignment = Alignment.CenterHorizontally
+                        ) {
+                            Text(
+                                "No allergies set",
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.SemiBold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                            Spacer(modifier = Modifier.height(2.dp))
+                            Text(
+                                "Add any and the AI Chef will avoid them",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                                textAlign = TextAlign.Center
+                            )
+                        }
+                    } else {
+                        LazyRow(
+                            modifier = Modifier.padding(12.dp),
+                            horizontalArrangement = Arrangement.spacedBy(8.dp)
+                        ) {
+                            items(userPrefs.allergies.toList(), key = { it.name }) { allergen ->
+                                Surface(
+                                    shape = RoundedCornerShape(50),
+                                    color = MaterialTheme.colorScheme.errorContainer
+                                ) {
+                                    Row(
+                                        modifier = Modifier.padding(
+                                            horizontal = 12.dp,
+                                            vertical = 6.dp
+                                        ),
+                                        verticalAlignment = Alignment.CenterVertically,
+                                        horizontalArrangement = Arrangement.spacedBy(4.dp)
+                                    ) {
+                                        Text(allergen.emoji, fontSize = 14.sp)
+                                        Text(
+                                            allergen.label,
+                                            style = MaterialTheme.typography.labelMedium,
+                                            color = MaterialTheme.colorScheme.onErrorContainer,
+                                            fontWeight = FontWeight.SemiBold
+                                        )
+                                    }
+                                }
+                            }
+                        }
                     }
                 }
             }

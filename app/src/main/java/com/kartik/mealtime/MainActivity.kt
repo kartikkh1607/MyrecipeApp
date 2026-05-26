@@ -16,6 +16,8 @@ import androidx.compose.ui.Modifier
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kartik.mealtime.data.ads.AdConfig
+import com.kartik.mealtime.data.ads.ConsentManager
 import com.kartik.mealtime.domain.model.ThemeMode
 import com.kartik.mealtime.ui.components.BrandSplash
 import com.kartik.mealtime.ui.screens.AuthScreen
@@ -24,9 +26,13 @@ import com.kartik.mealtime.ui.theme.MyrecipeAppTheme
 import com.kartik.mealtime.ui.viewmodel.AuthViewModel
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
 import dagger.hilt.android.AndroidEntryPoint
+import javax.inject.Inject
 
 @AndroidEntryPoint
 class MainActivity : ComponentActivity() {
+
+    @Inject lateinit var consentManager: ConsentManager
+
     override fun onCreate(savedInstanceState: Bundle?) {
         // installSplashScreen() MUST be called before super.onCreate so the
         // SplashScreen API can intercept the activity lifecycle. The system
@@ -34,6 +40,10 @@ class MainActivity : ComponentActivity() {
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
+
+        // Gather GDPR/EEA ad consent (UMP), then initialize AdMob. Runs only when ads
+        // are actually in play; ConsentManager handles the non-EEA fast path internally.
+        if (AdConfig.adsEnabled) consentManager.gatherConsent(this)
         setContent {
             val recipeViewModel: MainViewModel = hiltViewModel()
             val authViewModel: AuthViewModel = hiltViewModel()

@@ -662,105 +662,93 @@ internal fun QuickActionsRow(
             modifier = Modifier.padding(horizontal = 16.dp)
         )
         Spacer(modifier = Modifier.height(12.dp))
-        LazyRow(
-            contentPadding = PaddingValues(horizontal = 16.dp),
+        // Three equal-width action cards. AI Chef is the highlighted hero action;
+        // the other two share a cohesive tonal treatment so the row reads as one set.
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 16.dp),
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
-            // AI Chat Assistant
-            item {
-                var aiPressed by remember { mutableStateOf(false) }
-                val aiScale by animateFloatAsState(
-                    targetValue = if (aiPressed) 0.96f else 1f,
-                    animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessHigh),
-                    label = "ai_scale",
-                    finishedListener = { aiPressed = false }
-                )
-                Button(
-                    onClick = { aiPressed = true; onAIChat() },
-                    modifier = Modifier
-                        .height(52.dp)
-                        .graphicsLayer { scaleX = aiScale; scaleY = aiScale },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = ForestGreen,
-                        contentColor = Color.White
-                    )
-                ) {
-                    Icon(Icons.Default.AutoAwesome, null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(6.dp))
-                    Text(
-                        "AI Chef",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
-            }
+            QuickActionCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.AutoAwesome,
+                label = "AI Chef",
+                highlighted = true,
+                onClick = onAIChat
+            )
+            QuickActionCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.Shuffle,
+                label = "Random",
+                highlighted = false,
+                onClick = onRandomRecipe
+            )
+            QuickActionCard(
+                modifier = Modifier.weight(1f),
+                icon = Icons.Default.ShoppingCart,
+                label = "Shopping",
+                highlighted = false,
+                onClick = onShoppingList
+            )
+        }
+    }
+}
 
-            // Random Recipe
-            item {
-                var rndPressed by remember { mutableStateOf(false) }
-                val rndScale by animateFloatAsState(
-                    targetValue = if (rndPressed) 0.96f else 1f,
-                    animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessHigh),
-                    label = "rnd_scale",
-                    finishedListener = { rndPressed = false }
-                )
-                FilledTonalButton(
-                    onClick = { rndPressed = true; onRandomRecipe() },
-                    modifier = Modifier
-                        .height(52.dp)
-                        .graphicsLayer { scaleX = rndScale; scaleY = rndScale },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.filledTonalButtonColors(
-                        containerColor = MaterialTheme.colorScheme.secondaryContainer,
-                        contentColor = MaterialTheme.colorScheme.onSecondaryContainer
-                    )
-                ) {
-                    Icon(Icons.Default.Shuffle, null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        "Random Recipe",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
-            }
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun QuickActionCard(
+    modifier: Modifier = Modifier,
+    icon: androidx.compose.ui.graphics.vector.ImageVector,
+    label: String,
+    highlighted: Boolean,
+    onClick: () -> Unit
+) {
+    var pressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.95f else 1f,
+        animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessHigh),
+        label = "qa_scale",
+        finishedListener = { pressed = false }
+    )
 
-            // Shopping List
-            item {
-                var shpPressed by remember { mutableStateOf(false) }
-                val shpScale by animateFloatAsState(
-                    targetValue = if (shpPressed) 0.96f else 1f,
-                    animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessHigh),
-                    label = "shp_scale",
-                    finishedListener = { shpPressed = false }
-                )
-                Button(
-                    onClick = { shpPressed = true; onShoppingList() },
-                    modifier = Modifier
-                        .height(52.dp)
-                        .graphicsLayer { scaleX = shpScale; scaleY = shpScale },
-                    shape = RoundedCornerShape(16.dp),
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = MaterialTheme.colorScheme.primary,
-                        contentColor = MaterialTheme.colorScheme.onPrimary
-                    )
-                ) {
-                    Icon(Icons.Default.ShoppingCart, null, modifier = Modifier.size(18.dp))
-                    Spacer(modifier = Modifier.width(8.dp))
-                    Text(
-                        "Shopping List",
-                        fontWeight = FontWeight.SemiBold,
-                        fontSize = 13.sp,
-                        maxLines = 1,
-                        softWrap = false
-                    )
-                }
+    val container = if (highlighted) ForestGreen else MaterialTheme.colorScheme.secondaryContainer
+    val onContainer = if (highlighted) Color.White else MaterialTheme.colorScheme.onSecondaryContainer
+    val iconTileBg = if (highlighted) Color.White.copy(alpha = 0.18f) else MaterialTheme.colorScheme.surface
+
+    Surface(
+        onClick = { pressed = true; onClick() },
+        modifier = modifier
+            .height(100.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale },
+        shape = RoundedCornerShape(20.dp),
+        color = container
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxSize()
+                .padding(12.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Box(
+                modifier = Modifier
+                    .size(40.dp)
+                    .clip(CircleShape)
+                    .background(iconTileBg),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(icon, null, tint = onContainer, modifier = Modifier.size(20.dp))
             }
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(
+                label,
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = onContainer,
+                maxLines = 1,
+                softWrap = false
+            )
         }
     }
 }

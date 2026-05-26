@@ -1,13 +1,9 @@
 package com.kartik.mealtime.ui.screens
 
 import androidx.compose.animation.animateColorAsState
-import androidx.compose.animation.core.RepeatMode
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateDpAsState
-import androidx.compose.animation.core.animateFloat
 import androidx.compose.animation.core.animateFloatAsState
-import androidx.compose.animation.core.infiniteRepeatable
-import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.background
@@ -34,8 +30,6 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
-import androidx.compose.material.icons.filled.Mic
-import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Pause
 import androidx.compose.material.icons.filled.PlayArrow
 import androidx.compose.material.icons.filled.Refresh
@@ -381,28 +375,9 @@ internal fun CookingBottomBar(
     currentStep: Int,
     totalSteps: Int,
     isLast: Boolean,
-    isListening: Boolean,
-    voiceHint: String,
     onPrev: () -> Unit,
-    onNext: () -> Unit,
-    onMic: () -> Unit
+    onNext: () -> Unit
 ) {
-    val pulseTransition = rememberInfiniteTransition(label = "mic_pulse")
-    val micScale by pulseTransition.animateFloat(
-        initialValue = 1f,
-        targetValue = if (isListening) 1.18f else 1f,
-        animationSpec = infiniteRepeatable(animation = tween(600), repeatMode = RepeatMode.Reverse),
-        label = "mic_scale"
-    )
-    val micBgColor by animateColorAsState(
-        targetValue = if (isListening) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.secondaryContainer,
-        label = "mic_bg"
-    )
-    val micIconColor by animateColorAsState(
-        targetValue = if (isListening) MaterialTheme.colorScheme.onPrimary else MaterialTheme.colorScheme.onSecondaryContainer,
-        label = "mic_icon"
-    )
-
     Surface(
         modifier = Modifier.fillMaxWidth(),
         color = MaterialTheme.colorScheme.surface,
@@ -432,38 +407,6 @@ internal fun CookingBottomBar(
                         tint = if (currentStep > 0) MaterialTheme.colorScheme.onSurface
                         else MaterialTheme.colorScheme.onSurface.copy(alpha = 0.3f),
                         modifier = Modifier.size(22.dp)
-                    )
-                }
-            }
-
-            // Mic
-            Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                Surface(
-                    onClick = onMic,
-                    shape = CircleShape,
-                    color = micBgColor,
-                    modifier = Modifier
-                        .size(52.dp)
-                        .graphicsLayer { scaleX = micScale; scaleY = micScale }
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Icon(
-                            if (isListening) Icons.Default.MicOff else Icons.Default.Mic,
-                            contentDescription = if (isListening) "Stop" else "Voice",
-                            tint = micIconColor,
-                            modifier = Modifier.size(24.dp)
-                        )
-                    }
-                }
-                if (voiceHint.isNotEmpty()) {
-                    Spacer(Modifier.height(4.dp))
-                    Text(
-                        voiceHint,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = if (isListening) MaterialTheme.colorScheme.primary
-                        else MaterialTheme.colorScheme.onSurfaceVariant,
-                        textAlign = TextAlign.Center,
-                        maxLines = 1
                     )
                 }
             }

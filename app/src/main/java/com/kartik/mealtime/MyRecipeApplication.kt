@@ -1,20 +1,13 @@
 package com.kartik.mealtime
 
 import android.app.Application
-import android.util.Log
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.disk.DiskCache
 import coil.memory.MemoryCache
 import com.kartik.mealtime.BuildConfig
-import com.kartik.mealtime.data.ads.AdConfig
-import com.google.android.gms.ads.MobileAds
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import dagger.hilt.android.HiltAndroidApp
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.SupervisorJob
-import kotlinx.coroutines.launch
 
 @HiltAndroidApp
 class MyRecipeApplication : Application(), ImageLoaderFactory {
@@ -25,18 +18,10 @@ class MyRecipeApplication : Application(), ImageLoaderFactory {
         // development noise and avoids uploading mapping files on every debug run.
         FirebaseCrashlytics.getInstance().setCrashlyticsCollectionEnabled(!BuildConfig.DEBUG)
 
-        if (!AdConfig.adsEnabled) return
-
-        // Initialize AdMob off the main thread — it does disk I/O and network calls
-        // on init, which would jank the first frame if run synchronously.
-        CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
-            try {
-                MobileAds.initialize(this@MyRecipeApplication) { /* init complete */ }
-            } catch (t: Throwable) {
-                // Defense in depth: a broken WebView / GMS shouldn't take the app down.
-                Log.w("MyRecipeApplication", "MobileAds.initialize failed", t)
-            }
-        }
+        // AdMob is NOT initialized here. ConsentManager.gatherConsent() (driven from
+        // MainActivity) initializes the Mobile Ads SDK only after the UMP consent flow
+        // resolves — initializing earlier risks requesting ads before EEA/UK users
+        // have given consent.
     }
 
     override fun newImageLoader(): ImageLoader =

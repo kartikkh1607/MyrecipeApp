@@ -77,11 +77,13 @@ class UserViewModel @Inject constructor(
     /**
      * Atomic profile save — used by the EditProfileSheet's Save button. Delegates to a
      * single DataStore transaction in the repository, so observers see one emission
-     * instead of three (no UI flicker through partially-updated state).
+     * instead of many (no UI flicker through partially-updated state). The sheet passes
+     * a copy of the current prefs with the edited fields applied; stat fields on it are
+     * ignored by the repository.
      */
-    fun saveProfile(name: String, emoji: String, dietaryPrefs: Set<DietaryPref>) {
+    fun saveProfile(edited: UserPreferences) {
         viewModelScope.launch {
-            userPrefsRepo.saveProfile(name, emoji, dietaryPrefs)
+            userPrefsRepo.saveProfile(edited)
         }
     }
 }

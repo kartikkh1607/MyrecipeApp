@@ -71,12 +71,20 @@ class AuthViewModel @Inject constructor(
         }
     }
 
-    fun register(email: String, password: String) {
+    fun register(email: String, password: String, name: String) {
         if (!validate(email, password)) return
         viewModelScope.launch {
             _uiState.value = AuthUiState.Loading
-            userRepository.register(email, password)
-                .onSuccess { _uiState.value = AuthUiState.Success }
+            val trimmedName = name.trim()
+            userRepository.register(email, password, trimmedName)
+                .onSuccess {
+                    // Persist the name locally so the greeting + Profile screen show it
+                    // immediately (DataStore is the source of truth the UI reads from).
+                    if (trimmedName.isNotBlank()) {
+                        userPreferencesRepository.updateDisplayName(trimmedName)
+                    }
+                    _uiState.value = AuthUiState.Success
+                }
                 .onFailure { _uiState.value = AuthUiState.Error(it.friendlyMessage()) }
         }
     }

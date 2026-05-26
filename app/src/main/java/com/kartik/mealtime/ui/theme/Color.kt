@@ -28,5 +28,8 @@ val AmberContainer = Color(0xFF3D2800)    // Dark theme container
 // Error state — used by Theme.kt error color slot
 val Error = Color(0xFFF44336)
 
+// Success — inline validation (e.g. "passwords match", strong password meter)
+val Success = Color(0xFF2E7D32)
+
 // Light border color — used by Theme.kt outline slot
 val LightGray = Color(0xFFE5E5E5)

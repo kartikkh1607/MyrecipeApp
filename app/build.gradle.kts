@@ -152,6 +152,10 @@ dependencies {
     // Production ad unit IDs go in data/ads/AdConfig.kt; test IDs are baked in.
     implementation(libs.play.services.ads)
 
+    // Google UMP (User Messaging Platform) — GDPR/EEA consent flow. Required to
+    // serve ads to EU/UK users; drives data/ads/ConsentManager.kt.
+    implementation(libs.user.messaging.platform)
+
     // Android 12+ SplashScreen API (with back-compat shim for older versions).
     implementation(libs.androidx.core.splashscreen)
 

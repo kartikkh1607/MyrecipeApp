@@ -36,11 +36,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.SolidColor
@@ -49,7 +51,11 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.kartik.mealtime.data.preferences.Allergen
 import com.kartik.mealtime.data.preferences.DietaryPref
+import com.kartik.mealtime.data.preferences.SkillLevel
+import com.kartik.mealtime.data.preferences.SpiceLevel
+import com.kartik.mealtime.data.preferences.UnitSystem
 import com.kartik.mealtime.data.preferences.UserPreferences
 
 
@@ -219,13 +225,18 @@ internal fun ProfileMenuButton(
 internal fun EditProfileSheet(
     currentPrefs: UserPreferences,
     onDismiss: () -> Unit,
-    onSave: (name: String, emoji: String, dietaryPrefs: Set<DietaryPref>) -> Unit
+    onSave: (UserPreferences) -> Unit
 ) {
     // Local edit state — committed to the repository only when the user taps Save.
     // Lets the user cancel without partial writes.
     var draftName by remember { mutableStateOf(currentPrefs.displayName) }
     var draftEmoji by remember { mutableStateOf(currentPrefs.avatarEmoji) }
     var draftPrefs by remember { mutableStateOf(currentPrefs.dietaryPrefs) }
+    var draftAllergies by remember { mutableStateOf(currentPrefs.allergies) }
+    var draftSkill by remember { mutableStateOf(currentPrefs.skillLevel) }
+    var draftServings by remember { mutableIntStateOf(currentPrefs.defaultServings) }
+    var draftSpice by remember { mutableStateOf(currentPrefs.spiceLevel) }
+    var draftUnits by remember { mutableStateOf(currentPrefs.unitSystem) }
 
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
 
@@ -380,10 +391,118 @@ internal fun EditProfileSheet(
                 }
             }
 
+            // ── Allergies ────────────────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                Text(
+                    "Allergies & avoidances",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+                Text(
+                    "The AI Chef will never suggest recipes with these.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                )
+                androidx.compose.foundation.layout.FlowRow(
+                    horizontalArrangement = Arrangement.spacedBy(8.dp),
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Allergen.entries.forEach { allergen ->
+                        val selected = allergen in draftAllergies
+                        FilterChip(
+                            selected = selected,
+                            onClick = {
+                                draftAllergies =
+                                    if (selected) draftAllergies - allergen
+                                    else draftAllergies + allergen
+                            },
+                            label = {
+                                Text(
+                                    "${allergen.emoji}  ${allergen.label}",
+                                    style = MaterialTheme.typography.labelMedium,
+                                    fontWeight = FontWeight.SemiBold
+                                )
+                            },
+                            shape = RoundedCornerShape(50),
+                            colors = FilterChipDefaults.filterChipColors(
+                                selectedContainerColor = MaterialTheme.colorScheme.errorContainer,
+                                selectedLabelColor = MaterialTheme.colorScheme.onErrorContainer
+                            )
+                        )
+                    }
+                }
+            }
+
+            // ── Cooking profile ──────────────────────────────────────────────
+            Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+                Text(
+                    "Cooking profile",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+
+                // Skill level — single choice.
+                SingleChoiceRow(
+                    caption = "Skill level",
+                    options = SkillLevel.entries,
+                    selected = draftSkill,
+                    optionLabel = { "${it.emoji}  ${it.label}" },
+                    onSelect = { draftSkill = it }
+                )
+
+                // Default servings — stepper.
+                Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                    Text(
+                        "Default servings",
+                        style = MaterialTheme.typography.bodyMedium,
+                        fontWeight = FontWeight.Medium,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    ProfileServingsStepper(
+                        value = draftServings,
+                        onChange = { draftServings = it }
+                    )
+                }
+
+                // Spice preference — single choice.
+                SingleChoiceRow(
+                    caption = "Spice preference",
+                    options = SpiceLevel.entries,
+                    selected = draftSpice,
+                    optionLabel = { "${it.emoji}  ${it.label}" },
+                    onSelect = { draftSpice = it }
+                )
+
+                // Measurement units — single choice.
+                SingleChoiceRow(
+                    caption = "Measurement units",
+                    options = UnitSystem.entries,
+                    selected = draftUnits,
+                    optionLabel = { it.label },
+                    onSelect = { draftUnits = it }
+                )
+            }
+
             // ── Actions ──────────────────────────────────────────────────────
             Spacer(modifier = Modifier.height(4.dp))
             Button(
-                onClick = { onSave(draftName, draftEmoji, draftPrefs) },
+                onClick = {
+                    onSave(
+                        currentPrefs.copy(
+                            displayName = draftName,
+                            avatarEmoji = draftEmoji,
+                            dietaryPrefs = draftPrefs,
+                            allergies = draftAllergies,
+                            skillLevel = draftSkill,
+                            defaultServings = draftServings,
+                            spiceLevel = draftSpice,
+                            unitSystem = draftUnits
+                        )
+                    )
+                },
                 modifier = Modifier
                     .fillMaxWidth()
                     .height(52.dp),
@@ -405,5 +524,170 @@ internal fun EditProfileSheet(
                 Text("Cancel")
             }
         }
+    }
+}
+
+// ── Single-choice chip row ──────────────────────────────────────────────────────
+/**
+ * A captioned row of mutually-exclusive choices rendered as selectable chips.
+ * Used for skill level, spice preference, and unit system in the edit sheet.
+ */
+@OptIn(
+    ExperimentalMaterial3Api::class,
+    androidx.compose.foundation.layout.ExperimentalLayoutApi::class
+)
+@Composable
+internal fun <T> SingleChoiceRow(
+    caption: String,
+    options: List<T>,
+    selected: T,
+    optionLabel: (T) -> String,
+    onSelect: (T) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Text(
+            caption,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.Medium,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        androidx.compose.foundation.layout.FlowRow(
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp),
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            options.forEach { option ->
+                val isSelected = option == selected
+                FilterChip(
+                    selected = isSelected,
+                    onClick = { onSelect(option) },
+                    label = {
+                        Text(
+                            optionLabel(option),
+                            style = MaterialTheme.typography.labelMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+                    },
+                    shape = RoundedCornerShape(50),
+                    colors = FilterChipDefaults.filterChipColors(
+                        selectedContainerColor = MaterialTheme.colorScheme.primaryContainer,
+                        selectedLabelColor = MaterialTheme.colorScheme.onPrimaryContainer
+                    )
+                )
+            }
+        }
+    }
+}
+
+// ── Servings stepper ────────────────────────────────────────────────────────────
+/**
+ * −/+ stepper clamped to [UserPreferences.MIN_SERVINGS]..[UserPreferences.MAX_SERVINGS].
+ * Named distinctly from the recipe-detail servings stepper to avoid an overload clash.
+ */
+@Composable
+internal fun ProfileServingsStepper(
+    value: Int,
+    onChange: (Int) -> Unit
+) {
+    val canDecrease = value > UserPreferences.MIN_SERVINGS
+    val canIncrease = value < UserPreferences.MAX_SERVINGS
+    Row(
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        StepperButton(symbol = "−", enabled = canDecrease) {
+            if (canDecrease) onChange(value - 1)
+        }
+        Text(
+            text = if (value == 1) "1 serving" else "$value servings",
+            style = MaterialTheme.typography.titleMedium,
+            fontWeight = FontWeight.Bold,
+            color = MaterialTheme.colorScheme.onSurface
+        )
+        StepperButton(symbol = "+", enabled = canIncrease) {
+            if (canIncrease) onChange(value + 1)
+        }
+    }
+}
+
+@Composable
+private fun StepperButton(symbol: String, enabled: Boolean, onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        enabled = enabled,
+        shape = CircleShape,
+        color = MaterialTheme.colorScheme.primaryContainer,
+        modifier = Modifier.size(40.dp)
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Text(
+                symbol,
+                style = MaterialTheme.typography.titleLarge,
+                fontWeight = FontWeight.Bold,
+                color = if (enabled) MaterialTheme.colorScheme.onPrimaryContainer
+                else MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.35f)
+            )
+        }
+    }
+}
+
+// ── Achievements ────────────────────────────────────────────────────────────────
+/** One earnable milestone derived from the user's lifetime cooking stats. */
+internal data class Achievement(
+    val title: String,
+    val emoji: String,
+    val unlocked: Boolean
+)
+
+/**
+ * Builds the achievement list from the three tracked stats. Pure function — no
+ * Compose state — so it is trivially testable and cheap to recompute.
+ */
+internal fun buildAchievements(
+    streakDays: Int,
+    recipesViewed: Int,
+    favorites: Int
+): List<Achievement> = listOf(
+    Achievement("First Bite", "🍽️", recipesViewed >= 1),
+    Achievement("3-Day Streak", "🔥", streakDays >= 3),
+    Achievement("On Fire", "🚀", streakDays >= 7),
+    Achievement("Collector", "❤️", favorites >= 5),
+    Achievement("Explorer", "🧭", recipesViewed >= 25),
+    Achievement("Master Chef", "👨‍🍳", recipesViewed >= 100)
+)
+
+/** Circular badge — full-color when unlocked, greyed and dimmed while locked. */
+@Composable
+internal fun AchievementBadge(achievement: Achievement) {
+    Column(
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        modifier = Modifier.width(76.dp)
+    ) {
+        Box(
+            modifier = Modifier
+                .size(56.dp)
+                .clip(CircleShape)
+                .background(
+                    if (achievement.unlocked) MaterialTheme.colorScheme.primaryContainer
+                    else MaterialTheme.colorScheme.surfaceVariant
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                achievement.emoji,
+                fontSize = 26.sp,
+                modifier = Modifier.alpha(if (achievement.unlocked) 1f else 0.35f)
+            )
+        }
+        Text(
+            achievement.title,
+            style = MaterialTheme.typography.labelSmall,
+            fontWeight = FontWeight.SemiBold,
+            textAlign = androidx.compose.ui.text.style.TextAlign.Center,
+            maxLines = 2,
+            color = if (achievement.unlocked) MaterialTheme.colorScheme.onSurface
+            else MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f)
+        )
     }
 }

@@ -9,7 +9,7 @@
                 Google Cloud Console → APIs & Services → Credentials → "Web client".)
         Leave empty to disable the Google button.
     -->
-    <string name="web_client_id" translatable="false"></string>
+    <string name="web_client_id" translatable="false">477468465040-l4o15pjgie7ml45fmrem3qlggnpvhpad.apps.googleusercontent.com</string>
 
     <!--
         Public URLs for the legal documents. Source lives in the docs/ folder and is

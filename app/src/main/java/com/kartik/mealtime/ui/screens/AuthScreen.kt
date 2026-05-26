@@ -5,8 +5,10 @@ import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -34,11 +36,13 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Email
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -55,7 +59,9 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.autofill.ContentType
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.clipToBounds
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
@@ -95,6 +101,7 @@ fun AuthScreen(
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
     var selectedTab by remember { mutableIntStateOf(0) }
+    var name by remember { mutableStateOf("") }
     var email by remember { mutableStateOf("") }
     var password by remember { mutableStateOf("") }
     var confirmPassword by remember { mutableStateOf("") }
@@ -108,6 +115,73 @@ fun AuthScreen(
     var activePath by remember { mutableStateOf(AuthPath.None) }
     val emailLoading = isLoading && activePath == AuthPath.Email
     val googleLoading = isLoading && activePath == AuthPath.Google
+
+    // ── Inline validation state ──────────────────────────────────────────────
+    // A field's error stays hidden until the user has either left it once
+    // (touched) or pressed submit — so we don't yell while they're mid-typing.
+    var emailTouched by remember { mutableStateOf(false) }
+    var passwordTouched by remember { mutableStateOf(false) }
+    var emailHadFocus by remember { mutableStateOf(false) }
+    var passwordHadFocus by remember { mutableStateOf(false) }
+    var submitAttempted by remember { mutableStateOf(false) }
+
+    val emailValid = isValidEmail(email)
+    val passwordValid = password.length >= 6
+    val passwordsMatch = password == confirmPassword
+    val nameValid = name.isNotBlank()
+
+    val nameError: String? = when {
+        submitAttempted && selectedTab == 1 && name.isBlank() -> "Name is required"
+        else -> null
+    }
+
+    val emailError: String? = when {
+        submitAttempted && email.isBlank() -> "Email is required"
+        (emailTouched || submitAttempted) && email.isNotBlank() && !emailValid ->
+            "Enter a valid email address"
+
+        else -> null
+    }
+    val passwordError: String? = when {
+        submitAttempted && password.isBlank() -> "Password is required"
+        (passwordTouched || submitAttempted) && password.isNotBlank() && !passwordValid ->
+            "Use at least 6 characters"
+
+        else -> null
+    }
+    val confirmError = when {
+        confirmPassword.isNotEmpty() && !passwordsMatch -> "Passwords don't match"
+        submitAttempted && selectedTab == 1 && confirmPassword.isEmpty() -> "Confirm your password"
+        else -> null
+    }
+    val confirmSuccess = confirmPassword.isNotEmpty() && passwordsMatch
+    val confirmSupport = confirmError ?: if (confirmSuccess) "Passwords match" else null
+
+    // Clears transient validation flags when switching between Sign In / Register.
+    fun switchTab(tab: Int) {
+        selectedTab = tab
+        viewModel.resetState()
+        confirmPassword = ""
+        name = ""
+        submitAttempted = false
+        emailTouched = false
+        passwordTouched = false
+    }
+
+    // Reveals any outstanding errors, then submits only when the form is valid.
+    fun attemptSubmit() {
+        focusManager.clearFocus()
+        submitAttempted = true
+        if (selectedTab == 0) {
+            if (emailValid && passwordValid) {
+                activePath = AuthPath.Email
+                viewModel.signIn(email, password)
+            }
+        } else if (nameValid && emailValid && passwordValid && passwordsMatch) {
+            activePath = AuthPath.Email
+            viewModel.register(email, password, name)
+        }
+    }
 
     // ── Google Sign-In wiring (Credential Manager) ───────────────────────────
     // setServerClientId expects the *Web* OAuth client ID (auto-created when
@@ -207,32 +281,55 @@ fun AuthScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(260.dp)
+                    .height(288.dp)
+                    .clipToBounds()
                     .background(
                         Brush.verticalGradient(
                             colors = listOf(
-                                ForestGreen,
-                                ForestGreen.copy(alpha = 0.85f),
-                                ForestGreen.copy(alpha = 0.6f)
+                                Color(0xFF20403F),   // deep top
+                                ForestGreen,          // brand mid
+                                Color(0xFF3C6E6B)     // lighter base
                             )
                         )
                     )
                     .statusBarsPadding(),
                 contentAlignment = Alignment.Center
             ) {
+                // Soft decorative orbs for depth — clipped to the hero bounds.
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .offset(x = (-90).dp, y = (-70).dp)
+                        .size(220.dp)
+                        .background(Color.White.copy(alpha = 0.06f), CircleShape)
+                )
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.TopEnd)
+                        .offset(x = 80.dp, y = (-40).dp)
+                        .size(170.dp)
+                        .background(Color.White.copy(alpha = 0.05f), CircleShape)
+                )
+
                 Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    // App icon circle
+                    // Brand mark — the app's cream knife+fork glyph, inverted onto a
+                    // floating white badge so it reads cleanly over the green hero.
                     Box(
                         modifier = Modifier
-                            .size(72.dp)
-                            .shadow(12.dp, CircleShape)
+                            .size(88.dp)
+                            .shadow(18.dp, CircleShape)
                             .background(Color.White, CircleShape),
                         contentAlignment = Alignment.Center
                     ) {
-                        Text("🍽️", fontSize = 34.sp)
+                        Icon(
+                            imageVector = Icons.Filled.Restaurant,
+                            contentDescription = null,
+                            tint = ForestGreen,
+                            modifier = Modifier.size(42.dp)
+                        )
                     }
 
-                    Spacer(Modifier.height(16.dp))
+                    Spacer(Modifier.height(18.dp))
 
                     Text(
                         text = "MealTime",
@@ -241,11 +338,11 @@ fun AuthScreen(
                         color = Color.White,
                         letterSpacing = 0.5.sp
                     )
-                    Spacer(Modifier.height(4.dp))
+                    Spacer(Modifier.height(6.dp))
                     Text(
                         text = "Your personal recipe companion",
                         style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.8f)
+                        color = Color.White.copy(alpha = 0.85f)
                     )
                 }
             }
@@ -254,9 +351,13 @@ fun AuthScreen(
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset(y = (-24).dp)
-                    .shadow(0.dp, RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
-                    .clip(RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp))
+                    .offset(y = (-28).dp)
+                    .shadow(
+                        elevation = 16.dp,
+                        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
+                        clip = false
+                    )
+                    .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
                     .background(MaterialTheme.colorScheme.background)
                     .padding(horizontal = 24.dp)
                     .padding(top = 32.dp, bottom = 24.dp)
@@ -266,11 +367,7 @@ fun AuthScreen(
                     // ── Pill tab switcher ─────────────────────────────────────
                     PillTabSwitcher(
                         selectedTab = selectedTab,
-                        onTabSelected = { tab ->
-                            selectedTab = tab
-                            viewModel.resetState()
-                            confirmPassword = ""
-                        }
+                        onTabSelected = { tab -> switchTab(tab) }
                     )
 
                     Spacer(Modifier.height(20.dp))
@@ -317,6 +414,27 @@ fun AuthScreen(
                         label = "auth_fields"
                     ) { tab ->
                         Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                            // Name field — register only. Captured here so the greeting
+                            // and Profile screen can show it right after sign-up.
+                            AnimatedVisibility(
+                                visible = tab == 1,
+                                enter = slideInVertically(spring(Spring.DampingRatioMediumBouncy)) { -it / 2 } + fadeIn(),
+                                exit = slideOutVertically { -it / 2 } + fadeOut()
+                            ) {
+                                AuthField(
+                                    value = name,
+                                    onValueChange = { name = it },
+                                    placeholder = "Name",
+                                    leadingIcon = Icons.Default.Person,
+                                    keyboardType = KeyboardType.Text,
+                                    imeAction = ImeAction.Next,
+                                    onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                                    isError = nameError != null,
+                                    supportingText = nameError,
+                                    contentType = ContentType.PersonFullName
+                                )
+                            }
+
                             AuthField(
                                 value = email,
                                 onValueChange = { email = it },
@@ -324,7 +442,14 @@ fun AuthScreen(
                                 leadingIcon = Icons.Default.Email,
                                 keyboardType = KeyboardType.Email,
                                 imeAction = ImeAction.Next,
-                                onNext = { focusManager.moveFocus(FocusDirection.Down) }
+                                onNext = { focusManager.moveFocus(FocusDirection.Down) },
+                                isError = emailError != null,
+                                supportingText = emailError,
+                                contentType = ContentType.EmailAddress,
+                                onFocusChanged = { focused ->
+                                    if (focused) emailHadFocus = true
+                                    else if (emailHadFocus) emailTouched = true
+                                }
                             )
 
                             AuthField(
@@ -338,14 +463,24 @@ fun AuthScreen(
                                 passwordVisible = passwordVisible,
                                 onTogglePassword = { passwordVisible = !passwordVisible },
                                 onNext = { focusManager.moveFocus(FocusDirection.Down) },
-                                onDone = {
-                                    focusManager.clearFocus()
-                                    if (tab == 0) {
-                                        activePath = AuthPath.Email
-                                        viewModel.signIn(email, password)
-                                    }
+                                onDone = { if (tab == 0) attemptSubmit() },
+                                isError = passwordError != null,
+                                supportingText = passwordError,
+                                contentType = if (tab == 1) ContentType.NewPassword else ContentType.Password,
+                                onFocusChanged = { focused ->
+                                    if (focused) passwordHadFocus = true
+                                    else if (passwordHadFocus) passwordTouched = true
                                 }
                             )
+
+                            // Strength meter — register only, once they start typing.
+                            AnimatedVisibility(
+                                visible = tab == 1 && password.isNotEmpty(),
+                                enter = fadeIn() + expandVertically(),
+                                exit = fadeOut() + shrinkVertically()
+                            ) {
+                                PasswordStrengthMeter(password)
+                            }
 
                             // Confirm password only on Register tab
                             AnimatedVisibility(
@@ -365,15 +500,11 @@ fun AuthScreen(
                                     onTogglePassword = {
                                         confirmPasswordVisible = !confirmPasswordVisible
                                     },
-                                    onDone = {
-                                        focusManager.clearFocus()
-                                        if (password == confirmPassword) {
-                                            activePath = AuthPath.Email
-                                            viewModel.register(email, password)
-                                        } else {
-                                            viewModel.setError("Passwords do not match")
-                                        }
-                                    }
+                                    onDone = { attemptSubmit() },
+                                    isError = confirmError != null,
+                                    isSuccess = confirmSuccess,
+                                    supportingText = confirmSupport,
+                                    contentType = ContentType.NewPassword
                                 )
                             }
                         }
@@ -407,20 +538,7 @@ fun AuthScreen(
 
                     // ── Primary button ────────────────────────────────────────
                     Button(
-                        onClick = {
-                            focusManager.clearFocus()
-                            if (selectedTab == 0) {
-                                activePath = AuthPath.Email
-                                viewModel.signIn(email, password)
-                            } else {
-                                if (password == confirmPassword) {
-                                    activePath = AuthPath.Email
-                                    viewModel.register(email, password)
-                                } else {
-                                    viewModel.setError("Passwords do not match")
-                                }
-                            }
-                        },
+                        onClick = { attemptSubmit() },
                         enabled = !isLoading,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -480,7 +598,7 @@ fun AuthScreen(
                     Spacer(Modifier.height(16.dp))
 
                     // ── Google Sign-In button ─────────────────────────────────
-                    androidx.compose.material3.OutlinedButton(
+                    OutlinedButton(
                         onClick = { launchGoogleSignIn() },
                         enabled = !isLoading,
                         modifier = Modifier
@@ -520,7 +638,7 @@ fun AuthScreen(
                     Spacer(Modifier.height(12.dp))
 
                     // ── Guest button ──────────────────────────────────────────
-                    androidx.compose.material3.OutlinedButton(
+                    OutlinedButton(
                         onClick = onAuthSuccess,
                         modifier = Modifier
                             .fillMaxWidth()
@@ -561,11 +679,7 @@ fun AuthScreen(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         TextButton(
-                            onClick = {
-                                selectedTab = if (selectedTab == 0) 1 else 0
-                                viewModel.resetState()
-                                confirmPassword = ""
-                            }
+                            onClick = { switchTab(if (selectedTab == 0) 1 else 0) }
                         ) {
                             Text(
                                 text = if (selectedTab == 0) "Register" else "Sign In",

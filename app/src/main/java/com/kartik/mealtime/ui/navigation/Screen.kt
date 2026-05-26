@@ -34,8 +34,6 @@ object Auth
 @Serializable
 object Profile
 @Serializable
-object About
-@Serializable
 object ShoppingList
 @Serializable
 object Chat

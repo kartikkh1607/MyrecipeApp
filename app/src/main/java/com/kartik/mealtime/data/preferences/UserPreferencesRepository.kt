@@ -36,6 +36,12 @@ class UserPreferencesRepository @Inject constructor(
             displayName = prefs[KEY_DISPLAY_NAME] ?: "",
             avatarEmoji = prefs[KEY_AVATAR] ?: UserPreferences.DEFAULT_AVATAR,
             dietaryPrefs = parseDietaryPrefs(prefs[KEY_DIETARY_PREFS]),
+            allergies = parseAllergies(prefs[KEY_ALLERGIES]),
+            skillLevel = parseEnum(prefs[KEY_SKILL_LEVEL], SkillLevel.BEGINNER),
+            defaultServings = (prefs[KEY_DEFAULT_SERVINGS] ?: UserPreferences.DEFAULT_SERVINGS)
+                .coerceIn(UserPreferences.MIN_SERVINGS, UserPreferences.MAX_SERVINGS),
+            spiceLevel = parseEnum(prefs[KEY_SPICE_LEVEL], SpiceLevel.MEDIUM),
+            unitSystem = parseEnum(prefs[KEY_UNIT_SYSTEM], UnitSystem.METRIC),
             cookingStreakDays = prefs[KEY_STREAK_DAYS] ?: 0,
             lastCookedDate = prefs[KEY_LAST_COOKED_DATE] ?: "",
             totalRecipesViewed = prefs[KEY_TOTAL_VIEWED] ?: 0
@@ -57,15 +63,24 @@ class UserPreferencesRepository @Inject constructor(
     }
 
     /**
-     * Single-transaction profile save. Writes name, avatar, and dietary prefs in one
-     * DataStore [edit] so observers receive exactly one emission instead of three —
+     * Single-transaction profile save. Writes every user-editable field in one
+     * DataStore [edit] so observers receive exactly one emission instead of many —
      * prevents the Profile screen from flickering through partially-updated state.
+     *
+     * Stat fields (streak, last-cooked, total-viewed) are deliberately untouched:
+     * they are owned by [recordRecipeView], not the edit sheet.
      */
-    suspend fun saveProfile(name: String, emoji: String, dietaryPrefs: Set<DietaryPref>) {
+    suspend fun saveProfile(prefs: UserPreferences) {
         context.userPrefsDataStore.edit {
-            it[KEY_DISPLAY_NAME] = name.trim()
-            it[KEY_AVATAR] = emoji
-            it[KEY_DIETARY_PREFS] = dietaryPrefs.joinToString(",") { p -> p.name }
+            it[KEY_DISPLAY_NAME]     = prefs.displayName.trim()
+            it[KEY_AVATAR]           = prefs.avatarEmoji
+            it[KEY_DIETARY_PREFS]    = prefs.dietaryPrefs.joinToString(",") { p -> p.name }
+            it[KEY_ALLERGIES]        = prefs.allergies.joinToString(",") { a -> a.name }
+            it[KEY_SKILL_LEVEL]      = prefs.skillLevel.name
+            it[KEY_DEFAULT_SERVINGS] = prefs.defaultServings
+                .coerceIn(UserPreferences.MIN_SERVINGS, UserPreferences.MAX_SERVINGS)
+            it[KEY_SPICE_LEVEL]      = prefs.spiceLevel.name
+            it[KEY_UNIT_SYSTEM]      = prefs.unitSystem.name
         }
     }
 
@@ -118,6 +133,19 @@ class UserPreferencesRepository @Inject constructor(
             .toSet()
     }
 
+    private fun parseAllergies(raw: String?): Set<Allergen> {
+        if (raw.isNullOrBlank()) return emptySet()
+        return raw.split(",")
+            .mapNotNull { runCatching { Allergen.valueOf(it.trim()) }.getOrNull() }
+            .toSet()
+    }
+
+    /** Reads an enum constant by name, falling back to [default] on any mismatch. */
+    private inline fun <reified T : Enum<T>> parseEnum(raw: String?, default: T): T {
+        if (raw.isNullOrBlank()) return default
+        return runCatching { enumValueOf<T>(raw.trim()) }.getOrDefault(default)
+    }
+
     /** True iff [previousDateStr] (ISO) is exactly one day before [today]. */
     private fun isYesterday(previousDateStr: String, today: LocalDate): Boolean {
         return try {
@@ -131,6 +159,11 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_DISPLAY_NAME     = stringPreferencesKey("display_name")
         val KEY_AVATAR           = stringPreferencesKey("avatar_emoji")
         val KEY_DIETARY_PREFS    = stringPreferencesKey("dietary_prefs")
+        val KEY_ALLERGIES        = stringPreferencesKey("allergies")
+        val KEY_SKILL_LEVEL      = stringPreferencesKey("skill_level")
+        val KEY_DEFAULT_SERVINGS = intPreferencesKey("default_servings")
+        val KEY_SPICE_LEVEL      = stringPreferencesKey("spice_level")
+        val KEY_UNIT_SYSTEM      = stringPreferencesKey("unit_system")
         val KEY_STREAK_DAYS      = intPreferencesKey("streak_days")
         val KEY_LAST_COOKED_DATE = stringPreferencesKey("last_cooked_date")
         val KEY_TOTAL_VIEWED     = intPreferencesKey("total_viewed")

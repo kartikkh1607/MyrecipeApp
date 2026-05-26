@@ -22,7 +22,6 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kartik.mealtime.data.source.CategoryDataSource
-import com.kartik.mealtime.ui.screens.AboutScreen
 import com.kartik.mealtime.ui.screens.AuthScreen
 import com.kartik.mealtime.ui.screens.CategoryDetailScreen
 import com.kartik.mealtime.ui.screens.ChatScreen
@@ -209,10 +208,6 @@ fun Navigation(
                     navController.navigate(Auth) { launchSingleTop = true }
                 }
             )
-        }
-
-        composable<About> {
-            AboutScreen(navController = navController)
         }
 
         composable<ShoppingList> {

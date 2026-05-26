@@ -24,12 +24,15 @@ import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
-import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Palette
 import androidx.compose.material.icons.filled.Person
+import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Share
+import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
@@ -52,12 +55,17 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.kartik.mealtime.BuildConfig
+import com.kartik.mealtime.R
 import com.kartik.mealtime.domain.model.ThemeMode
-import com.kartik.mealtime.ui.navigation.About
+import com.kartik.mealtime.ui.components.findActivity
+import com.kartik.mealtime.ui.components.rememberConsentManager
 import com.kartik.mealtime.ui.navigation.LocalTabReselectEvents
 import com.kartik.mealtime.ui.navigation.Profile
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
@@ -71,8 +79,20 @@ fun SettingsScreen(
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     val context = LocalContext.current
+    val uriHandler = LocalUriHandler.current
     // ✅ Issue #4: observe current theme mode from DataStore
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
+
+    // Legal links — folded in from the former About screen. Each row appears only
+    // when its URL is configured in strings.xml, so we never show a broken link.
+    val privacyUrl = stringResource(R.string.privacy_policy_url)
+    val termsUrl = stringResource(R.string.terms_of_service_url)
+
+    // Ad-consent ("Privacy choices") — shown only for EEA/UK users, who must be able
+    // to change their UMP consent after the initial prompt. Hidden everywhere else.
+    val consentManager = rememberConsentManager()
+    val privacyOptionsRequired by consentManager.privacyOptionsRequired.collectAsStateWithLifecycle()
+    val activity = context.findActivity()
 
     // Hoist list state so reselecting the Settings tab smooth-scrolls to top.
     val listState = rememberLazyListState()
@@ -110,72 +130,80 @@ fun SettingsScreen(
         context.startActivity(Intent.createChooser(send, "Share app"))
     }
 
+    var showThemeDialog by remember { mutableStateOf(false) }
+
+    // Theme picker AlertDialog — branded styling that matches the app.
+    if (showThemeDialog) {
+        AlertDialog(
+            onDismissRequest = { showThemeDialog = false },
+            shape = RoundedCornerShape(24.dp),
+            containerColor = MaterialTheme.colorScheme.surface,
+            // Drop the default tonal tint so the dialog matches the surrounding surface.
+            tonalElevation = 0.dp,
+            title = {
+                Column {
+                    Text(
+                        "Choose theme",
+                        style = MaterialTheme.typography.headlineSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Spacer(Modifier.height(4.dp))
+                    Text(
+                        "Pick the look that feels right.",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    ThemeMode.entries.forEach { mode ->
+                        ThemePickerRow(
+                            mode = mode,
+                            selected = currentTheme == mode,
+                            onClick = {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                viewModel.setThemeMode(mode)
+                                showThemeDialog = false
+                            }
+                        )
+                    }
+                }
+            },
+            confirmButton = {},
+            dismissButton = {
+                TextButton(onClick = { showThemeDialog = false }) {
+                    Text("Close")
+                }
+            }
+        )
+    }
+
     Column(
         modifier = Modifier
             .fillMaxSize()
             .background(MaterialTheme.colorScheme.background)
             .statusBarsPadding()
-            .padding(16.dp)
+            .padding(horizontal = 16.dp)
     ) {
-        Text(
-            text = "Settings",
-            style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground,
-            modifier = Modifier.padding(bottom = 24.dp)
-        )
-
-        var showThemeDialog by remember { mutableStateOf(false) }
-
-        // Theme picker AlertDialog — branded styling that matches the app.
-        if (showThemeDialog) {
-            AlertDialog(
-                onDismissRequest = { showThemeDialog = false },
-                shape = RoundedCornerShape(24.dp),
-                containerColor = MaterialTheme.colorScheme.surface,
-                // Drop the default tonal tint so the dialog matches the surrounding surface.
-                tonalElevation = 0.dp,
-                title = {
-                    Column {
-                        Text(
-                            "Choose theme",
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                        Spacer(Modifier.height(4.dp))
-                        Text(
-                            "Pick the look that feels right.",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
-                },
-                text = {
-                    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                        ThemeMode.entries.forEach { mode ->
-                            ThemePickerRow(
-                                mode = mode,
-                                selected = currentTheme == mode,
-                                onClick = {
-                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                                    viewModel.setThemeMode(mode)
-                                    showThemeDialog = false
-                                }
-                            )
-                        }
-                    }
-                },
-                confirmButton = {},
-                dismissButton = {
-                    TextButton(onClick = { showThemeDialog = false }) {
-                        Text("Close")
-                    }
-                }
+        // ── Header ──────────────────────────────────────────────────────────────
+        Column(modifier = Modifier.padding(top = 8.dp, bottom = 20.dp)) {
+            Text(
+                text = "Settings",
+                style = MaterialTheme.typography.headlineLarge,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground
+            )
+            Spacer(Modifier.height(4.dp))
+            Text(
+                text = "Personalize your MealTime experience",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
             )
         }
 
-        LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(12.dp)) {
+        LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(20.dp)) {
             item {
                 SettingsSection(title = "Preferences") {
                     // Theme row — tapping opens the AlertDialog picker
@@ -202,11 +230,7 @@ fun SettingsScreen(
                 }
             }
             item {
-                SettingsSection(title = "About") {
-                    SettingsItem(Icons.Default.Info, "About", "App version and information") {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        navController.navigate(About)
-                    }
+                SettingsSection(title = "Support") {
                     SettingsItem(Icons.Default.Star, "Rate App", "Share your feedback") {
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                         openPlayStore()
@@ -220,6 +244,70 @@ fun SettingsScreen(
                         shareApp()
                     }
                 }
+            }
+            // ── Legal ─────────────────────────────────────────────────────────────
+            // Rows render only when the matching URL is configured in strings.xml.
+            if (privacyUrl.isNotBlank() || termsUrl.isNotBlank() ||
+                (privacyOptionsRequired && activity != null)
+            ) {
+                item {
+                    SettingsSection(title = "Legal") {
+                        if (privacyOptionsRequired && activity != null) {
+                            SettingsItem(
+                                Icons.Default.Shield,
+                                "Privacy choices",
+                                "Manage your ad consent"
+                            ) {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                consentManager.showPrivacyOptionsForm(activity)
+                            }
+                        }
+                        if (privacyUrl.isNotBlank()) {
+                            SettingsItem(
+                                Icons.Default.PrivacyTip,
+                                "Privacy Policy",
+                                "How we handle your data",
+                                isExternal = true
+                            ) {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                uriHandler.openUri(privacyUrl)
+                            }
+                        }
+                        if (termsUrl.isNotBlank()) {
+                            SettingsItem(
+                                Icons.Default.Description,
+                                "Terms of Service",
+                                "The rules for using MealTime",
+                                isExternal = true
+                            ) {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                uriHandler.openUri(termsUrl)
+                            }
+                        }
+                    }
+                }
+            }
+            // ── Version footer ──────────────────────────────────────────────────────
+            item {
+                Column(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "MealTime",
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "Version ${BuildConfig.VERSION_NAME}",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
+                    )
+                }
+                // Bottom breathing room so the footer clears the bottom nav bar.
+                Spacer(Modifier.height(96.dp))
             }
         }
     }
@@ -236,46 +324,62 @@ fun SettingsSection(title: String, content: @Composable ColumnScope.() -> Unit) 
             style = MaterialTheme.typography.titleMedium,
             fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.padding(bottom = 12.dp)
+            modifier = Modifier.padding(start = 4.dp, bottom = 12.dp)
         )
         Card(
             modifier = Modifier.fillMaxWidth(),
             colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            shape = RoundedCornerShape(16.dp)
+            elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+            shape = RoundedCornerShape(20.dp)
         ) {
-            Column(modifier = Modifier.padding(4.dp)) { content() }
+            Column(modifier = Modifier.padding(6.dp)) { content() }
         }
     }
 }
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun SettingsItem(icon: ImageVector, title: String, subtitle: String, onClick: () -> Unit) {
+fun SettingsItem(
+    icon: ImageVector,
+    title: String,
+    subtitle: String,
+    isExternal: Boolean = false,
+    onClick: () -> Unit
+) {
     Card(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(16.dp),
+                .padding(12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
-            Icon(
-                icon,
-                null,
-                modifier = Modifier.size(24.dp),
-                tint = MaterialTheme.colorScheme.primary
-            )
+            // Tinted rounded-square icon tile — the premium brand accent.
+            Box(
+                modifier = Modifier
+                    .size(44.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(MaterialTheme.colorScheme.primaryContainer),
+                contentAlignment = Alignment.Center
+            ) {
+                Icon(
+                    icon,
+                    null,
+                    modifier = Modifier.size(22.dp),
+                    tint = MaterialTheme.colorScheme.primary
+                )
+            }
             Spacer(modifier = Modifier.width(16.dp))
             Column(modifier = Modifier.weight(1f)) {
                 Text(
                     title,
                     style = MaterialTheme.typography.bodyLarge,
-                    fontWeight = FontWeight.Medium,
+                    fontWeight = FontWeight.SemiBold,
                     color = MaterialTheme.colorScheme.onSurface
                 )
                 Text(
@@ -285,7 +389,7 @@ fun SettingsItem(icon: ImageVector, title: String, subtitle: String, onClick: ()
                 )
             }
             Icon(
-                Icons.Default.ChevronRight,
+                if (isExternal) Icons.AutoMirrored.Filled.OpenInNew else Icons.Default.ChevronRight,
                 null,
                 modifier = Modifier.size(20.dp),
                 tint = MaterialTheme.colorScheme.onSurfaceVariant
