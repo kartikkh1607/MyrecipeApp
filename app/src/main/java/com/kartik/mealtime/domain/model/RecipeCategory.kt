@@ -1,7 +1,6 @@
 package com.kartik.mealtime.domain.model
 
 import android.os.Parcelable
-import androidx.annotation.DrawableRes
 import androidx.compose.runtime.Immutable
 import kotlinx.parcelize.Parcelize
 
@@ -32,8 +31,13 @@ data class RecipeCategory(
     val cuisineType: CuisineType = CuisineType.INTERNATIONAL,
     val dietaryTags: List<DietaryFilter> = emptyList(),
     val spoonacularTag: String = "",
-    /** When > 0 the UI loads from local drawable (instant, offline). imageUrl is the URL fallback. */
-    @DrawableRes val imageResId: Int = 0,
+    /**
+     * Drawable resource id for a bundled category image; when > 0 the UI loads it
+     * locally (instant, offline) and falls back to [imageUrl] otherwise. Kept as a
+     * plain Int (no @DrawableRes) so the domain model carries no Android-resource
+     * annotation; the UI layer validates/uses it as a drawable id.
+     */
+    val imageResId: Int = 0,
     /** Determines which Spoonacular query param receives [spoonacularTag]. */
     val kind: CategoryKind = CategoryKind.DISH_TYPE,
     /**

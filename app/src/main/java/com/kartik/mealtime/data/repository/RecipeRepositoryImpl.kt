@@ -30,21 +30,33 @@ import javax.inject.Inject
  * Issue #7 fix: [getRecipeDetails] now caches successful API responses in Room
  * and serves them from cache when offline, so the detail screen never shows up empty.
  */
-class RecipeRepositoryImpl @Inject constructor(
+class RecipeRepositoryImpl(
     private val apiService: SpoonacularApiService,
     private val cachedRecipeDao: CachedRecipeDao,
-    private val featuredCacheDao: FeaturedCacheDao
+    private val featuredCacheDao: FeaturedCacheDao,
+    // Whether a Spoonacular key is present (decides API vs. sample fallback). The actual
+    // key injection is handled by NetworkModule.ApiKeyInterceptor.
+    private val apiConfigured: Boolean,
+    // Sample data is a debug-only fallback so release builds don't quietly ship demo
+    // recipes when the network is unavailable. In release, network failures propagate as
+    // empty results and the UI shows its error state.
+    private val sampleFallbackEnabled: Boolean
 ) : RecipeRepository {
 
-    // Only needed to decide whether to call the API or fall back to sample data.
-    // The actual key injection is handled by NetworkModule.ApiKeyInterceptor.
-    private val apiKey: String = BuildConfig.SPOONACULAR_API_KEY
-    private val apiConfigured: Boolean = apiKey.isNotEmpty() && apiKey != "null"
-
-    // Sample data is a debug-only fallback so release builds don't quietly ship
-    // demo recipes when the network is unavailable. In release, network failures
-    // propagate as empty results and the UI shows its error state.
-    private val sampleFallbackEnabled = BuildConfig.DEBUG
+    /** Production constructor — Hilt-injected; reads API config from [BuildConfig]. */
+    @Inject
+    constructor(
+        apiService: SpoonacularApiService,
+        cachedRecipeDao: CachedRecipeDao,
+        featuredCacheDao: FeaturedCacheDao
+    ) : this(
+        apiService = apiService,
+        cachedRecipeDao = cachedRecipeDao,
+        featuredCacheDao = featuredCacheDao,
+        apiConfigured = BuildConfig.SPOONACULAR_API_KEY.isNotEmpty() &&
+                BuildConfig.SPOONACULAR_API_KEY != "null",
+        sampleFallbackEnabled = BuildConfig.DEBUG
+    )
 
     private val sampleRecipes: List<Recipe> by lazy {
         SampleDataSource.featuredRecipes.map { it.recipe }
@@ -232,23 +244,25 @@ class RecipeRepositoryImpl @Inject constructor(
 
         return try {
             val resp = when (category.kind) {
-                CategoryKind.CUISINE   -> apiService.searchRecipes(
-                    query   = category.apiQuery,
+                CategoryKind.CUISINE -> apiService.searchRecipes(
+                    query = category.apiQuery,
                     cuisine = category.spoonacularTag,
-                    number  = limit,
-                    offset  = offset,
-                    addRecipeNutrition = true
-                )
-                CategoryKind.DISH_TYPE -> apiService.searchRecipes(
-                    query  = category.apiQuery,
-                    type   = category.spoonacularTag,
                     number = limit,
                     offset = offset,
                     addRecipeNutrition = true
                 )
-                CategoryKind.DIETARY   -> apiService.searchRecipes(
-                    query  = category.apiQuery,
-                    diet   = category.spoonacularTag,
+
+                CategoryKind.DISH_TYPE -> apiService.searchRecipes(
+                    query = category.apiQuery,
+                    type = category.spoonacularTag,
+                    number = limit,
+                    offset = offset,
+                    addRecipeNutrition = true
+                )
+
+                CategoryKind.DIETARY -> apiService.searchRecipes(
+                    query = category.apiQuery,
+                    diet = category.spoonacularTag,
                     number = limit,
                     offset = offset,
                     addRecipeNutrition = true
@@ -256,7 +270,10 @@ class RecipeRepositoryImpl @Inject constructor(
             }
 
             val recipes = resp.results.map { it.toDomain() }
-            Log.d(TAG, "Fetched ${recipes.size} recipes for category: ${category.name} (offset=$offset)")
+            Log.d(
+                TAG,
+                "Fetched ${recipes.size} recipes for category: ${category.name} (offset=$offset)"
+            )
             recipes
         } catch (e: Exception) {
             Log.e(TAG, "Category recipes API failed for $categoryId: ${e.message}")
@@ -268,15 +285,25 @@ class RecipeRepositoryImpl @Inject constructor(
         if (!sampleFallbackEnabled) return emptyList()
         return sampleRecipes.filter { recipe ->
             when (category.kind) {
-                CategoryKind.CUISINE -> 
+                CategoryKind.CUISINE ->
                     recipe.cuisine.equals(category.spoonacularTag, ignoreCase = true) ||
-                    recipe.tags.any { it.equals(category.spoonacularTag, ignoreCase = true) }
-                    
-                CategoryKind.DISH_TYPE -> 
-                    recipe.category.equals(category.spoonacularTag, ignoreCase = true) || 
-                    recipe.tags.any { it.equals(category.spoonacularTag, ignoreCase = true) } ||
-                    recipe.category.equals(category.name, ignoreCase = true)
-                    
+                            recipe.tags.any {
+                                it.equals(
+                                    category.spoonacularTag,
+                                    ignoreCase = true
+                                )
+                            }
+
+                CategoryKind.DISH_TYPE ->
+                    recipe.category.equals(category.spoonacularTag, ignoreCase = true) ||
+                            recipe.tags.any {
+                                it.equals(
+                                    category.spoonacularTag,
+                                    ignoreCase = true
+                                )
+                            } ||
+                            recipe.category.equals(category.name, ignoreCase = true)
+
                 CategoryKind.DIETARY -> {
                     when (category.spoonacularTag.lowercase()) {
                         "vegetarian" -> recipe.isVegetarian
@@ -294,6 +321,7 @@ class RecipeRepositoryImpl @Inject constructor(
 
     companion object {
         private const val TAG = "RecipeRepositoryImpl"
+
         /** Max cached recipes before we evict the oldest 20. */
         private const val MAX_CACHED_RECIPES = 100
         private const val EVICT_BATCH_SIZE = 20

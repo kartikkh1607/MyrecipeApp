@@ -50,10 +50,12 @@ commands (e.g. "next", "back", "repeat").
 - **Spoonacular API**: when you search for a recipe, your search query
   and the recipe IDs you view are sent to Spoonacular's API to return
   results. No account information is sent.
-- **Google Gemini API**: when you use the AI features (recipe
-  generation, chat assistant), the text prompts you send are
-  transmitted to Google for inference. No account information is
-  attached to these requests by the App. Do not enter personal
+- **AI providers (Google Gemini, with Groq as fallback)**: when you use
+  the AI features (recipe generation, chat assistant), the text prompts
+  you send are transmitted to **Google (Gemini API)** for inference. If
+  the Gemini request fails and a fallback is configured, the same prompt
+  may instead be sent to **Groq** for inference. No account information
+  is attached to these requests by the App. Do not enter personal
   information into AI prompts.
 
 ### 1.5 Advertising
@@ -110,7 +112,8 @@ privacy policy:
 |---|---|---|
 | Firebase (Google) | Auth, Firestore, Analytics, Crashlytics | https://policies.google.com/privacy |
 | Google AdMob | In-app advertising | https://support.google.com/admob/answer/6128543 |
-| Google Gemini API | AI recipe generation and chat | https://policies.google.com/privacy |
+| Google Gemini API | AI recipe generation and chat (primary) | https://policies.google.com/privacy |
+| Groq | AI recipe generation and chat (fallback) | https://groq.com/privacy-policy/ |
 | Spoonacular | Recipe search and detail data | https://spoonacular.com/food-api/terms |
 | Android Speech Recognizer (Google) | Voice command transcription | https://policies.google.com/privacy |
 

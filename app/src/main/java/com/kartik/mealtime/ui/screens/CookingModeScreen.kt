@@ -401,7 +401,7 @@ fun CookingModeScreen(
                     ) {
                         AsyncImage(
                             model = recipe.imageUrl,
-                            contentDescription = null,
+                            contentDescription = recipe.name,
                             contentScale = ContentScale.Crop,
                             modifier = Modifier.fillMaxSize()
                         )

@@ -1,6 +1,7 @@
 package com.kartik.mealtime.ui.screens
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -18,7 +19,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.automirrored.filled.OpenInNew
 import androidx.compose.material.icons.filled.Code
+import androidx.compose.material.icons.filled.Description
+import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -31,10 +35,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalUriHandler
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.navigation.NavHostController
 import com.kartik.mealtime.BuildConfig
+import com.kartik.mealtime.R
 import com.kartik.mealtime.ui.theme.ForestGreen
 
 @Composable
@@ -209,6 +217,87 @@ fun AboutScreen(navController: NavHostController) {
             }
         }
 
+        // ── Legal section ──────────────────────────────────────────────────────
+        // Rows appear only when the matching URL is configured in strings.xml, so
+        // the app never shows a broken link before the policies are hosted.
+        val uriHandler = LocalUriHandler.current
+        val privacyUrl = stringResource(R.string.privacy_policy_url)
+        val termsUrl = stringResource(R.string.terms_of_service_url)
+        if (privacyUrl.isNotBlank() || termsUrl.isNotBlank()) {
+            Spacer(modifier = Modifier.height(24.dp))
+            Text(
+                "Legal",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary,
+                modifier = Modifier.padding(bottom = 12.dp)
+            )
+            Card(
+                modifier = Modifier.fillMaxWidth(),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
+                shape = RoundedCornerShape(16.dp)
+            ) {
+                Column {
+                    if (privacyUrl.isNotBlank()) {
+                        LegalLinkRow(
+                            icon = Icons.Default.PrivacyTip,
+                            label = "Privacy Policy",
+                            onClick = { uriHandler.openUri(privacyUrl) }
+                        )
+                    }
+                    if (privacyUrl.isNotBlank() && termsUrl.isNotBlank()) {
+                        HorizontalDivider(
+                            modifier = Modifier.padding(horizontal = 16.dp),
+                            color = MaterialTheme.colorScheme.outlineVariant.copy(alpha = 0.4f)
+                        )
+                    }
+                    if (termsUrl.isNotBlank()) {
+                        LegalLinkRow(
+                            icon = Icons.Default.Description,
+                            label = "Terms of Service",
+                            onClick = { uriHandler.openUri(termsUrl) }
+                        )
+                    }
+                }
+            }
+        }
+
         Spacer(modifier = Modifier.height(32.dp))
+    }
+}
+
+@Composable
+private fun LegalLinkRow(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        Icon(
+            icon,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.primary,
+            modifier = Modifier.size(22.dp)
+        )
+        Text(
+            label,
+            style = MaterialTheme.typography.bodyLarge,
+            color = MaterialTheme.colorScheme.onSurface,
+            modifier = Modifier.weight(1f)
+        )
+        Icon(
+            Icons.AutoMirrored.Filled.OpenInNew,
+            contentDescription = "Opens in browser",
+            tint = MaterialTheme.colorScheme.onSurfaceVariant,
+            modifier = Modifier.size(18.dp)
+        )
     }
 }

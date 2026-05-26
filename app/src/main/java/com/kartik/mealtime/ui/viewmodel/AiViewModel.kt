@@ -10,6 +10,7 @@ import com.kartik.mealtime.data.local.FavoriteDao
 import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import com.kartik.mealtime.data.remote.AiService
 import com.kartik.mealtime.data.remote.ChatMessage
+import com.kartik.mealtime.ui.viewmodel.AiViewModel.Companion.MAX_HISTORY_MESSAGES
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
@@ -62,8 +63,14 @@ class AiViewModel @Inject constructor(
 
     private val conversationHistory = mutableListOf<ChatMessage>()
 
-    /** Monotonic timestamp of the last accepted send, used by the cooldown guard. */
-    private var lastSendElapsed = 0L
+    /**
+     * Monotonic clock for the send cooldown, overridable in tests. Defaults to
+     * SystemClock.elapsedRealtime() so it's immune to wall-clock / NTP changes.
+     */
+    internal var nowMs: () -> Long = { android.os.SystemClock.elapsedRealtime() }
+
+    /** Timestamp of the last accepted send; null until the first send. */
+    private var lastSendMs: Long? = null
 
     private companion object {
         /** Minimum gap between accepted sends — blocks double-taps / rapid spam that
@@ -94,9 +101,10 @@ class AiViewModel @Inject constructor(
         // Rate-limit: drop the send if a response is still streaming or we're inside the
         // cooldown window. The send button is also disabled while isTyping, so this is
         // defense-in-depth against double-taps and programmatic spam.
-        val now = android.os.SystemClock.elapsedRealtime()
-        if (_chatState.value.isTyping || now - lastSendElapsed < SEND_COOLDOWN_MS) return
-        lastSendElapsed = now
+        val now = nowMs()
+        val last = lastSendMs
+        if (_chatState.value.isTyping || (last != null && now - last < SEND_COOLDOWN_MS)) return
+        lastSendMs = now
 
         viewModelScope.launch {
             // Add user message

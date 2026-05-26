@@ -35,6 +35,7 @@ class FavoritesViewModelTest {
         override fun getAllSync(): List<FavoriteEntity> = items
         override suspend fun insert(entity: FavoriteEntity) {}
         override suspend fun delete(id: String) {}
+        override suspend fun deleteAll() {}
     }
 
     @Before

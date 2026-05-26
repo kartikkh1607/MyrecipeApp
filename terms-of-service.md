@@ -45,8 +45,9 @@ You agree not to:
 
 ## 4. Recipe content and AI features — important disclaimer
 - Recipe data is provided in part by third parties (including the
-  Spoonacular API) and by generative AI (Google Gemini). It is offered
-  for **general informational purposes only**.
+  Spoonacular API) and by generative AI (Google Gemini, with Groq as a
+  fallback provider). It is offered for **general informational purposes
+  only**.
 - **The App does not provide medical, nutritional, or dietary advice.**
   Ingredient lists, nutrition figures, allergen information, and cooking
   instructions may be **inaccurate, incomplete, or unsuitable** for your
@@ -62,7 +63,7 @@ You agree not to:
 
 ## 5. Third-party services
 The App relies on third-party services, each governed by its own terms,
-including Google (Firebase, AdMob, Gemini) and Spoonacular. Your use of
+including Google (Firebase, AdMob, Gemini), Groq, and Spoonacular. Your use of
 features powered by these services is also subject to their terms. We
 are not responsible for third-party services or content.
 

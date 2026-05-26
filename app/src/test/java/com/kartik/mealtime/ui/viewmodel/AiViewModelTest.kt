@@ -174,6 +174,25 @@ class AiViewModelTest {
     }
 
     @Test
+    fun `send within cooldown is dropped, send after cooldown is accepted`() = runTest {
+        var clock = 10_000L
+        viewModel.nowMs = { clock }
+
+        viewModel.sendMessage("first")
+        assertEquals("first", aiService.lastMessage)
+
+        // 500ms later — inside the 1.5s cooldown → dropped (service not re-invoked).
+        clock = 10_500L
+        viewModel.sendMessage("too soon")
+        assertEquals("first", aiService.lastMessage)
+
+        // 2s after the first send — past the cooldown → accepted.
+        clock = 12_000L
+        viewModel.sendMessage("later")
+        assertEquals("later", aiService.lastMessage)
+    }
+
+    @Test
     fun `clearChat resets to the welcome message`() = runTest {
         viewModel.sendMessage("hello")
         assertTrue(viewModel.chatState.value.messages.size > 1)
