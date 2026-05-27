@@ -46,7 +46,14 @@ class AiServiceRouter @Inject constructor(
         dietaryPreferences: String
     ): Result<Recipe> {
         val primary = gemini.generateRecipe(query, dietaryPreferences)
-        if (primary.isSuccess || !groq.isConfigured) return primary
+        // A premium-gate rejection must NOT fall back to Groq: the Groq route isn't gated
+        // server-side, so falling back would be a paywall bypass. Surface it for the upsell.
+        if (primary.isSuccess ||
+            primary.exceptionOrNull() is PremiumRequiredException ||
+            !groq.isConfigured
+        ) {
+            return primary
+        }
 
         val fallback = groq.generateRecipe(query, dietaryPreferences)
         return if (fallback.isSuccess) fallback else primary

@@ -31,15 +31,21 @@ class GroqAiService @Inject constructor(
     private val gson = Gson()
 
     companion object {
-        private const val BASE_URL = "https://api.groq.com/openai/v1/chat/completions"
+        // Routed through the Cloudflare Worker proxy, which injects the Groq API key
+        // (and the model) and forwards to Groq's chat/completions endpoint.
+        private val BASE_URL = "${BuildConfig.PROXY_BASE_URL}/groq"
         // Change this to whichever model your Groq account has access to
         // (e.g. "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it").
         private const val MODEL = "llama-3.3-70b-versatile"
     }
 
-    /** True when a Groq API key is configured; gates whether fallback is attempted. */
+    /**
+     * Whether the Groq fallback should be attempted. The key now lives in the proxy,
+     * so the client gates on the proxy being configured; the Worker decides whether a
+     * Groq key is actually present.
+     */
     val isConfigured: Boolean
-        get() = BuildConfig.GROQ_API_KEY.isNotBlank()
+        get() = BuildConfig.PROXY_BASE_URL.isNotBlank()
 
     override suspend fun sendChatMessage(
         message: String,
@@ -100,7 +106,9 @@ class GroqAiService @Inject constructor(
                 .url(BASE_URL)
                 .post(body)
                 .addHeader("Content-Type", "application/json")
-                .addHeader("Authorization", "Bearer ${BuildConfig.GROQ_API_KEY}")
+                // No Authorization here: the FirebaseAuthInterceptor on the shared
+                // "ai" OkHttpClient attaches the Firebase ID token, and the proxy
+                // supplies the real Groq key server-side.
                 .build()
 
             val response = client.newCall(request).execute()
@@ -135,8 +143,8 @@ class GroqAiService @Inject constructor(
         return Exception(
             when (code) {
                 400 -> "Groq rejected the request (bad request).$suffix"
-                401 -> "Groq API key is invalid or missing — check groq.api.key in local.properties.$suffix"
-                403 -> "Groq access denied: the key may lack permission for model '$MODEL'.$suffix"
+                401 -> "Your session expired. Please sign out and back in, then try again.$suffix"
+                403 -> "Groq access denied for model '$MODEL'.$suffix"
                 404 -> "Groq model '$MODEL' not found — your account may not have access. Try another model in GroqAiService.$suffix"
                 429 -> "Groq rate limit or credits exceeded. Check your Groq usage at console.groq.com.$suffix"
                 in 500..599 -> "Groq is having trouble right now. Please try again in a moment.$suffix"

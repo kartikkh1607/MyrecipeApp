@@ -23,17 +23,12 @@ import javax.inject.Singleton
 @InstallIn(SingletonComponent::class)
 object NetworkModule {
 
-    private const val BASE_URL = "https://api.spoonacular.com/"
+    // Spoonacular is reached through the Cloudflare Worker proxy, which adds the
+    // real API key server-side (see server/cloudflare-worker). The trailing
+    // "/spoonacular/" + relative endpoint paths resolve to /spoonacular/<path>,
+    // which the Worker forwards to api.spoonacular.com/<path>.
+    private val BASE_URL = "${BuildConfig.PROXY_BASE_URL}/spoonacular/"
     private const val CACHE_SIZE_BYTES = 10L * 1024 * 1024
-
-    private class ApiKeyInterceptor(private val apiKey: String) : Interceptor {
-        override fun intercept(chain: Interceptor.Chain): Response {
-            val url = chain.request().url.newBuilder()
-                .addQueryParameter("apiKey", apiKey)
-                .build()
-            return chain.proceed(chain.request().newBuilder().url(url).build())
-        }
-    }
 
     private val offlineFallbackInterceptor = Interceptor { chain ->
         val request = chain.request()
@@ -82,7 +77,7 @@ object NetworkModule {
         val cache = Cache(File(context.cacheDir, "http_cache"), CACHE_SIZE_BYTES)
         return OkHttpClient.Builder()
             .cache(cache)
-            .addInterceptor(ApiKeyInterceptor(BuildConfig.SPOONACULAR_API_KEY))
+            .addInterceptor(FirebaseAuthInterceptor())
             .addInterceptor(RetryInterceptor())
             .addInterceptor(offlineFallbackInterceptor)
             .addInterceptor(loggingInterceptor)
@@ -93,16 +88,17 @@ object NetworkModule {
     }
 
     /**
-     * Plain OkHttp client for the AI providers (Gemini, Groq). Kept separate from the
-     * Spoonacular client above, whose ApiKeyInterceptor appends the Spoonacular apiKey
-     * to every request — that must never touch AI calls. Shared as a singleton so Gemini
-     * and Groq don't each spin up their own thread + connection pools.
+     * OkHttp client for the AI providers (Gemini, Groq). Like the Spoonacular client,
+     * it carries the FirebaseAuthInterceptor (the proxy requires an ID token) but uses
+     * longer timeouts suited to AI latency. Shared as a singleton so Gemini and Groq
+     * don't each spin up their own thread + connection pools.
      */
     @Provides
     @Singleton
     @Named("ai")
     fun provideAiOkHttpClient(): OkHttpClient =
         OkHttpClient.Builder()
+            .addInterceptor(FirebaseAuthInterceptor())
             .connectTimeout(30, TimeUnit.SECONDS)
             .readTimeout(60, TimeUnit.SECONDS)
             .writeTimeout(60, TimeUnit.SECONDS)

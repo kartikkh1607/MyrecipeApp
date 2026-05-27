@@ -38,3 +38,11 @@ data class ChatMessage(
     val isUser: Boolean,
     val timestamp: Long = System.currentTimeMillis()
 )
+
+/**
+ * Thrown when the AI proxy rejects a premium-only request (HTTP 402, server-side
+ * entitlement gate). The UI maps this to the upsell paywall rather than a generic error —
+ * it means the user isn't currently entitled (e.g. a stale local mirror), not that the
+ * request itself failed.
+ */
+class PremiumRequiredException : Exception("Premium subscription required")

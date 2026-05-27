@@ -1,5 +1,9 @@
 package com.kartik.mealtime.ui.screens
 
+import android.app.Activity
+import android.content.Context
+import android.content.ContextWrapper
+import android.widget.Toast
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.animateFloatAsState
@@ -60,6 +64,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.text.font.FontWeight
@@ -67,11 +72,14 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kartik.mealtime.data.billing.BillingManager
 import com.kartik.mealtime.ui.components.GeneratedRecipeSheet
 import com.kartik.mealtime.ui.components.UpsellBottomSheet
 import com.kartik.mealtime.ui.theme.ForestGreen
 import com.kartik.mealtime.ui.viewmodel.AiViewModel
+import com.kartik.mealtime.ui.viewmodel.BillingViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -79,16 +87,44 @@ fun ChatScreen(
     onBackClick: () -> Unit,
     onOpenCreations: () -> Unit,
     onOpenRecipe: (String) -> Unit,
-    viewModel: AiViewModel
+    viewModel: AiViewModel,
+    billingViewModel: BillingViewModel = hiltViewModel()
 ) {
     val chatState by viewModel.chatState
     val genState by viewModel.recipeGenState
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
+    val productDetails by billingViewModel.productDetails.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val keyboard = LocalSoftwareKeyboardController.current
     val hapticFeedback = LocalHapticFeedback.current
+    val context = LocalContext.current
+    val activity = remember(context) { context.findActivity() }
     var inputText by remember { mutableStateOf("") }
     var showUpsell by remember { mutableStateOf(false) }
+
+    // The ViewModel asks for the paywall when the proxy rejects generation with 402
+    // (entitlement lapsed / mirror out of sync).
+    LaunchedEffect(Unit) {
+        viewModel.upsellEvents.collect { showUpsell = true }
+    }
+
+    // Purchase outcomes from the (app-scoped) BillingManager: dismiss the paywall on
+    // success, surface a message on failure, stay silent on user-cancel.
+    LaunchedEffect(Unit) {
+        billingViewModel.purchaseEvents.collect { result ->
+            when (result) {
+                BillingManager.PurchaseResult.Success -> {
+                    showUpsell = false
+                    Toast.makeText(context, "You're Premium now — enjoy!", Toast.LENGTH_SHORT)
+                        .show()
+                }
+
+                BillingManager.PurchaseResult.Cancelled -> Unit
+                is BillingManager.PurchaseResult.Error ->
+                    Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     // Premium gate: generate when unlocked, otherwise prompt to upgrade.
     fun attemptGenerate(query: String) {
@@ -209,10 +245,24 @@ fun ChatScreen(
                 "Saved to your AI Creations",
                 "Tailored to your diet & preferences"
             ),
-            onUnlock = { showUpsell = false },
+            productDetails = productDetails,
+            onSelectPlan = { offerToken ->
+                activity?.let { billingViewModel.purchase(it, offerToken) }
+            },
             onDismiss = { showUpsell = false }
         )
     }
+}
+
+/** Unwraps the host [Activity] from a Compose [Context] — needed to launch the Play
+ *  billing flow, which requires an Activity. */
+private fun Context.findActivity(): Activity? {
+    var ctx: Context = this
+    while (ctx is ContextWrapper) {
+        if (ctx is Activity) return ctx
+        ctx = ctx.baseContext
+    }
+    return null
 }
 
 /** Amber assist chip that triggers full-recipe generation; shows a lock when gated. */

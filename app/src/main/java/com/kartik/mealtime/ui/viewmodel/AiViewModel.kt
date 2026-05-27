@@ -7,17 +7,20 @@ import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kartik.mealtime.data.analytics.AnalyticsHelper
 import com.kartik.mealtime.data.local.AiRecipeSource
-import com.kartik.mealtime.data.local.FavoriteDao
 import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import com.kartik.mealtime.data.remote.AiService
 import com.kartik.mealtime.data.remote.ChatMessage
+import com.kartik.mealtime.data.remote.PremiumRequiredException
 import com.kartik.mealtime.data.repository.AiRecipeRepository
 import com.kartik.mealtime.domain.model.Recipe
 import com.kartik.mealtime.domain.repository.EntitlementRepository
 import com.kartik.mealtime.ui.viewmodel.AiViewModel.Companion.MAX_HISTORY_MESSAGES
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -25,7 +28,6 @@ import javax.inject.Inject
 
 @HiltViewModel
 class AiViewModel @Inject constructor(
-    private val favoriteDao: FavoriteDao,
     private val aiService: AiService,
     private val analytics: AnalyticsHelper,
     private val userPrefsRepo: UserPreferencesRepository,
@@ -64,15 +66,12 @@ class AiViewModel @Inject constructor(
     private val _chatState = mutableStateOf(ChatState())
     val chatState: State<ChatState> = _chatState
 
-    private val _recommendationState = mutableStateOf<RecommendationState>(RecommendationState.Idle)
-    val recommendationState: State<RecommendationState> = _recommendationState
-
-    sealed class RecommendationState {
-        data object Idle : RecommendationState()
-        data object Loading : RecommendationState()
-        data class Success(val recommendations: List<SuggestedRecipe>) : RecommendationState()
-        data class Error(val message: String) : RecommendationState()
-    }
+    /**
+     * One-shot signal that the user tried a premium action without entitlement (the proxy
+     * returned 402). The screen collects this to open the upsell paywall.
+     */
+    private val _upsellEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
+    val upsellEvents: SharedFlow<Unit> = _upsellEvents.asSharedFlow()
 
     private val conversationHistory = mutableListOf<ChatMessage>()
 
@@ -184,32 +183,6 @@ class AiViewModel @Inject constructor(
         )
     }
 
-    fun loadRecommendations() {
-        viewModelScope.launch {
-            _recommendationState.value = RecommendationState.Loading
-
-            val favoriteNames = favoriteDao.getAllSync().map { it.name }
-            val personalization = userPrefsRepo.preferences.first().aiPersonalizationContext()
-
-            val result = aiService.getRecipeRecommendations(favoriteNames, personalization)
-            result.fold(
-                onSuccess = { response ->
-                    val suggestions = parseRecommendations(response)
-                    _recommendationState.value = RecommendationState.Success(suggestions)
-                },
-                onFailure = { error ->
-                    _recommendationState.value = RecommendationState.Error(
-                        error.message ?: "Failed to load recommendations"
-                    )
-                }
-            )
-        }
-    }
-
-    fun refreshRecommendations() {
-        loadRecommendations()
-    }
-
     // ── Full recipe generation (premium) ──────────────────────────────────────
 
     @Immutable
@@ -245,10 +218,16 @@ class AiViewModel @Inject constructor(
             val personalization = userPrefsRepo.preferences.first().aiPersonalizationContext()
             aiService.generateRecipe(trimmed, personalization).fold(
                 onSuccess = { _recipeGenState.value = RecipeGenState.Ready(it) },
-                onFailure = {
-                    _recipeGenState.value = RecipeGenState.Error(
-                        it.message ?: "Couldn't generate a recipe. Please try again."
-                    )
+                onFailure = { error ->
+                    // A 402 means entitlement lapsed/out-of-sync — show the upsell, not an error.
+                    if (error is PremiumRequiredException) {
+                        _recipeGenState.value = RecipeGenState.Idle
+                        _upsellEvents.tryEmit(Unit)
+                    } else {
+                        _recipeGenState.value = RecipeGenState.Error(
+                            error.message ?: "Couldn't generate a recipe. Please try again."
+                        )
+                    }
                 }
             )
         }
@@ -290,17 +269,6 @@ class AiViewModel @Inject constructor(
         }
 
         return suggestions.take(5)
-    }
-
-    private fun parseRecommendations(text: String): List<SuggestedRecipe> {
-        return extractRecipeSuggestions(text).ifEmpty {
-            listOf(
-                SuggestedRecipe(
-                    name = "Loading recommendations...",
-                    description = "Please try again"
-                )
-            )
-        }
     }
 
 }

@@ -38,8 +38,8 @@ class RecipeRepositoryImpl(
     // The user's AI Creations store. Detail lookups for `ai-` ids are served from
     // here (local-only, no network) instead of the Spoonacular API.
     private val aiRecipeDao: AiRecipeDao,
-    // Whether a Spoonacular key is present (decides API vs. sample fallback). The actual
-    // key injection is handled by NetworkModule.ApiKeyInterceptor.
+    // Whether the API proxy is configured (decides API vs. sample fallback). The
+    // Spoonacular key is injected server-side by the Cloudflare Worker proxy.
     private val apiConfigured: Boolean,
     // Sample data is a debug-only fallback so release builds don't quietly ship demo
     // recipes when the network is unavailable. In release, network failures propagate as
@@ -59,8 +59,8 @@ class RecipeRepositoryImpl(
         cachedRecipeDao = cachedRecipeDao,
         featuredCacheDao = featuredCacheDao,
         aiRecipeDao = aiRecipeDao,
-        apiConfigured = BuildConfig.SPOONACULAR_API_KEY.isNotEmpty() &&
-                BuildConfig.SPOONACULAR_API_KEY != "null",
+        apiConfigured = BuildConfig.PROXY_BASE_URL.isNotEmpty() &&
+                BuildConfig.PROXY_BASE_URL != "null",
         sampleFallbackEnabled = BuildConfig.DEBUG
     )
 

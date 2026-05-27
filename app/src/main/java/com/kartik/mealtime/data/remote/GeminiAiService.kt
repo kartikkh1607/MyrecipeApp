@@ -24,7 +24,10 @@ class GeminiAiService @Inject constructor(
     private val gson = Gson()
 
     companion object {
-        private const val BASE_URL = "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent"
+        // Routed through the Cloudflare Worker proxy, which injects the Gemini API
+        // key and forwards to the real :generateContent endpoint. The model is
+        // chosen server-side in the Worker (server/cloudflare-worker/src/index.js).
+        private val BASE_URL = "${BuildConfig.PROXY_BASE_URL}/gemini"
         private const val SAFETY_BLOCKED = " SAFETY_BLOCKED"
     }
 
@@ -37,9 +40,10 @@ class GeminiAiService @Inject constructor(
         val suffix = if (!geminiMsg.isNullOrBlank()) " ($geminiMsg)" else ""
         return Exception(
             when (code) {
-                400 -> "Couldn't reach the AI assistant (bad request). The API key may be invalid — check local.properties.$suffix"
-                401, 403 -> "AI assistant is unavailable: the API key is missing, restricted, or the Generative Language API isn't enabled.$suffix"
-                404 -> "AI model not found. The 'gemini-2.0-flash' model may have changed — try updating the app.$suffix"
+                400 -> "Couldn't reach the AI assistant (bad request). Please try again.$suffix"
+                401 -> "Your session expired. Please sign out and back in, then try again.$suffix"
+                403 -> "AI assistant access denied. Please try again later.$suffix"
+                404 -> "AI model not found — please update the app.$suffix"
                 429 -> "AI assistant quota exceeded. Free tier allows 15 req/min and 1500 req/day per project. Check Google Cloud quotas or enable billing.$suffix"
                 in 500..599 -> "Gemini is having trouble right now. Please try again in a moment.$suffix"
                 else -> "AI assistant error ($code).$suffix"
@@ -73,7 +77,7 @@ class GeminiAiService @Inject constructor(
                 )
             )
 
-            val url = "$BASE_URL?key=${BuildConfig.GEMINI_API_KEY}"
+            val url = BASE_URL
             val mediaType = "application/json".toMediaType()
             val body = gson.toJson(requestBody).toRequestBody(mediaType)
 
@@ -138,7 +142,7 @@ class GeminiAiService @Inject constructor(
                 )
             )
 
-            val url = "$BASE_URL?key=${BuildConfig.GEMINI_API_KEY}"
+            val url = BASE_URL
             val mediaType = "application/json".toMediaType()
             val body = gson.toJson(requestBody).toRequestBody(mediaType)
 
@@ -206,7 +210,7 @@ class GeminiAiService @Inject constructor(
                 )
             )
 
-            val url = "$BASE_URL?key=${BuildConfig.GEMINI_API_KEY}"
+            val url = BASE_URL
             val mediaType = "application/json".toMediaType()
             val body = gson.toJson(requestBody).toRequestBody(mediaType)
 
@@ -220,6 +224,11 @@ class GeminiAiService @Inject constructor(
             val responseBody = response.body?.string()
                 ?: return Result.failure(Exception("Empty response from Gemini API"))
 
+            // 402 = the proxy's premium gate (structured generation is premium-only).
+            // Surface a typed error so the UI shows the upsell, not a generic failure.
+            if (response.code == 402) {
+                return Result.failure(PremiumRequiredException())
+            }
             if (!response.isSuccessful) {
                 return Result.failure(friendlyError(response.code, responseBody))
             }

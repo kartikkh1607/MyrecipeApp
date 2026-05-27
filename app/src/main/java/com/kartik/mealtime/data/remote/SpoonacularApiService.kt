@@ -12,8 +12,8 @@ import retrofit2.http.Query
  * Retrofit interface for the Spoonacular Food API.
  * This lives in the data layer — the domain layer never sees it.
  *
- * NOTE: The API key is injected automatically by [NetworkModule.ApiKeyInterceptor]
- * on every request — no need to pass it here.
+ * NOTE: The API key is injected server-side by the Cloudflare Worker proxy
+ * (requests are routed through it), so no key is passed here.
  */
 interface SpoonacularApiService {
 

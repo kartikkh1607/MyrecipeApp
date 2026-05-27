@@ -43,6 +43,7 @@ googleid = "1.1.1"
 playServicesAds = "23.6.0"
 userMessagingPlatform = "3.2.0"
 coreSplashscreen = "1.0.1"
+billing = "7.1.1"
 
 
 [libraries]
@@ -98,6 +99,7 @@ googleid = { module = "com.google.android.libraries.identity.googleid:googleid",
 play-services-ads = { module = "com.google.android.gms:play-services-ads", version.ref = "playServicesAds" }
 user-messaging-platform = { module = "com.google.android.ump:user-messaging-platform", version.ref = "userMessagingPlatform" }
 androidx-core-splashscreen = { module = "androidx.core:core-splashscreen", version.ref = "coreSplashscreen" }
+billing-ktx = { module = "com.android.billingclient:billing-ktx", version.ref = "billing" }
 
 
 [plugins]

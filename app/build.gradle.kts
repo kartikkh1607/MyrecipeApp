@@ -40,13 +40,13 @@ android {
             useSupportLibrary = true
         }
 
-        // This line reads the property from local.properties and creates a field in BuildConfig
-        val apiKey = localProperties.getProperty("spoonacular.api.key") ?: ""
-        buildConfigField("String", "SPOONACULAR_API_KEY", "\"$apiKey\"")
-        val geminiApiKey = localProperties.getProperty("gemini.api.key") ?: ""
-        buildConfigField("String", "GEMINI_API_KEY", "\"$geminiApiKey\"")
-        val groqApiKey = localProperties.getProperty("groq.api.key") ?: ""
-        buildConfigField("String", "GROQ_API_KEY", "\"$groqApiKey\"")
+        // API keys are no longer shipped in the app. They live server-side in the
+        // Cloudflare Worker proxy (server/cloudflare-worker), which injects them and
+        // forwards requests. The app only needs the proxy's URL. Overridable via
+        // local.properties (proxy.base.url) for dev/staging; defaults to production.
+        val proxyBaseUrl = localProperties.getProperty("proxy.base.url")
+            ?: "https://mealtime-proxy.kartik-mealtime.workers.dev"
+        buildConfigField("String", "PROXY_BASE_URL", "\"$proxyBaseUrl\"")
 
         // AdMob production ad-unit IDs — injected from local.properties so they never
         // live in source control. Left blank in debug (debug uses Google's baked-in
@@ -147,6 +147,11 @@ dependencies {
     // catalog with logging-interceptor (libs.logging.interceptor, below) and the OkHttp
     // 5.x that Retrofit 3.x pulls transitively, so only one OkHttp is on the classpath.
     implementation(libs.okhttp)
+
+    // Google Play Billing — premium subscription (monthly + annual base plans).
+    // Wrapped by data/billing/BillingManager; entitlement flows through
+    // data/billing/BillingEntitlementRepository -> EntitlementRepository seam.
+    implementation(libs.billing.ktx)
 
     // Google AdMob — banner + interstitial ads (Phase A monetization).
     // Production ad unit IDs go in data/ads/AdConfig.kt; test IDs are baked in.

@@ -1,16 +1,18 @@
 package com.kartik.mealtime.ui.viewmodel
 
 import com.kartik.mealtime.data.analytics.AnalyticsHelper
-import com.kartik.mealtime.data.local.FavoriteDao
 import com.kartik.mealtime.data.preferences.DietaryPref
 import com.kartik.mealtime.data.preferences.UserPreferences
 import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import com.kartik.mealtime.data.remote.AiService
 import com.kartik.mealtime.data.remote.ChatMessage
+import com.kartik.mealtime.data.remote.PremiumRequiredException
 import com.kartik.mealtime.data.repository.AiRecipeRepository
 import com.kartik.mealtime.domain.repository.EntitlementRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.toList
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -73,7 +75,6 @@ class AiViewModelTest {
     }
 
     private lateinit var aiService: FakeAiService
-    private lateinit var favoriteDao: FavoriteDao
     private lateinit var analytics: AnalyticsHelper
     private lateinit var userPrefsRepo: UserPreferencesRepository
     private lateinit var aiRecipeRepository: AiRecipeRepository
@@ -84,7 +85,6 @@ class AiViewModelTest {
     fun setUp() {
         Dispatchers.setMain(UnconfinedTestDispatcher())
         aiService = FakeAiService()
-        favoriteDao = mock(FavoriteDao::class.java)
         analytics = mock(AnalyticsHelper::class.java)   // void methods → no stubbing needed
         userPrefsRepo = mock(UserPreferencesRepository::class.java)
         `when`(userPrefsRepo.preferences).thenReturn(flowOf(UserPreferences()))
@@ -92,7 +92,7 @@ class AiViewModelTest {
         entitlement = mock(EntitlementRepository::class.java)
         `when`(entitlement.isPremium).thenReturn(flowOf(false))
         viewModel = AiViewModel(
-            favoriteDao, aiService, analytics, userPrefsRepo, aiRecipeRepository, entitlement
+            aiService, analytics, userPrefsRepo, aiRecipeRepository, entitlement
         )
     }
 
@@ -272,29 +272,22 @@ class AiViewModelTest {
     }
 
     @Test
-    fun `loadRecommendations success exposes parsed recommendations`() = runTest {
-        `when`(favoriteDao.getAllSync()).thenReturn(emptyList())
-        aiService.recommendationsResult = Result.success("**Tofu Bowl** - High protein")
+    fun `generateRecipe maps a premium-required failure to an upsell event, not an error`() = runTest {
+        // Premium client-side, but the proxy rejects (402) — entitlement out of sync.
+        `when`(entitlement.isPremium).thenReturn(flowOf(true))
+        aiService.generateRecipeResult = Result.failure(PremiumRequiredException())
 
-        viewModel.loadRecommendations()
+        val events = mutableListOf<Unit>()
+        val collector = launch(UnconfinedTestDispatcher(testScheduler)) {
+            viewModel.upsellEvents.toList(events)
+        }
 
-        val state = viewModel.recommendationState.value
-        assertTrue(state is AiViewModel.RecommendationState.Success)
-        assertEquals(
-            "Tofu Bowl",
-            (state as AiViewModel.RecommendationState.Success).recommendations.first().name
-        )
-    }
+        viewModel.generateRecipe("a quick pasta")
 
-    @Test
-    fun `loadRecommendations failure exposes error state`() = runTest {
-        `when`(favoriteDao.getAllSync()).thenReturn(emptyList())
-        aiService.recommendationsResult = Result.failure(RuntimeException("quota exceeded"))
+        // The paywall is signalled and the gen sheet is dismissed — no error bubble.
+        assertEquals(1, events.size)
+        assertTrue(viewModel.recipeGenState.value is AiViewModel.RecipeGenState.Idle)
 
-        viewModel.loadRecommendations()
-
-        val state = viewModel.recommendationState.value
-        assertTrue(state is AiViewModel.RecommendationState.Error)
-        assertEquals("quota exceeded", (state as AiViewModel.RecommendationState.Error).message)
+        collector.cancel()
     }
 }

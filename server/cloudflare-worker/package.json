@@ -1,0 +1,11 @@
+{
+  "name": "mealtime-proxy-worker",
+  "description": "Cloudflare Worker that proxies Spoonacular/Gemini/Groq for MealTime, keeping API keys server-side. Requires a valid Firebase ID token.",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "dev": "wrangler dev",
+    "deploy": "wrangler deploy",
+    "tail": "wrangler tail"
+  }
+}

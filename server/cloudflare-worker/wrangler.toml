@@ -1,0 +1,26 @@
+# Cloudflare Worker config for the MealTime API proxy.
+# Free plan, no credit card required (100,000 requests/day).
+
+name = "mealtime-proxy"
+main = "src/index.js"
+compatibility_date = "2025-01-01"
+
+# Non-secret config. The Firebase project ID is public (it identifies the
+# project) and is used to validate the audience of incoming ID tokens.
+[vars]
+FIREBASE_PROJECT_ID = "mealtime-96386"
+
+# Play Billing: purchaseToken -> uid map (written by /billing/verify, read by /billing/rtdn).
+# Create once and paste the printed id here:  wrangler kv namespace create BILLING_KV
+[[kv_namespaces]]
+binding = "BILLING_KV"
+id = "<run: wrangler kv namespace create BILLING_KV, then paste the id>"
+
+# Secrets are NOT stored here. Set them once with `wrangler secret put <NAME>`:
+#   SPOONACULAR_API_KEY, GEMINI_API_KEY, GROQ_API_KEY   — upstream API keys
+#   GCP_SA_CLIENT_EMAIL, GCP_SA_PRIVATE_KEY             — Firebase service-account JSON
+#                                                         (client_email + private_key);
+#                                                         used to call the Play Developer
+#                                                         API and set the premium claim
+#   RTDN_SECRET                                         — shared secret in the Pub/Sub
+#                                                         push URL (?key=...) for /billing/rtdn

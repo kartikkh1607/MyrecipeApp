@@ -1,0 +1,13 @@
+# Wrangler local state — contains your Cloudflare account id + auth cache.
+# Never commit this; it's regenerated locally by `wrangler`.
+.wrangler/
+
+# Dependencies
+node_modules/
+
+# Local secret overrides for `wrangler dev` (API keys live here in dev).
+.dev.vars
+.env
+
+# Build output
+dist/
