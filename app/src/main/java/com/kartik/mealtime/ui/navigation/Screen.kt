@@ -37,3 +37,5 @@ object Profile
 object ShoppingList
 @Serializable
 object Chat
+@Serializable
+object AiCreations

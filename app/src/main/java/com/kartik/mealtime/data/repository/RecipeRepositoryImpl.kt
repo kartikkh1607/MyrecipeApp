@@ -2,6 +2,7 @@ package com.kartik.mealtime.data.repository
 
 import android.util.Log
 import com.kartik.mealtime.BuildConfig
+import com.kartik.mealtime.data.local.AiRecipeDao
 import com.kartik.mealtime.data.local.CachedRecipeDao
 import com.kartik.mealtime.data.local.CachedRecipeEntity
 import com.kartik.mealtime.data.local.FeaturedCacheDao
@@ -34,6 +35,9 @@ class RecipeRepositoryImpl(
     private val apiService: SpoonacularApiService,
     private val cachedRecipeDao: CachedRecipeDao,
     private val featuredCacheDao: FeaturedCacheDao,
+    // The user's AI Creations store. Detail lookups for `ai-` ids are served from
+    // here (local-only, no network) instead of the Spoonacular API.
+    private val aiRecipeDao: AiRecipeDao,
     // Whether a Spoonacular key is present (decides API vs. sample fallback). The actual
     // key injection is handled by NetworkModule.ApiKeyInterceptor.
     private val apiConfigured: Boolean,
@@ -48,11 +52,13 @@ class RecipeRepositoryImpl(
     constructor(
         apiService: SpoonacularApiService,
         cachedRecipeDao: CachedRecipeDao,
-        featuredCacheDao: FeaturedCacheDao
+        featuredCacheDao: FeaturedCacheDao,
+        aiRecipeDao: AiRecipeDao
     ) : this(
         apiService = apiService,
         cachedRecipeDao = cachedRecipeDao,
         featuredCacheDao = featuredCacheDao,
+        aiRecipeDao = aiRecipeDao,
         apiConfigured = BuildConfig.SPOONACULAR_API_KEY.isNotEmpty() &&
                 BuildConfig.SPOONACULAR_API_KEY != "null",
         sampleFallbackEnabled = BuildConfig.DEBUG
@@ -147,6 +153,9 @@ class RecipeRepositoryImpl(
     // ─────────────────────────────────────────────────────────────────────────
 
     override suspend fun getRecipeDetails(recipeId: String): Recipe? {
+        // AI Creations live only in Room — never hit the API for them.
+        if (recipeId.startsWith("ai-")) return aiRecipeDao.getById(recipeId)?.toRecipe()
+
         if (!apiConfigured) return sampleRecipeById(recipeId)
 
         val numericId = recipeId.toIntOrNull()

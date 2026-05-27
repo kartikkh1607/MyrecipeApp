@@ -22,6 +22,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.toRoute
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kartik.mealtime.data.source.CategoryDataSource
+import com.kartik.mealtime.ui.screens.AiCreationsScreen
 import com.kartik.mealtime.ui.screens.AuthScreen
 import com.kartik.mealtime.ui.screens.CategoryDetailScreen
 import com.kartik.mealtime.ui.screens.ChatScreen
@@ -221,7 +222,21 @@ fun Navigation(
         composable<Chat> {
             ChatScreen(
                 onBackClick = { navController.popBackStack() },
+                onOpenCreations = { navController.navigate(AiCreations) { launchSingleTop = true } },
+                onOpenRecipe = { recipeId ->
+                    navController.navigate(RecipeDetail(recipeId = recipeId)) { launchSingleTop = true }
+                },
                 viewModel = hiltViewModel()
+            )
+        }
+
+        composable<AiCreations> {
+            AiCreationsScreen(
+                viewModel = hiltViewModel(),
+                onBack = { navController.popBackStack() },
+                onOpenRecipe = { recipeId ->
+                    navController.navigate(RecipeDetail(recipeId = recipeId)) { launchSingleTop = true }
+                }
             )
         }
     }

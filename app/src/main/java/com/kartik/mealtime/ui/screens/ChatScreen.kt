@@ -32,8 +32,10 @@ import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Bookmarks
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.CircularProgressIndicator
@@ -65,6 +67,9 @@ import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import com.kartik.mealtime.ui.components.GeneratedRecipeSheet
+import com.kartik.mealtime.ui.components.UpsellBottomSheet
 import com.kartik.mealtime.ui.theme.ForestGreen
 import com.kartik.mealtime.ui.viewmodel.AiViewModel
 
@@ -72,13 +77,26 @@ import com.kartik.mealtime.ui.viewmodel.AiViewModel
 @Composable
 fun ChatScreen(
     onBackClick: () -> Unit,
+    onOpenCreations: () -> Unit,
+    onOpenRecipe: (String) -> Unit,
     viewModel: AiViewModel
 ) {
     val chatState by viewModel.chatState
+    val genState by viewModel.recipeGenState
+    val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()
     val keyboard = LocalSoftwareKeyboardController.current
     val hapticFeedback = LocalHapticFeedback.current
     var inputText by remember { mutableStateOf("") }
+    var showUpsell by remember { mutableStateOf(false) }
+
+    // Premium gate: generate when unlocked, otherwise prompt to upgrade.
+    fun attemptGenerate(query: String) {
+        val q = query.trim()
+        if (q.isBlank()) return
+        keyboard?.hide()
+        if (isPremium) viewModel.generateRecipe(q) else showUpsell = true
+    }
 
     // Auto-scroll to bottom when new messages arrive
     LaunchedEffect(chatState.messages.size, chatState.isTyping) {
@@ -98,6 +116,7 @@ fun ChatScreen(
         // ── Header ─────────────────────────────────────────────────────────────
         ChatHeader(
             onBackClick = onBackClick,
+            onCreationsClick = onOpenCreations,
             onClearClick = {
                 hapticFeedback.performHapticFeedback(
                     androidx.compose.ui.hapticfeedback.HapticFeedbackType.LongPress
@@ -118,7 +137,8 @@ fun ChatScreen(
             items(chatState.messages, key = { it.id }) { message ->
                 ChatBubble(
                     message = message,
-                    onRecipeClick = { /* Navigate to recipe search */ }
+                    // Tapping a suggested recipe turns it into a full, savable recipe.
+                    onRecipeClick = { name -> attemptGenerate(name) }
                 )
             }
 
@@ -142,6 +162,15 @@ fun ChatScreen(
             }
         }
 
+        // ── "Generate full recipe" quick action ──────────────────────────────────
+        // Appears once the user has typed something; turns that text into a recipe.
+        AnimatedVisibility(visible = inputText.isNotBlank()) {
+            GenerateRecipeChip(
+                isPremium = isPremium,
+                onClick = { attemptGenerate(inputText) }
+            )
+        }
+
         // ── Input Bar ───────────────────────────────────────────────────────────
         ChatInputBar(
             value = inputText,
@@ -156,11 +185,84 @@ fun ChatScreen(
             isLoading = chatState.isTyping
         )
     }
+
+    // ── Generated recipe review sheet ─────────────────────────────────────────
+    if (genState !is AiViewModel.RecipeGenState.Idle) {
+        GeneratedRecipeSheet(
+            state = genState,
+            onSave = { viewModel.saveGeneratedRecipe() },
+            onOpen = { recipe ->
+                viewModel.dismissGeneratedRecipe()
+                onOpenRecipe(recipe.id)
+            },
+            onDismiss = { viewModel.dismissGeneratedRecipe() }
+        )
+    }
+
+    // ── Premium upsell ────────────────────────────────────────────────────────
+    if (showUpsell) {
+        UpsellBottomSheet(
+            title = "AI Recipe Generator",
+            description = "Turn any idea into a complete, cookable recipe.",
+            perks = listOf(
+                "Full ingredients & step-by-step method",
+                "Saved to your AI Creations",
+                "Tailored to your diet & preferences"
+            ),
+            onUnlock = { showUpsell = false },
+            onDismiss = { showUpsell = false }
+        )
+    }
+}
+
+/** Amber assist chip that triggers full-recipe generation; shows a lock when gated. */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun GenerateRecipeChip(
+    isPremium: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .padding(horizontal = 16.dp, vertical = 4.dp),
+        shape = RoundedCornerShape(20.dp),
+        color = com.kartik.mealtime.ui.theme.Amber.copy(alpha = 0.16f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = com.kartik.mealtime.ui.theme.Amber,
+                modifier = Modifier.size(18.dp)
+            )
+            Spacer(Modifier.width(8.dp))
+            Text(
+                text = "Generate full recipe",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (!isPremium) {
+                Spacer(Modifier.width(6.dp))
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = "Premium",
+                    tint = com.kartik.mealtime.ui.theme.Amber,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
+    }
 }
 
 @Composable
 private fun ChatHeader(
     onBackClick: () -> Unit,
+    onCreationsClick: () -> Unit,
     onClearClick: () -> Unit
 ) {
     Surface(
@@ -214,6 +316,14 @@ private fun ChatHeader(
                     text = "Powered by Gemini",
                     style = MaterialTheme.typography.labelSmall,
                     color = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
+            IconButton(onClick = onCreationsClick) {
+                Icon(
+                    imageVector = Icons.Default.Bookmarks,
+                    contentDescription = "AI Creations",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
                 )
             }
 

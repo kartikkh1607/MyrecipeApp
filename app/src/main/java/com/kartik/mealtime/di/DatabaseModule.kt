@@ -1,6 +1,7 @@
 package com.kartik.mealtime.di
 
 import android.content.Context
+import com.kartik.mealtime.data.local.AiRecipeDao
 import com.kartik.mealtime.data.local.AppDatabase
 import com.kartik.mealtime.data.local.CachedRecipeDao
 import com.kartik.mealtime.data.local.FavoriteDao
@@ -33,4 +34,7 @@ object DatabaseModule {
 
     @Provides
     fun provideFeaturedCacheDao(db: AppDatabase): FeaturedCacheDao = db.featuredCacheDao()
+
+    @Provides
+    fun provideAiRecipeDao(db: AppDatabase): AiRecipeDao = db.aiRecipeDao()
 }

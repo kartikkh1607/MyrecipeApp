@@ -1,5 +1,6 @@
 package com.kartik.mealtime.data.remote
 
+import com.kartik.mealtime.domain.model.Recipe
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -37,6 +38,17 @@ class AiServiceRouter @Inject constructor(
         if (primary.isSuccess || !groq.isConfigured) return primary
 
         val fallback = groq.getRecipeRecommendations(favoriteRecipes, dietaryPreferences)
+        return if (fallback.isSuccess) fallback else primary
+    }
+
+    override suspend fun generateRecipe(
+        query: String,
+        dietaryPreferences: String
+    ): Result<Recipe> {
+        val primary = gemini.generateRecipe(query, dietaryPreferences)
+        if (primary.isSuccess || !groq.isConfigured) return primary
+
+        val fallback = groq.generateRecipe(query, dietaryPreferences)
         return if (fallback.isSuccess) fallback else primary
     }
 }

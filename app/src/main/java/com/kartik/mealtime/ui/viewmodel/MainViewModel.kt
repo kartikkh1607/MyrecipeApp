@@ -107,6 +107,26 @@ class MainViewModel @Inject constructor(
         }
     }
 
+    // ── Premium (dev unlock) ──────────────────────────────────────────────────
+    // Local placeholder until Play Billing exists. The Settings dev toggle flips
+    // this so premium AI features can be exercised without a real purchase. Real
+    // entitlement is read app-wide via EntitlementRepository, which is backed by
+    // the same DataStore flag today.
+
+    // Lazy so construction never touches userPrefsRepo (keeps ViewModel tests that
+    // pass a bare mock working); initialized on first observation by the UI.
+    val isPremium: StateFlow<Boolean> by lazy {
+        userPrefsRepo.isPremium.stateIn(
+            scope = viewModelScope,
+            started = SharingStarted.WhileSubscribed(5_000),
+            initialValue = false
+        )
+    }
+
+    fun setPremiumDevOverride(enabled: Boolean) {
+        viewModelScope.launch { userPrefsRepo.setPremium(enabled) }
+    }
+
     // ── Home Screen State ─────────────────────────────────────────────────────
     @Immutable
     data class HomeRecipeState(

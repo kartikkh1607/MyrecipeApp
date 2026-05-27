@@ -40,6 +40,54 @@ internal object AiPrompts {
         return sb.toString()
     }
 
+    /**
+     * The JSON contract a generated recipe must follow. Shared verbatim by Gemini
+     * and Groq so both providers emit the exact shape [AiRecipeParser] expects.
+     */
+    private const val RECIPE_JSON_SCHEMA = """
+{
+  "name": string,
+  "description": string,
+  "category": string,            // e.g. "Dinner", "Dessert", "Breakfast"
+  "cuisine": string,             // e.g. "Italian", "Indian"
+  "difficulty": "EASY" | "MEDIUM" | "HARD",
+  "prepTimeMinutes": integer,
+  "cookTimeMinutes": integer,
+  "servings": integer,
+  "calories": integer,           // per serving, approximate
+  "ingredients": [ { "name": string, "amount": string, "unit": string } ],
+  "instructions": [ { "step": integer, "instruction": string, "tip": string } ],
+  "tags": [ string ],
+  "nutrition": { "calories": integer, "protein": number, "carbs": number, "fat": number, "fiber": number, "sugar": number, "sodium": number },
+  "isVegetarian": boolean, "isVegan": boolean, "isGlutenFree": boolean,
+  "isDairyFree": boolean, "isKeto": boolean, "isLowCarb": boolean
+}"""
+
+    /**
+     * Prompt for generating ONE complete recipe as strict JSON. Used by both
+     * providers; the response is parsed by [AiRecipeParser].
+     */
+    fun buildGenerateRecipePrompt(
+        query: String,
+        dietaryPreferences: String = ""
+    ): String {
+        val sb = StringBuilder()
+        sb.appendLine("You are a professional chef. Create ONE complete, realistic recipe for the request below.")
+        sb.appendLine()
+        sb.appendLine("Request: $query")
+        if (dietaryPreferences.isNotBlank()) {
+            sb.appendLine()
+            sb.appendLine("The recipe MUST respect these dietary preferences: $dietaryPreferences.")
+            sb.appendLine("Set the matching boolean flags (isVegetarian, isVegan, etc.) accordingly.")
+        }
+        sb.appendLine()
+        sb.appendLine("Respond with ONLY a JSON object (no markdown, no commentary) matching this schema:")
+        sb.appendLine(RECIPE_JSON_SCHEMA)
+        sb.appendLine()
+        sb.appendLine("Use concrete amounts, realistic times, and clear numbered steps. Estimate nutrition reasonably.")
+        return sb.toString()
+    }
+
     fun buildRecommendationPrompt(
         favoriteRecipes: List<String>,
         dietaryPreferences: String

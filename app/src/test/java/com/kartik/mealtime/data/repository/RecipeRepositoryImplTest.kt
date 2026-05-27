@@ -1,9 +1,13 @@
 package com.kartik.mealtime.data.repository
 
+import com.kartik.mealtime.data.local.AiRecipeDao
+import com.kartik.mealtime.data.local.AiRecipeEntity
+import com.kartik.mealtime.data.local.AiRecipeSource
 import com.kartik.mealtime.data.local.CachedRecipeDao
 import com.kartik.mealtime.data.local.CachedRecipeEntity
 import com.kartik.mealtime.data.local.FeaturedCacheDao
 import com.kartik.mealtime.data.local.FeaturedCacheEntity
+import com.kartik.mealtime.data.local.toAiRecipeEntity
 import com.kartik.mealtime.data.remote.SpoonacularApiService
 import com.kartik.mealtime.data.remote.dto.SpoonacularGetRecipesResponse
 import com.kartik.mealtime.data.remote.dto.SpoonacularRecipeDto
@@ -46,6 +50,14 @@ class RecipeRepositoryImplTest {
         override suspend fun get(): FeaturedCacheEntity? = stored
     }
 
+    private class FakeAiRecipeDao(private val stored: MutableList<AiRecipeEntity> = mutableListOf()) : AiRecipeDao {
+        override fun getAllFlow() = kotlinx.coroutines.flow.flowOf(stored.toList())
+        override suspend fun getById(id: String): AiRecipeEntity? = stored.find { it.id == id }
+        override suspend fun upsert(entity: AiRecipeEntity) { stored.add(entity) }
+        override suspend fun delete(id: String) { stored.removeAll { it.id == id } }
+        override suspend fun deleteAll() { stored.clear() }
+    }
+
     /** Every endpoint throws — models a network/API failure. */
     private class FailingApiService : SpoonacularApiService {
         override suspend fun searchRecipes(
@@ -85,9 +97,10 @@ class RecipeRepositoryImplTest {
         api: SpoonacularApiService,
         cached: CachedRecipeDao = FakeCachedRecipeDao(),
         featured: FeaturedCacheDao = FakeFeaturedCacheDao(),
+        aiRecipes: AiRecipeDao = FakeAiRecipeDao(),
         apiConfigured: Boolean = true,
         sampleEnabled: Boolean = false
-    ) = RecipeRepositoryImpl(api, cached, featured, apiConfigured, sampleEnabled)
+    ) = RecipeRepositoryImpl(api, cached, featured, aiRecipes, apiConfigured, sampleEnabled)
 
     // ── getRecipeDetails ──────────────────────────────────────────────────────────
 
@@ -113,6 +126,19 @@ class RecipeRepositoryImplTest {
     fun `getRecipeDetails returns null when API fails with no cache and sample disabled`() = runTest {
         val r = repo(FailingApiService(), cached = FakeCachedRecipeDao(null))
         assertNull(r.getRecipeDetails("123"))
+    }
+
+    @Test
+    fun `getRecipeDetails serves ai- ids from the local store without touching the API`() = runTest {
+        val aiRecipe = recipe("ai-abc123")
+        val api = mock(SpoonacularApiService::class.java)
+        val aiDao = FakeAiRecipeDao(
+            mutableListOf(aiRecipe.toAiRecipeEntity(AiRecipeSource.GENERATED))
+        )
+        val r = repo(api, aiRecipes = aiDao)
+
+        assertEquals(aiRecipe, r.getRecipeDetails("ai-abc123"))
+        verifyNoInteractions(api)
     }
 
     @Test

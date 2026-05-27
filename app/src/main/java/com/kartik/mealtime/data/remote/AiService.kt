@@ -1,5 +1,7 @@
 package com.kartik.mealtime.data.remote
 
+import com.kartik.mealtime.domain.model.Recipe
+
 /**
  * Provider-neutral contract for the AI recipe assistant.
  *
@@ -18,6 +20,16 @@ interface AiService {
         favoriteRecipes: List<String>,
         dietaryPreferences: String = ""
     ): Result<String>
+
+    /**
+     * Generates a complete, structured [Recipe] from a free-text [query]
+     * (e.g. "a spicy paneer curry using yogurt"). Returns a domain recipe with an
+     * `ai-` id ready to persist; failures carry a user-facing message.
+     */
+    suspend fun generateRecipe(
+        query: String,
+        dietaryPreferences: String = ""
+    ): Result<Recipe>
 }
 
 /** A single turn in the chat history, shared across providers. */

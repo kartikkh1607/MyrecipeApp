@@ -1,6 +1,7 @@
 package com.kartik.mealtime.data.remote
 
 import com.kartik.mealtime.BuildConfig
+import com.kartik.mealtime.domain.model.Recipe
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.Dispatchers
@@ -57,10 +58,27 @@ class GroqAiService @Inject constructor(
         complete(prompt, temperature = 0.7f, maxTokens = 1024)
     }
 
+    override suspend fun generateRecipe(
+        query: String,
+        dietaryPreferences: String
+    ): Result<Recipe> = withContext(Dispatchers.IO) {
+        val prompt = AiPrompts.buildGenerateRecipePrompt(query, dietaryPreferences)
+        complete(prompt, temperature = 0.6f, maxTokens = 2048, jsonMode = true)
+            .fold(
+                onSuccess = { AiRecipeParser.parse(it) },
+                onFailure = { Result.failure(it) }
+            )
+    }
+
     // The combined prompt (system instructions + history + "Assistant:") is sent
     // as a single user message. This reuses Gemini's exact prompt verbatim, so
     // fallback output matches; the conversation is already embedded in the text.
-    private fun complete(prompt: String, temperature: Float, maxTokens: Int): Result<String> {
+    private fun complete(
+        prompt: String,
+        temperature: Float,
+        maxTokens: Int,
+        jsonMode: Boolean = false
+    ): Result<String> {
         if (!isConfigured) {
             return Result.failure(Exception("Groq API key is not configured."))
         }
@@ -69,7 +87,10 @@ class GroqAiService @Inject constructor(
                 model = MODEL,
                 messages = listOf(ChatCompletionMessage(role = "user", content = prompt)),
                 temperature = temperature,
-                maxTokens = maxTokens
+                maxTokens = maxTokens,
+                // OpenAI-compatible JSON mode. The prompt already contains the word
+                // "JSON", which Groq requires when this is set.
+                responseFormat = if (jsonMode) ResponseFormat(type = "json_object") else null
             )
 
             val mediaType = "application/json".toMediaType()
@@ -132,8 +153,13 @@ data class ChatCompletionRequest(
     val messages: List<ChatCompletionMessage>,
     val temperature: Float? = null,
     @SerializedName("max_tokens")
-    val maxTokens: Int? = null
+    val maxTokens: Int? = null,
+    @SerializedName("response_format")
+    val responseFormat: ResponseFormat? = null
 )
+
+/** OpenAI-compatible structured-output selector; type = "json_object" enables JSON mode. */
+data class ResponseFormat(val type: String)
 
 data class ChatCompletionMessage(
     val role: String,

@@ -1,6 +1,7 @@
 package com.kartik.mealtime.data.remote
 
 import com.kartik.mealtime.BuildConfig
+import com.kartik.mealtime.domain.model.Recipe
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.Dispatchers
@@ -172,6 +173,72 @@ class GeminiAiService @Inject constructor(
             Result.failure(e)
         }
     }
+
+    override suspend fun generateRecipe(
+        query: String,
+        dietaryPreferences: String
+    ): Result<Recipe> = withContext(Dispatchers.IO) {
+        val prompt = AiPrompts.buildGenerateRecipePrompt(query, dietaryPreferences)
+        // temperature 0.6 — creative enough to vary recipes, low enough for valid JSON.
+        postForJson(prompt, temperature = 0.6f, maxTokens = 2048)
+            .fold(
+                onSuccess = { AiRecipeParser.parse(it) },
+                onFailure = { Result.failure(it) }
+            )
+    }
+
+    /**
+     * Posts [prompt] with JSON response mode and returns the raw model text.
+     * Shared by the structured-output features (recipe generation, transform, etc.).
+     */
+    private fun postForJson(
+        prompt: String,
+        temperature: Float,
+        maxTokens: Int
+    ): Result<String> {
+        return try {
+            val requestBody = GenerateContentRequest(
+                contents = listOf(Content(parts = listOf(Part(text = prompt)))),
+                generationConfig = GenerationConfig(
+                    temperature = temperature,
+                    maxOutputTokens = maxTokens,
+                    responseMimeType = "application/json"
+                )
+            )
+
+            val url = "$BASE_URL?key=${BuildConfig.GEMINI_API_KEY}"
+            val mediaType = "application/json".toMediaType()
+            val body = gson.toJson(requestBody).toRequestBody(mediaType)
+
+            val request = Request.Builder()
+                .url(url)
+                .post(body)
+                .addHeader("Content-Type", "application/json")
+                .build()
+
+            val response = client.newCall(request).execute()
+            val responseBody = response.body?.string()
+                ?: return Result.failure(Exception("Empty response from Gemini API"))
+
+            if (!response.isSuccessful) {
+                return Result.failure(friendlyError(response.code, responseBody))
+            }
+
+            val parsed = gson.fromJson(responseBody, GenerateContentResponse::class.java)
+            val text = parsed.candidates
+                ?.firstOrNull()
+                ?.content
+                ?.parts
+                ?.firstOrNull()
+                ?.text
+                ?.trim()
+                ?: return Result.failure(Exception("No content in response"))
+
+            Result.success(text)
+        } catch (e: Exception) {
+            Result.failure(e)
+        }
+    }
 }
 
 // ── Data classes for Gemini API ────────────────────────────────────────────────
@@ -192,7 +259,10 @@ data class Part(
 data class GenerationConfig(
     val temperature: Float? = null,
     @SerializedName("maxOutputTokens")
-    val maxOutputTokens: Int? = null
+    val maxOutputTokens: Int? = null,
+    // Set to "application/json" to make Gemini return parseable JSON (structured output).
+    @SerializedName("responseMimeType")
+    val responseMimeType: String? = null
 )
 
 data class GenerateContentResponse(

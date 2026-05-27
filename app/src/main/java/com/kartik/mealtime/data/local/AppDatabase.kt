@@ -21,15 +21,17 @@ import androidx.sqlite.db.SupportSQLiteDatabase
  *  1 — initial schema (favorites + shopping_items)
  *  2 — added cached_recipes table for offline recipe detail (Issue #7)
  *  3 — added featured_cache table to skip the 5-pt random-recipes API call
+ *  4 — added ai_recipes table for the user's AI Creations collection
  */
 @Database(
     entities = [
         FavoriteEntity::class,
         ShoppingItemEntity::class,
         CachedRecipeEntity::class,
-        FeaturedCacheEntity::class
+        FeaturedCacheEntity::class,
+        AiRecipeEntity::class
     ],
-    version = 3,
+    version = 4,
     exportSchema = true   // schema history tracked in app/schemas/
 )
 @TypeConverters(RecipeTypeConverters::class)
@@ -38,6 +40,7 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun shoppingDao(): ShoppingDao
     abstract fun cachedRecipeDao(): CachedRecipeDao
     abstract fun featuredCacheDao(): FeaturedCacheDao
+    abstract fun aiRecipeDao(): AiRecipeDao
 
     companion object {
         @Volatile private var INSTANCE: AppDatabase? = null
@@ -77,6 +80,26 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
+        /**
+         * Adds the `ai_recipes` table for the user's AI Creations (v4).
+         * Columns match [AiRecipeEntity] exactly; `recipe` holds the JSON blob.
+         */
+        val MIGRATION_3_4 = object : Migration(3, 4) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                db.execSQL(
+                    """
+                    CREATE TABLE IF NOT EXISTS `ai_recipes` (
+                        `id`             TEXT    NOT NULL PRIMARY KEY,
+                        `recipe`         TEXT    NOT NULL,
+                        `source`         TEXT    NOT NULL,
+                        `sourceRecipeId` TEXT,
+                        `createdAt`      INTEGER NOT NULL
+                    )
+                    """.trimIndent()
+                )
+            }
+        }
+
         fun getInstance(context: Context): AppDatabase =
             INSTANCE ?: synchronized(this) {
                 INSTANCE ?: Room.databaseBuilder(
@@ -84,7 +107,7 @@ abstract class AppDatabase : RoomDatabase() {
                     AppDatabase::class.java,
                     "myrecipe_db"
                 )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3)
+                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
                     .build()
                     .also { INSTANCE = it }
             }

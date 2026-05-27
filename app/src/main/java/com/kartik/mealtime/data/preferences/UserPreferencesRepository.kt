@@ -98,6 +98,23 @@ class UserPreferencesRepository @Inject constructor(
     }
 
     /**
+     * Whether the user currently has premium entitlement.
+     *
+     * v1 is a LOCAL placeholder flag, default false. It is the single source of
+     * truth read by [com.kartik.mealtime.domain.repository.EntitlementRepository]
+     * so the rest of the app can gate premium features today. When real Play
+     * Billing lands, the entitlement source is swapped to server/receipt-validated
+     * state and this flag is retired — no gate/upsell code needs to change.
+     */
+    val isPremium: Flow<Boolean> = context.userPrefsDataStore.data.map { prefs ->
+        prefs[KEY_PREMIUM] ?: false
+    }
+
+    suspend fun setPremium(enabled: Boolean) {
+        context.userPrefsDataStore.edit { it[KEY_PREMIUM] = enabled }
+    }
+
+    /**
      * Records a recipe view. Updates the streak based on the gap between
      * [lastCookedDate] and today:
      *   - today      → no change (already cooked today)
@@ -168,5 +185,6 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_LAST_COOKED_DATE = stringPreferencesKey("last_cooked_date")
         val KEY_TOTAL_VIEWED     = intPreferencesKey("total_viewed")
         val KEY_AUTH_GATE_SEEN   = booleanPreferencesKey("auth_gate_seen")
+        val KEY_PREMIUM          = booleanPreferencesKey("premium_unlocked")
     }
 }

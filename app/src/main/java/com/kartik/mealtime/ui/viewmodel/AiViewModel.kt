@@ -6,13 +6,20 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kartik.mealtime.data.analytics.AnalyticsHelper
+import com.kartik.mealtime.data.local.AiRecipeSource
 import com.kartik.mealtime.data.local.FavoriteDao
 import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import com.kartik.mealtime.data.remote.AiService
 import com.kartik.mealtime.data.remote.ChatMessage
+import com.kartik.mealtime.data.repository.AiRecipeRepository
+import com.kartik.mealtime.domain.model.Recipe
+import com.kartik.mealtime.domain.repository.EntitlementRepository
 import com.kartik.mealtime.ui.viewmodel.AiViewModel.Companion.MAX_HISTORY_MESSAGES
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -21,8 +28,14 @@ class AiViewModel @Inject constructor(
     private val favoriteDao: FavoriteDao,
     private val aiService: AiService,
     private val analytics: AnalyticsHelper,
-    private val userPrefsRepo: UserPreferencesRepository
+    private val userPrefsRepo: UserPreferencesRepository,
+    private val aiRecipeRepository: AiRecipeRepository,
+    private val entitlement: EntitlementRepository
 ) : ViewModel() {
+
+    /** Premium gate — the UI shows an upsell instead of generating when this is false. */
+    val isPremium: StateFlow<Boolean> = entitlement.isPremium
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     // ── Chat State ─────────────────────────────────────────────────────────────
     @Immutable
@@ -195,6 +208,64 @@ class AiViewModel @Inject constructor(
 
     fun refreshRecommendations() {
         loadRecommendations()
+    }
+
+    // ── Full recipe generation (premium) ──────────────────────────────────────
+
+    @Immutable
+    sealed interface RecipeGenState {
+        data object Idle : RecipeGenState
+        data object Loading : RecipeGenState
+        /** A generated recipe ready to review; [saved] flips true once persisted. */
+        data class Ready(val recipe: Recipe, val saved: Boolean = false) : RecipeGenState
+        data class Error(val message: String) : RecipeGenState
+    }
+
+    private val _recipeGenState = mutableStateOf<RecipeGenState>(RecipeGenState.Idle)
+    val recipeGenState: State<RecipeGenState> = _recipeGenState
+
+    /**
+     * Generates a full structured recipe from [query]. Caller is responsible for
+     * the premium gate (via [isPremium]); this also guards as defense-in-depth.
+     */
+    fun generateRecipe(query: String) {
+        val trimmed = query.trim()
+        if (trimmed.isBlank() || _recipeGenState.value is RecipeGenState.Loading) return
+
+        viewModelScope.launch {
+            // Read the source of truth directly so the guard is always current
+            // (the exposed isPremium StateFlow is only hot while the UI subscribes).
+            if (!entitlement.isPremium.first()) {
+                _recipeGenState.value = RecipeGenState.Error("Recipe generation is a premium feature.")
+                return@launch
+            }
+            _recipeGenState.value = RecipeGenState.Loading
+            analytics.logAiChatMessageSent()
+
+            val personalization = userPrefsRepo.preferences.first().aiPersonalizationContext()
+            aiService.generateRecipe(trimmed, personalization).fold(
+                onSuccess = { _recipeGenState.value = RecipeGenState.Ready(it) },
+                onFailure = {
+                    _recipeGenState.value = RecipeGenState.Error(
+                        it.message ?: "Couldn't generate a recipe. Please try again."
+                    )
+                }
+            )
+        }
+    }
+
+    /** Persists the currently-shown generated recipe into the AI Creations store. */
+    fun saveGeneratedRecipe() {
+        val current = _recipeGenState.value as? RecipeGenState.Ready ?: return
+        if (current.saved) return
+        viewModelScope.launch {
+            aiRecipeRepository.save(current.recipe, AiRecipeSource.GENERATED)
+            _recipeGenState.value = current.copy(saved = true)
+        }
+    }
+
+    fun dismissGeneratedRecipe() {
+        _recipeGenState.value = RecipeGenState.Idle
     }
 
     /** Caps [conversationHistory] at [MAX_HISTORY_MESSAGES], dropping the oldest turns. */

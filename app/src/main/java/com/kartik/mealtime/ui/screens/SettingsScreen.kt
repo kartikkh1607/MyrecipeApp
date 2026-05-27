@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.PrivacyTip
 import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Shield
 import androidx.compose.material.icons.filled.Star
+import androidx.compose.material.icons.filled.WorkspacePremium
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -82,6 +83,10 @@ fun SettingsScreen(
     val uriHandler = LocalUriHandler.current
     // ✅ Issue #4: observe current theme mode from DataStore
     val currentTheme by viewModel.themeMode.collectAsStateWithLifecycle()
+
+    // Dev-only premium override (debug builds). Lets us exercise premium AI features
+    // before Play Billing exists. Never shown in release builds.
+    val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
 
     // Legal links — folded in from the former About screen. Each row appears only
     // when its URL is configured in strings.xml, so we never show a broken link.
@@ -242,6 +247,20 @@ fun SettingsScreen(
                     ) {
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                         shareApp()
+                    }
+                }
+            }
+            if (BuildConfig.DEBUG) {
+                item {
+                    SettingsSection(title = "Developer") {
+                        SettingsItem(
+                            icon = Icons.Default.WorkspacePremium,
+                            title = if (isPremium) "Premium: ON (dev)" else "Premium: OFF (dev)",
+                            subtitle = "Tap to toggle the local premium override"
+                        ) {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            viewModel.setPremiumDevOverride(!isPremium)
+                        }
                     }
                 }
             }

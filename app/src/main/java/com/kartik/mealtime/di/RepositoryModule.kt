@@ -2,7 +2,9 @@ package com.kartik.mealtime.di
 
 import com.kartik.mealtime.data.remote.AiService
 import com.kartik.mealtime.data.remote.AiServiceRouter
+import com.kartik.mealtime.data.repository.LocalEntitlementRepository
 import com.kartik.mealtime.data.repository.RecipeRepositoryImpl
+import com.kartik.mealtime.domain.repository.EntitlementRepository
 import com.kartik.mealtime.domain.repository.RecipeRepository
 import com.kartik.mealtime.domain.usecase.GetCategoriesUseCase
 import com.kartik.mealtime.domain.usecase.GetFeaturedRecipesUseCase
@@ -33,6 +35,14 @@ abstract class RepositoryModule {
     @Binds
     @Singleton
     abstract fun bindAiService(impl: AiServiceRouter): AiService
+
+    /**
+     * Premium entitlement source. Currently the local DataStore-backed placeholder;
+     * swap to a billing-backed implementation here when Play Billing is built.
+     */
+    @Binds
+    @Singleton
+    abstract fun bindEntitlementRepository(impl: LocalEntitlementRepository): EntitlementRepository
 
     companion object {
         @Provides

@@ -7,6 +7,8 @@ import com.kartik.mealtime.data.preferences.UserPreferences
 import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import com.kartik.mealtime.data.remote.AiService
 import com.kartik.mealtime.data.remote.ChatMessage
+import com.kartik.mealtime.data.repository.AiRecipeRepository
+import com.kartik.mealtime.domain.repository.EntitlementRepository
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -36,8 +38,11 @@ class AiViewModelTest {
     private class FakeAiService : AiService {
         var chatResult: Result<String> = Result.success("ok")
         var recommendationsResult: Result<String> = Result.success("ok")
+        var generateRecipeResult: Result<com.kartik.mealtime.domain.model.Recipe> =
+            Result.failure(Exception("not stubbed"))
         var lastMessage: String? = null
         var lastDietaryPreferences: String? = null
+        var lastGenerateQuery: String? = null
 
         override suspend fun sendChatMessage(
             message: String,
@@ -56,12 +61,23 @@ class AiViewModelTest {
             lastDietaryPreferences = dietaryPreferences
             return recommendationsResult
         }
+
+        override suspend fun generateRecipe(
+            query: String,
+            dietaryPreferences: String
+        ): Result<com.kartik.mealtime.domain.model.Recipe> {
+            lastGenerateQuery = query
+            lastDietaryPreferences = dietaryPreferences
+            return generateRecipeResult
+        }
     }
 
     private lateinit var aiService: FakeAiService
     private lateinit var favoriteDao: FavoriteDao
     private lateinit var analytics: AnalyticsHelper
     private lateinit var userPrefsRepo: UserPreferencesRepository
+    private lateinit var aiRecipeRepository: AiRecipeRepository
+    private lateinit var entitlement: EntitlementRepository
     private lateinit var viewModel: AiViewModel
 
     @Before
@@ -72,7 +88,12 @@ class AiViewModelTest {
         analytics = mock(AnalyticsHelper::class.java)   // void methods → no stubbing needed
         userPrefsRepo = mock(UserPreferencesRepository::class.java)
         `when`(userPrefsRepo.preferences).thenReturn(flowOf(UserPreferences()))
-        viewModel = AiViewModel(favoriteDao, aiService, analytics, userPrefsRepo)
+        aiRecipeRepository = mock(AiRecipeRepository::class.java)
+        entitlement = mock(EntitlementRepository::class.java)
+        `when`(entitlement.isPremium).thenReturn(flowOf(false))
+        viewModel = AiViewModel(
+            favoriteDao, aiService, analytics, userPrefsRepo, aiRecipeRepository, entitlement
+        )
     }
 
     @After
@@ -108,6 +129,52 @@ class AiViewModelTest {
         assertFalse(state.messages[2].isUser)
         assertFalse(state.isTyping)
         assertNull(state.error)
+    }
+
+    @Test
+    fun `generateRecipe is blocked for non-premium users`() = runTest {
+        // entitlement.isPremium is stubbed false in setUp.
+        viewModel.generateRecipe("a quick pasta")
+
+        val state = viewModel.recipeGenState.value
+        assertTrue(state is AiViewModel.RecipeGenState.Error)
+        // The AI service must never be called when the gate is closed.
+        assertNull(aiService.lastGenerateQuery)
+    }
+
+    @Test
+    fun `generateRecipe returns a ready recipe for premium users`() = runTest {
+        `when`(entitlement.isPremium).thenReturn(flowOf(true))
+        val recipe = com.kartik.mealtime.domain.model.Recipe(
+            id = "ai-1", name = "Quick Pasta", description = "", imageUrl = "", category = "AI"
+        )
+        aiService.generateRecipeResult = Result.success(recipe)
+
+        viewModel.generateRecipe("a quick pasta")
+
+        val state = viewModel.recipeGenState.value
+        assertTrue(state is AiViewModel.RecipeGenState.Ready)
+        assertEquals(recipe, (state as AiViewModel.RecipeGenState.Ready).recipe)
+        assertFalse(state.saved)
+        assertEquals("a quick pasta", aiService.lastGenerateQuery)
+    }
+
+    @Test
+    fun `saveGeneratedRecipe persists and flips saved flag`() = runTest {
+        `when`(entitlement.isPremium).thenReturn(flowOf(true))
+        val recipe = com.kartik.mealtime.domain.model.Recipe(
+            id = "ai-1", name = "Quick Pasta", description = "", imageUrl = "", category = "AI"
+        )
+        aiService.generateRecipeResult = Result.success(recipe)
+        viewModel.generateRecipe("a quick pasta")
+
+        viewModel.saveGeneratedRecipe()
+
+        // saved flips to true only after aiRecipeRepository.save() returns, so this
+        // also proves the persistence call was made.
+        val state = viewModel.recipeGenState.value
+        assertTrue(state is AiViewModel.RecipeGenState.Ready)
+        assertTrue((state as AiViewModel.RecipeGenState.Ready).saved)
     }
 
     @Test
