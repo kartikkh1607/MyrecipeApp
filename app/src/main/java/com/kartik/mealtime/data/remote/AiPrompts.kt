@@ -142,6 +142,53 @@ internal object AiPrompts {
         return sb.toString().trimEnd()
     }
 
+    /**
+     * Prompt for a [days]-day meal plan as strict JSON. Each meal embeds a full recipe in
+     * the same [RECIPE_JSON_SCHEMA] shape (so [com.kartik.mealtime.data.remote.dto.MealPlanDto]
+     * reuses the recipe mapper). Recipes are capped in size to keep the whole plan inside
+     * the output-token budget.
+     */
+    fun buildMealPlanPrompt(
+        days: Int,
+        dietaryPreferences: String = "",
+        favoriteRecipes: List<String> = emptyList()
+    ): String {
+        val sb = StringBuilder()
+        sb.appendLine("You are a meal-planning chef. Create a realistic $days-day meal plan.")
+        sb.appendLine("Each day MUST have exactly three meals: Breakfast, Lunch, and Dinner.")
+        sb.appendLine("Vary the cuisines and avoid repeating the same dish across the plan.")
+        if (dietaryPreferences.isNotBlank()) {
+            sb.appendLine()
+            sb.appendLine("Every recipe MUST respect these dietary preferences: $dietaryPreferences.")
+            sb.appendLine("Set the matching boolean flags (isVegetarian, isVegan, etc.) accordingly.")
+        }
+        if (favoriteRecipes.isNotEmpty()) {
+            sb.appendLine()
+            sb.appendLine("Take light inspiration from dishes the user enjoys: ${favoriteRecipes.take(10).joinToString(", ")}.")
+        }
+        sb.appendLine()
+        sb.appendLine("Keep each recipe concise: at most 8 ingredients and 6 steps, with realistic times and an approximate calorie count.")
+        sb.appendLine()
+        sb.appendLine("Respond with ONLY a JSON object (no markdown, no commentary) matching this schema:")
+        sb.appendLine(
+            """
+{
+  "title": string,                 // a short name for the plan
+  "days": [
+    {
+      "day": integer,              // 1-based day number
+      "meals": [
+        { "mealType": "Breakfast" | "Lunch" | "Dinner", "recipe": <RECIPE> }
+      ]
+    }
+  ]
+}
+where each <RECIPE> is an object of this shape:""".trimIndent()
+        )
+        sb.appendLine(RECIPE_JSON_SCHEMA)
+        return sb.toString()
+    }
+
     fun buildRecommendationPrompt(
         favoriteRecipes: List<String>,
         dietaryPreferences: String

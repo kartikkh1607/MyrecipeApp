@@ -1,5 +1,6 @@
 package com.kartik.mealtime.data.remote
 
+import com.kartik.mealtime.domain.model.MealPlan
 import com.kartik.mealtime.domain.model.Recipe
 
 /**
@@ -42,6 +43,17 @@ interface AiService {
         instruction: String,
         dietaryPreferences: String = ""
     ): Result<Recipe>
+
+    /**
+     * Builds a [days]-day [MealPlan] (Breakfast/Lunch/Dinner each day). Like
+     * [generateRecipe] this is a premium, structured-output call; each meal is a full
+     * recipe with an `ai-` id ready to open, save, or add to the shopping list.
+     */
+    suspend fun generateMealPlan(
+        days: Int,
+        dietaryPreferences: String = "",
+        favoriteRecipes: List<String> = emptyList()
+    ): Result<MealPlan>
 }
 
 /** A single turn in the chat history, shared across providers. */

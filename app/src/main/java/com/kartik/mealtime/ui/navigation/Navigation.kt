@@ -28,6 +28,7 @@ import com.kartik.mealtime.ui.screens.CategoryDetailScreen
 import com.kartik.mealtime.ui.screens.ChatScreen
 import com.kartik.mealtime.ui.screens.FavoritesScreen
 import com.kartik.mealtime.ui.screens.HomeScreen
+import com.kartik.mealtime.ui.screens.MealPlannerScreen
 import com.kartik.mealtime.ui.screens.ProfileScreen
 import com.kartik.mealtime.ui.screens.RecipeDetailScreen
 import com.kartik.mealtime.ui.screens.RecipeScreen
@@ -223,10 +224,22 @@ fun Navigation(
             ChatScreen(
                 onBackClick = { navController.popBackStack() },
                 onOpenCreations = { navController.navigate(AiCreations) { launchSingleTop = true } },
+                onOpenMealPlanner = { navController.navigate(MealPlanner) { launchSingleTop = true } },
                 onOpenRecipe = { recipeId ->
                     navController.navigate(RecipeDetail(recipeId = recipeId)) { launchSingleTop = true }
                 },
                 viewModel = hiltViewModel()
+            )
+        }
+
+        composable<MealPlanner> {
+            MealPlannerScreen(
+                viewModel = hiltViewModel(),
+                shoppingListViewModel = shoppingListViewModel,
+                onBack = { navController.popBackStack() },
+                onOpenRecipe = { recipeId ->
+                    navController.navigate(RecipeDetail(recipeId = recipeId)) { launchSingleTop = true }
+                }
             )
         }
 

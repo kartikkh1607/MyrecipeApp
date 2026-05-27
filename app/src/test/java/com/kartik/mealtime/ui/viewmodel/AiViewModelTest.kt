@@ -11,6 +11,7 @@ import com.kartik.mealtime.data.remote.PremiumRequiredException
 import com.kartik.mealtime.data.repository.AiRecipeRepository
 import com.kartik.mealtime.domain.repository.EntitlementRepository
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.flowOf
 import kotlinx.coroutines.flow.toList
 import kotlinx.coroutines.launch
@@ -89,6 +90,13 @@ class AiViewModelTest {
             lastDietaryPreferences = dietaryPreferences
             return transformRecipeResult
         }
+
+        override suspend fun generateMealPlan(
+            days: Int,
+            dietaryPreferences: String,
+            favoriteRecipes: List<String>
+        ): Result<com.kartik.mealtime.domain.model.MealPlan> =
+            Result.failure(Exception("not used in AiViewModel tests"))
     }
 
     private lateinit var aiService: FakeAiService
@@ -340,6 +348,7 @@ class AiViewModelTest {
         assertFalse(messages.first().isUser)
     }
 
+    @OptIn(ExperimentalCoroutinesApi::class)
     @Test
     fun `generateRecipe maps a premium-required failure to an upsell event, not an error`() = runTest {
         // Premium client-side, but the proxy rejects (402) — entitlement out of sync.

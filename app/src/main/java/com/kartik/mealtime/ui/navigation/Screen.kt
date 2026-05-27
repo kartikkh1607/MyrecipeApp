@@ -39,3 +39,5 @@ object ShoppingList
 object Chat
 @Serializable
 object AiCreations
+@Serializable
+object MealPlanner

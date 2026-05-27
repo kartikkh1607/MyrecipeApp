@@ -37,6 +37,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Send
 import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Bookmarks
+import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Lock
@@ -86,6 +87,7 @@ import com.kartik.mealtime.ui.viewmodel.BillingViewModel
 fun ChatScreen(
     onBackClick: () -> Unit,
     onOpenCreations: () -> Unit,
+    onOpenMealPlanner: () -> Unit,
     onOpenRecipe: (String) -> Unit,
     viewModel: AiViewModel,
     billingViewModel: BillingViewModel = hiltViewModel()
@@ -152,6 +154,7 @@ fun ChatScreen(
         // ── Header ─────────────────────────────────────────────────────────────
         ChatHeader(
             onBackClick = onBackClick,
+            onMealPlannerClick = onOpenMealPlanner,
             onCreationsClick = onOpenCreations,
             onClearClick = {
                 hapticFeedback.performHapticFeedback(
@@ -312,6 +315,7 @@ private fun GenerateRecipeChip(
 @Composable
 private fun ChatHeader(
     onBackClick: () -> Unit,
+    onMealPlannerClick: () -> Unit,
     onCreationsClick: () -> Unit,
     onClearClick: () -> Unit
 ) {
@@ -369,6 +373,14 @@ private fun ChatHeader(
                 )
             }
 
+            IconButton(onClick = onMealPlannerClick) {
+                Icon(
+                    imageVector = Icons.Default.CalendarMonth,
+                    contentDescription = "Meal Planner",
+                    tint = MaterialTheme.colorScheme.onSurfaceVariant
+                )
+            }
+
             IconButton(onClick = onCreationsClick) {
                 Icon(
                     imageVector = Icons.Default.Bookmarks,
@@ -390,7 +402,7 @@ private fun ChatHeader(
 
 @Composable
 private fun ChatBubble(
-    message: com.kartik.mealtime.ui.viewmodel.AiViewModel.ChatUiMessage,
+    message: AiViewModel.ChatUiMessage,
     onRecipeClick: (String) -> Unit
 ) {
     val isUser = message.isUser

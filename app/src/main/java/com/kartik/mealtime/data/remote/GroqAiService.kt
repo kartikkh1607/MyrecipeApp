@@ -1,6 +1,7 @@
 package com.kartik.mealtime.data.remote
 
 import com.kartik.mealtime.BuildConfig
+import com.kartik.mealtime.domain.model.MealPlan
 import com.kartik.mealtime.domain.model.Recipe
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
@@ -85,6 +86,19 @@ class GroqAiService @Inject constructor(
         complete(prompt, temperature = 0.6f, maxTokens = 2048, jsonMode = true)
             .fold(
                 onSuccess = { AiRecipeParser.parse(it) },
+                onFailure = { Result.failure(it) }
+            )
+    }
+
+    override suspend fun generateMealPlan(
+        days: Int,
+        dietaryPreferences: String,
+        favoriteRecipes: List<String>
+    ): Result<MealPlan> = withContext(Dispatchers.IO) {
+        val prompt = AiPrompts.buildMealPlanPrompt(days, dietaryPreferences, favoriteRecipes)
+        complete(prompt, temperature = 0.6f, maxTokens = 8192, jsonMode = true)
+            .fold(
+                onSuccess = { MealPlanParser.parse(it) },
                 onFailure = { Result.failure(it) }
             )
     }

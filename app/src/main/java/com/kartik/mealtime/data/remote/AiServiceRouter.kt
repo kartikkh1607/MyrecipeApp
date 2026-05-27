@@ -1,5 +1,6 @@
 package com.kartik.mealtime.data.remote
 
+import com.kartik.mealtime.domain.model.MealPlan
 import com.kartik.mealtime.domain.model.Recipe
 import javax.inject.Inject
 import javax.inject.Singleton
@@ -75,6 +76,25 @@ class AiServiceRouter @Inject constructor(
         }
 
         val fallback = groq.transformRecipe(base, instruction, dietaryPreferences)
+        return if (fallback.isSuccess) fallback else primary
+    }
+
+    override suspend fun generateMealPlan(
+        days: Int,
+        dietaryPreferences: String,
+        favoriteRecipes: List<String>
+    ): Result<MealPlan> {
+        val primary = gemini.generateMealPlan(days, dietaryPreferences, favoriteRecipes)
+        // Same gate as the other structured calls: never fall back to the un-gated Groq
+        // route on a 402, or the paywall could be bypassed.
+        if (primary.isSuccess ||
+            primary.exceptionOrNull() is PremiumRequiredException ||
+            !groq.isConfigured
+        ) {
+            return primary
+        }
+
+        val fallback = groq.generateMealPlan(days, dietaryPreferences, favoriteRecipes)
         return if (fallback.isSuccess) fallback else primary
     }
 }
