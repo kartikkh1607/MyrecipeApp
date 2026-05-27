@@ -58,4 +58,23 @@ class AiServiceRouter @Inject constructor(
         val fallback = groq.generateRecipe(query, dietaryPreferences)
         return if (fallback.isSuccess) fallback else primary
     }
+
+    override suspend fun transformRecipe(
+        base: Recipe,
+        instruction: String,
+        dietaryPreferences: String
+    ): Result<Recipe> {
+        val primary = gemini.transformRecipe(base, instruction, dietaryPreferences)
+        // Same gate as generateRecipe: never fall back to the un-gated Groq route on a 402,
+        // or the paywall could be bypassed. Surface the premium error for the upsell.
+        if (primary.isSuccess ||
+            primary.exceptionOrNull() is PremiumRequiredException ||
+            !groq.isConfigured
+        ) {
+            return primary
+        }
+
+        val fallback = groq.transformRecipe(base, instruction, dietaryPreferences)
+        return if (fallback.isSuccess) fallback else primary
+    }
 }

@@ -30,6 +30,18 @@ interface AiService {
         query: String,
         dietaryPreferences: String = ""
     ): Result<Recipe>
+
+    /**
+     * Transforms an existing [base] recipe per a free-text [instruction] (e.g. "make it
+     * vegan", "double the servings", "make it spicier") and returns a new structured
+     * [Recipe] with a fresh `ai-` id — the original is never mutated. Like
+     * [generateRecipe] this is a premium, structured-output call.
+     */
+    suspend fun transformRecipe(
+        base: Recipe,
+        instruction: String,
+        dietaryPreferences: String = ""
+    ): Result<Recipe>
 }
 
 /** A single turn in the chat history, shared across providers. */

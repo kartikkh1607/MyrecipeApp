@@ -1,6 +1,7 @@
 package com.kartik.mealtime.ui.screens
 
 import android.content.Intent
+import android.widget.Toast
 import androidx.activity.compose.BackHandler
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.core.Spring
@@ -13,6 +14,8 @@ import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.layout.ExperimentalLayoutApi
+import androidx.compose.foundation.layout.FlowRow
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -29,10 +32,18 @@ import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AutoAwesome
+import androidx.compose.material.icons.filled.Lock
+import androidx.compose.material3.Button
+import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
+import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
+import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
@@ -55,10 +66,18 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.kartik.mealtime.data.billing.BillingManager
+import com.kartik.mealtime.ui.components.GeneratedRecipeSheet
+import com.kartik.mealtime.ui.components.UpsellBottomSheet
 import com.kartik.mealtime.ui.components.findActivity
 import com.kartik.mealtime.ui.components.rememberInterstitialAdManager
+import com.kartik.mealtime.ui.navigation.RecipeDetail
 import com.kartik.mealtime.ui.navigation.ShoppingList
+import com.kartik.mealtime.ui.theme.Amber
+import com.kartik.mealtime.ui.viewmodel.AiViewModel
+import com.kartik.mealtime.ui.viewmodel.BillingViewModel
 import com.kartik.mealtime.ui.viewmodel.FavoritesViewModel
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
 import com.kartik.mealtime.ui.viewmodel.ShoppingListViewModel
@@ -141,6 +160,10 @@ private fun RecipeDetailPage(
     shoppingListViewModel: ShoppingListViewModel
 ) {
     val favoritesViewModel: FavoritesViewModel = hiltViewModel()
+    // Keyed per recipe so each page in the swipe pager owns its own remix state — without
+    // a key the shared genState would render a GeneratedRecipeSheet on every composed page.
+    val aiViewModel: AiViewModel = hiltViewModel(key = "remix-$recipeId")
+    val billingViewModel: BillingViewModel = hiltViewModel()
     val cachedRecipe = viewModel.recipeDetailCache[recipeId]
     val recipeDetailState by viewModel.recipeDetailState
 
@@ -199,6 +222,41 @@ private fun RecipeDetailPage(
     var checkedIngredients by remember(recipe.id) { mutableStateOf(setOf<Int>()) }
     var completedSteps by remember(recipe.id) { mutableStateOf(setOf<Int>()) }
     var showDescriptionSheet by remember { mutableStateOf(false) }
+
+    // ── AI Remix (premium) ────────────────────────────────────────────────────
+    val isPremium by aiViewModel.isPremium.collectAsStateWithLifecycle()
+    val remixState by aiViewModel.recipeGenState
+    val productDetails by billingViewModel.productDetails.collectAsStateWithLifecycle()
+    var showRemixOptions by remember { mutableStateOf(false) }
+    var showUpsell by remember { mutableStateOf(false) }
+    val activity = remember(context) { context.findActivity() }
+
+    fun attemptRemix(instruction: String) {
+        if (instruction.isBlank()) return
+        showRemixOptions = false
+        if (isPremium) aiViewModel.transformRecipe(recipe, instruction) else showUpsell = true
+    }
+
+    // 402 from the proxy (entitlement lapsed / mirror stale) → open the paywall, not an error.
+    LaunchedEffect(aiViewModel) {
+        aiViewModel.upsellEvents.collect { showUpsell = true }
+    }
+    // React to purchase outcomes only while the paywall is up, so swipe-pager siblings
+    // (which share the singleton BillingManager) don't each fire a duplicate toast.
+    LaunchedEffect(showUpsell) {
+        if (!showUpsell) return@LaunchedEffect
+        billingViewModel.purchaseEvents.collect { result ->
+            when (result) {
+                BillingManager.PurchaseResult.Success -> {
+                    showUpsell = false
+                    Toast.makeText(context, "You're Premium now — enjoy!", Toast.LENGTH_SHORT).show()
+                }
+                BillingManager.PurchaseResult.Cancelled -> Unit
+                is BillingManager.PurchaseResult.Error ->
+                    Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     fun shareCurrentRecipe() {
         val body = buildString {
@@ -300,6 +358,11 @@ private fun RecipeDetailPage(
                         navController.navigate(ShoppingList) { launchSingleTop = true }
                     },
                     resolveVideoUrl = { name -> viewModel.resolveYoutubeUrl(name) }
+                )
+                Spacer(modifier = Modifier.height(16.dp))
+                RemixWithAiButton(
+                    isPremium = isPremium,
+                    onClick = { showRemixOptions = true }
                 )
                 Spacer(modifier = Modifier.height(24.dp))
             }
@@ -457,6 +520,190 @@ private fun RecipeDetailPage(
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                     }
                 )
+            }
+        }
+
+        // ── Remix options sheet ───────────────────────────────────────────────
+        if (showRemixOptions) {
+            RemixOptionsSheet(
+                onPreset = { attemptRemix(it) },
+                onCustom = { attemptRemix(it) },
+                onDismiss = { showRemixOptions = false }
+            )
+        }
+
+        // ── Remixed recipe review sheet (reuses the generated-recipe sheet) ────
+        if (remixState !is AiViewModel.RecipeGenState.Idle) {
+            GeneratedRecipeSheet(
+                state = remixState,
+                onSave = { aiViewModel.saveGeneratedRecipe() },
+                onOpen = { newRecipe ->
+                    aiViewModel.dismissGeneratedRecipe()
+                    navController.navigate(RecipeDetail(recipeId = newRecipe.id)) {
+                        launchSingleTop = true
+                    }
+                },
+                onDismiss = { aiViewModel.dismissGeneratedRecipe() }
+            )
+        }
+
+        // ── Premium upsell ────────────────────────────────────────────────────
+        if (showUpsell) {
+            UpsellBottomSheet(
+                title = "AI Recipe Remix",
+                description = "Make any recipe vegan, spicier, healthier, or scaled to your table.",
+                perks = listOf(
+                    "Transform any recipe with one tap",
+                    "Saved to your AI Creations",
+                    "Tailored to your diet & preferences"
+                ),
+                productDetails = productDetails,
+                onSelectPlan = { offerToken ->
+                    activity?.let { billingViewModel.purchase(it, offerToken) }
+                },
+                onDismiss = { showUpsell = false }
+            )
+        }
+    }
+}
+
+/** Amber call-to-action that opens the AI remix options; shows a lock when gated. */
+@Composable
+private fun RemixWithAiButton(
+    isPremium: Boolean,
+    onClick: () -> Unit
+) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 16.dp),
+        shape = RoundedCornerShape(16.dp),
+        color = Amber.copy(alpha = 0.16f)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = Amber,
+                modifier = Modifier.size(20.dp)
+            )
+            Spacer(Modifier.size(8.dp))
+            Text(
+                text = "Remix with AI",
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onSurface
+            )
+            if (!isPremium) {
+                Spacer(Modifier.size(6.dp))
+                Icon(
+                    imageVector = Icons.Default.Lock,
+                    contentDescription = "Premium",
+                    tint = Amber,
+                    modifier = Modifier.size(14.dp)
+                )
+            }
+        }
+    }
+}
+
+/** Bottom sheet of one-tap remix presets plus a free-text box. */
+@OptIn(ExperimentalMaterial3Api::class, ExperimentalLayoutApi::class)
+@Composable
+private fun RemixOptionsSheet(
+    onPreset: (String) -> Unit,
+    onCustom: (String) -> Unit,
+    onDismiss: () -> Unit,
+) {
+    val presets = remember {
+        listOf(
+            "Make it vegetarian",
+            "Make it vegan",
+            "Double the servings",
+            "Halve the servings",
+            "Make it spicier",
+            "Make it healthier",
+            "Suggest ingredient substitutions",
+            "Make it gluten-free",
+        )
+    }
+    var custom by remember { mutableStateOf("") }
+
+    ModalBottomSheet(
+        onDismissRequest = onDismiss,
+        sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
+    ) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 24.dp)
+                .padding(bottom = 32.dp),
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    imageVector = Icons.Default.AutoAwesome,
+                    contentDescription = null,
+                    tint = Amber,
+                    modifier = Modifier.size(22.dp)
+                )
+                Spacer(Modifier.size(8.dp))
+                Text(
+                    "Remix with AI",
+                    style = MaterialTheme.typography.titleLarge,
+                    fontWeight = FontWeight.Bold
+                )
+            }
+            Spacer(Modifier.height(4.dp))
+            Text(
+                "Pick a quick change, or describe your own.",
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+            )
+            Spacer(Modifier.height(16.dp))
+
+            FlowRow(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                presets.forEach { preset ->
+                    Surface(
+                        onClick = { onPreset(preset) },
+                        shape = RoundedCornerShape(20.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        modifier = Modifier.padding(vertical = 4.dp),
+                    ) {
+                        Text(
+                            preset,
+                            style = MaterialTheme.typography.labelLarge,
+                            modifier = Modifier.padding(horizontal = 14.dp, vertical = 8.dp),
+                        )
+                    }
+                }
+            }
+
+            Spacer(Modifier.height(16.dp))
+            OutlinedTextField(
+                value = custom,
+                onValueChange = { custom = it },
+                modifier = Modifier.fillMaxWidth(),
+                placeholder = { Text("e.g. swap chicken for tofu") },
+                shape = RoundedCornerShape(14.dp),
+                maxLines = 3,
+            )
+            Spacer(Modifier.height(12.dp))
+            Button(
+                onClick = { onCustom(custom) },
+                enabled = custom.isNotBlank(),
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(14.dp),
+                colors = ButtonDefaults.buttonColors(
+                    containerColor = Amber,
+                    contentColor = Color.Black
+                ),
+            ) {
+                Text("Remix", fontWeight = FontWeight.SemiBold)
             }
         }
     }

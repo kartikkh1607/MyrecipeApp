@@ -75,3 +75,6 @@ build_error.txt
 *.tmp
 *.bak
 *.swp
+
+# Wrangler local cache (if run from repo root)
+.wrangler/

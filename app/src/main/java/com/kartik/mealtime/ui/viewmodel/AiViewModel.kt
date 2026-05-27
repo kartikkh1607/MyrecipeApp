@@ -198,6 +198,14 @@ class AiViewModel @Inject constructor(
     val recipeGenState: State<RecipeGenState> = _recipeGenState
 
     /**
+     * How the recipe currently in [recipeGenState] was produced, so [saveGeneratedRecipe]
+     * tags it correctly in AI Creations. Set by [generateRecipe] (GENERATED) and
+     * [transformRecipe] (REMIX, with the source recipe's id).
+     */
+    private var pendingSource: AiRecipeSource = AiRecipeSource.GENERATED
+    private var pendingSourceId: String? = null
+
+    /**
      * Generates a full structured recipe from [query]. Caller is responsible for
      * the premium gate (via [isPremium]); this also guards as defense-in-depth.
      */
@@ -213,6 +221,8 @@ class AiViewModel @Inject constructor(
                 return@launch
             }
             _recipeGenState.value = RecipeGenState.Loading
+            pendingSource = AiRecipeSource.GENERATED
+            pendingSourceId = null
             analytics.logAiChatMessageSent()
 
             val personalization = userPrefsRepo.preferences.first().aiPersonalizationContext()
@@ -233,12 +243,48 @@ class AiViewModel @Inject constructor(
         }
     }
 
-    /** Persists the currently-shown generated recipe into the AI Creations store. */
+    /**
+     * Remixes [base] per a free-text [instruction] (e.g. "make it vegan", "double the
+     * servings") into a new recipe, surfaced through the same [recipeGenState]/
+     * [GeneratedRecipeSheet] as generation. Premium-gated like [generateRecipe].
+     */
+    fun transformRecipe(base: Recipe, instruction: String) {
+        val trimmed = instruction.trim()
+        if (trimmed.isBlank() || _recipeGenState.value is RecipeGenState.Loading) return
+
+        viewModelScope.launch {
+            if (!entitlement.isPremium.first()) {
+                _recipeGenState.value = RecipeGenState.Error("Recipe remix is a premium feature.")
+                return@launch
+            }
+            _recipeGenState.value = RecipeGenState.Loading
+            pendingSource = AiRecipeSource.REMIX
+            pendingSourceId = base.id
+            analytics.logAiChatMessageSent()
+
+            val personalization = userPrefsRepo.preferences.first().aiPersonalizationContext()
+            aiService.transformRecipe(base, trimmed, personalization).fold(
+                onSuccess = { _recipeGenState.value = RecipeGenState.Ready(it) },
+                onFailure = { error ->
+                    if (error is PremiumRequiredException) {
+                        _recipeGenState.value = RecipeGenState.Idle
+                        _upsellEvents.tryEmit(Unit)
+                    } else {
+                        _recipeGenState.value = RecipeGenState.Error(
+                            error.message ?: "Couldn't remix this recipe. Please try again."
+                        )
+                    }
+                }
+            )
+        }
+    }
+
+    /** Persists the currently-shown generated/remixed recipe into the AI Creations store. */
     fun saveGeneratedRecipe() {
         val current = _recipeGenState.value as? RecipeGenState.Ready ?: return
         if (current.saved) return
         viewModelScope.launch {
-            aiRecipeRepository.save(current.recipe, AiRecipeSource.GENERATED)
+            aiRecipeRepository.save(current.recipe, pendingSource, pendingSourceId)
             _recipeGenState.value = current.copy(saved = true)
         }
     }

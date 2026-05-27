@@ -88,6 +88,60 @@ internal object AiPrompts {
         return sb.toString()
     }
 
+    /**
+     * Prompt for transforming an existing recipe per a free-text instruction (the
+     * "Remix with AI" feature). Embeds a compact summary of [base] so the model has the
+     * full starting point, applies [instruction], and returns ONE complete recipe as
+     * strict JSON in the same schema [buildGenerateRecipePrompt] uses, so the response
+     * parses through [AiRecipeParser] identically.
+     */
+    fun buildTransformPrompt(
+        base: com.kartik.mealtime.domain.model.Recipe,
+        instruction: String,
+        dietaryPreferences: String = ""
+    ): String {
+        val sb = StringBuilder()
+        sb.appendLine("You are a professional chef. Transform the recipe below according to the user's request.")
+        sb.appendLine("Return a COMPLETE recipe with every field recomputed (ingredients, steps, times, servings, nutrition, and the dietary boolean flags) so it is consistent with the change.")
+        sb.appendLine()
+        sb.appendLine("Original recipe:")
+        sb.appendLine(base.toPromptSummary())
+        sb.appendLine()
+        sb.appendLine("Requested change: $instruction")
+        if (dietaryPreferences.isNotBlank()) {
+            sb.appendLine()
+            sb.appendLine("The result MUST also respect these dietary preferences: $dietaryPreferences.")
+        }
+        sb.appendLine()
+        sb.appendLine("Respond with ONLY a JSON object (no markdown, no commentary) matching this schema:")
+        sb.appendLine(RECIPE_JSON_SCHEMA)
+        sb.appendLine()
+        sb.appendLine("Keep the dish recognizably derived from the original unless the request says otherwise. Use concrete amounts and realistic times.")
+        return sb.toString()
+    }
+
+    /** Compact, model-friendly rendering of a recipe used as context in transform prompts. */
+    private fun com.kartik.mealtime.domain.model.Recipe.toPromptSummary(): String {
+        val sb = StringBuilder()
+        sb.appendLine("Name: $name")
+        if (description.isNotBlank()) sb.appendLine("Description: $description")
+        if (cuisine.isNotBlank()) sb.appendLine("Cuisine: $cuisine")
+        if (category.isNotBlank()) sb.appendLine("Category: $category")
+        sb.appendLine("Servings: $servings; Prep: ${prepTime}m; Cook: ${cookTime}m")
+        if (ingredients.isNotEmpty()) {
+            sb.appendLine("Ingredients:")
+            ingredients.forEach { ing ->
+                val qty = listOf(ing.amount, ing.unit).filter { it.isNotBlank() }.joinToString(" ")
+                sb.appendLine("- ${if (qty.isBlank()) ing.name else "$qty ${ing.name}"}")
+            }
+        }
+        if (instructions.isNotEmpty()) {
+            sb.appendLine("Steps:")
+            instructions.forEach { step -> sb.appendLine("${step.stepNumber}. ${step.instruction}") }
+        }
+        return sb.toString().trimEnd()
+    }
+
     fun buildRecommendationPrompt(
         favoriteRecipes: List<String>,
         dietaryPreferences: String

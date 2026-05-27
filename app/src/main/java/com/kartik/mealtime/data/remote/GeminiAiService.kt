@@ -191,6 +191,19 @@ class GeminiAiService @Inject constructor(
             )
     }
 
+    override suspend fun transformRecipe(
+        base: Recipe,
+        instruction: String,
+        dietaryPreferences: String
+    ): Result<Recipe> = withContext(Dispatchers.IO) {
+        val prompt = AiPrompts.buildTransformPrompt(base, instruction, dietaryPreferences)
+        postForJson(prompt, temperature = 0.6f, maxTokens = 2048)
+            .fold(
+                onSuccess = { AiRecipeParser.parse(it) },
+                onFailure = { Result.failure(it) }
+            )
+    }
+
     /**
      * Posts [prompt] with JSON response mode and returns the raw model text.
      * Shared by the structured-output features (recipe generation, transform, etc.).

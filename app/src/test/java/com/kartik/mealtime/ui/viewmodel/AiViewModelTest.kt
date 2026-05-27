@@ -1,6 +1,7 @@
 package com.kartik.mealtime.ui.viewmodel
 
 import com.kartik.mealtime.data.analytics.AnalyticsHelper
+import com.kartik.mealtime.data.local.AiRecipeSource
 import com.kartik.mealtime.data.preferences.DietaryPref
 import com.kartik.mealtime.data.preferences.UserPreferences
 import com.kartik.mealtime.data.preferences.UserPreferencesRepository
@@ -25,6 +26,7 @@ import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.verify
 import org.mockito.Mockito.`when`
 
 /**
@@ -42,9 +44,13 @@ class AiViewModelTest {
         var recommendationsResult: Result<String> = Result.success("ok")
         var generateRecipeResult: Result<com.kartik.mealtime.domain.model.Recipe> =
             Result.failure(Exception("not stubbed"))
+        var transformRecipeResult: Result<com.kartik.mealtime.domain.model.Recipe> =
+            Result.failure(Exception("not stubbed"))
         var lastMessage: String? = null
         var lastDietaryPreferences: String? = null
         var lastGenerateQuery: String? = null
+        var lastTransformInstruction: String? = null
+        var lastTransformBaseId: String? = null
 
         override suspend fun sendChatMessage(
             message: String,
@@ -71,6 +77,17 @@ class AiViewModelTest {
             lastGenerateQuery = query
             lastDietaryPreferences = dietaryPreferences
             return generateRecipeResult
+        }
+
+        override suspend fun transformRecipe(
+            base: com.kartik.mealtime.domain.model.Recipe,
+            instruction: String,
+            dietaryPreferences: String
+        ): Result<com.kartik.mealtime.domain.model.Recipe> {
+            lastTransformBaseId = base.id
+            lastTransformInstruction = instruction
+            lastDietaryPreferences = dietaryPreferences
+            return transformRecipeResult
         }
     }
 
@@ -175,6 +192,58 @@ class AiViewModelTest {
         val state = viewModel.recipeGenState.value
         assertTrue(state is AiViewModel.RecipeGenState.Ready)
         assertTrue((state as AiViewModel.RecipeGenState.Ready).saved)
+    }
+
+    @Test
+    fun `transformRecipe is blocked for non-premium users`() = runTest {
+        // entitlement.isPremium is stubbed false in setUp.
+        val base = com.kartik.mealtime.domain.model.Recipe(
+            id = "src-1", name = "Chicken Curry", description = "", imageUrl = "", category = "Dinner"
+        )
+
+        viewModel.transformRecipe(base, "make it vegan")
+
+        assertTrue(viewModel.recipeGenState.value is AiViewModel.RecipeGenState.Error)
+        // The AI service must never be called when the gate is closed.
+        assertNull(aiService.lastTransformInstruction)
+    }
+
+    @Test
+    fun `transformRecipe returns a ready remixed recipe for premium users`() = runTest {
+        `when`(entitlement.isPremium).thenReturn(flowOf(true))
+        val base = com.kartik.mealtime.domain.model.Recipe(
+            id = "src-1", name = "Chicken Curry", description = "", imageUrl = "", category = "Dinner"
+        )
+        val remixed = com.kartik.mealtime.domain.model.Recipe(
+            id = "ai-2", name = "Tofu Curry", description = "", imageUrl = "", category = "Dinner"
+        )
+        aiService.transformRecipeResult = Result.success(remixed)
+
+        viewModel.transformRecipe(base, "make it vegan")
+
+        val state = viewModel.recipeGenState.value
+        assertTrue(state is AiViewModel.RecipeGenState.Ready)
+        assertEquals(remixed, (state as AiViewModel.RecipeGenState.Ready).recipe)
+        assertEquals("src-1", aiService.lastTransformBaseId)
+        assertEquals("make it vegan", aiService.lastTransformInstruction)
+    }
+
+    @Test
+    fun `saving a remix persists it as REMIX with the source recipe id`() = runTest {
+        `when`(entitlement.isPremium).thenReturn(flowOf(true))
+        val base = com.kartik.mealtime.domain.model.Recipe(
+            id = "src-1", name = "Chicken Curry", description = "", imageUrl = "", category = "Dinner"
+        )
+        val remixed = com.kartik.mealtime.domain.model.Recipe(
+            id = "ai-2", name = "Tofu Curry", description = "", imageUrl = "", category = "Dinner"
+        )
+        aiService.transformRecipeResult = Result.success(remixed)
+        viewModel.transformRecipe(base, "make it vegan")
+
+        viewModel.saveGeneratedRecipe()
+
+        // Concrete args only — matchers on a suspend mock corrupt sibling tests (see test memory).
+        verify(aiRecipeRepository).save(remixed, AiRecipeSource.REMIX, "src-1")
     }
 
     @Test

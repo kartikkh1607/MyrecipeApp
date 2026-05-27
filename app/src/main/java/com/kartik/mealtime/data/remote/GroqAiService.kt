@@ -76,6 +76,19 @@ class GroqAiService @Inject constructor(
             )
     }
 
+    override suspend fun transformRecipe(
+        base: Recipe,
+        instruction: String,
+        dietaryPreferences: String
+    ): Result<Recipe> = withContext(Dispatchers.IO) {
+        val prompt = AiPrompts.buildTransformPrompt(base, instruction, dietaryPreferences)
+        complete(prompt, temperature = 0.6f, maxTokens = 2048, jsonMode = true)
+            .fold(
+                onSuccess = { AiRecipeParser.parse(it) },
+                onFailure = { Result.failure(it) }
+            )
+    }
+
     // The combined prompt (system instructions + history + "Assistant:") is sent
     // as a single user message. This reuses Gemini's exact prompt verbatim, so
     // fallback output matches; the conversation is already embedded in the text.

@@ -14,7 +14,7 @@ FIREBASE_PROJECT_ID = "mealtime-96386"
 # Create once and paste the printed id here:  wrangler kv namespace create BILLING_KV
 [[kv_namespaces]]
 binding = "BILLING_KV"
-id = "<run: wrangler kv namespace create BILLING_KV, then paste the id>"
+id = "abc407c7af564e87b701873c57853f55"
 
 # Secrets are NOT stored here. Set them once with `wrangler secret put <NAME>`:
 #   SPOONACULAR_API_KEY, GEMINI_API_KEY, GROQ_API_KEY   — upstream API keys
