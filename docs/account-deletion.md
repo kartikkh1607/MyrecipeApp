@@ -35,6 +35,23 @@ request and process it within **30 days**.
 
 ---
 
+## Delete some of your data without deleting your account
+
+You don't have to delete your whole account to remove your data. While signed
+in, you can delete your synced content directly in the **MealTime** app:
+
+- **Favorites:** open any favorited recipe (or your Favorites list) and tap the
+  filled heart to remove it. Removing a favorite deletes it from our Cloud
+  Firestore database.
+- **Shopping list:** open **Shopping List** and remove individual items, or
+  clear the list. Cleared items are deleted from our Cloud Firestore database.
+
+You can also email **kartikkhandelwal1234589@gmail.com** (subject: **"Delete my
+MealTime data"**) to request deletion of specific synced data while keeping your
+account; we process such requests within **30 days**.
+
+---
+
 ## What data is deleted
 
 When your account is deleted, the following is **permanently removed**:
