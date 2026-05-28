@@ -25,7 +25,13 @@ class AiServiceRouter @Inject constructor(
         dietaryPreferences: String
     ): Result<String> {
         val primary = gemini.sendChatMessage(message, conversationHistory, dietaryPreferences)
-        if (primary.isSuccess || !groq.isConfigured) return primary
+        // Quota rejections must NOT fall back to Groq — that would defeat the per-user cap.
+        if (primary.isSuccess ||
+            primary.exceptionOrNull() is QuotaExceededException ||
+            !groq.isConfigured
+        ) {
+            return primary
+        }
 
         val fallback = groq.sendChatMessage(message, conversationHistory, dietaryPreferences)
         return if (fallback.isSuccess) fallback else primary
@@ -36,7 +42,12 @@ class AiServiceRouter @Inject constructor(
         dietaryPreferences: String
     ): Result<String> {
         val primary = gemini.getRecipeRecommendations(favoriteRecipes, dietaryPreferences)
-        if (primary.isSuccess || !groq.isConfigured) return primary
+        if (primary.isSuccess ||
+            primary.exceptionOrNull() is QuotaExceededException ||
+            !groq.isConfigured
+        ) {
+            return primary
+        }
 
         val fallback = groq.getRecipeRecommendations(favoriteRecipes, dietaryPreferences)
         return if (fallback.isSuccess) fallback else primary
@@ -51,6 +62,7 @@ class AiServiceRouter @Inject constructor(
         // server-side, so falling back would be a paywall bypass. Surface it for the upsell.
         if (primary.isSuccess ||
             primary.exceptionOrNull() is PremiumRequiredException ||
+            primary.exceptionOrNull() is QuotaExceededException ||
             !groq.isConfigured
         ) {
             return primary
@@ -70,6 +82,7 @@ class AiServiceRouter @Inject constructor(
         // or the paywall could be bypassed. Surface the premium error for the upsell.
         if (primary.isSuccess ||
             primary.exceptionOrNull() is PremiumRequiredException ||
+            primary.exceptionOrNull() is QuotaExceededException ||
             !groq.isConfigured
         ) {
             return primary
@@ -89,6 +102,7 @@ class AiServiceRouter @Inject constructor(
         // route on a 402, or the paywall could be bypassed.
         if (primary.isSuccess ||
             primary.exceptionOrNull() is PremiumRequiredException ||
+            primary.exceptionOrNull() is QuotaExceededException ||
             !groq.isConfigured
         ) {
             return primary

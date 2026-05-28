@@ -34,6 +34,30 @@ class GeminiAiService @Inject constructor(
 
     // Maps Gemini HTTP errors to messages users can act on, instead of "API error: 429".
     private fun friendlyError(code: Int, body: String?): Exception {
+        // The proxy's per-user daily cap also returns 429, but with body
+        // {"error":"user_quota_exceeded","limit":N,"tier":"free|premium"}. Catch it
+        // first so the user sees "you've hit your daily AI limit" instead of the
+        // upstream "Gemini quota exceeded" message.
+        if (code == 429) {
+            val proxy = runCatching {
+                gson.fromJson(body, ProxyErrorEnvelope::class.java)
+            }.getOrNull()
+            if (proxy?.error == "user_quota_exceeded") {
+                val limit = proxy.limit
+                val isPremium = proxy.tier == "premium"
+                val message = when {
+                    limit != null && isPremium ->
+                        "You've used your daily AI limit ($limit recipes/chats). It resets at midnight UTC."
+                    limit != null ->
+                        "You've used your free daily AI limit ($limit chats). Upgrade to premium or try again tomorrow."
+                    isPremium ->
+                        "You've used your daily AI limit. It resets at midnight UTC."
+                    else ->
+                        "You've used your free daily AI limit. Upgrade to premium or try again tomorrow."
+                }
+                return QuotaExceededException(message)
+            }
+        }
         // Gemini error JSON shape: { "error": { "code": ..., "message": "...", "status": "..." } }
         val geminiMsg = runCatching {
             gson.fromJson(body, GeminiErrorEnvelope::class.java)?.error?.message
@@ -45,7 +69,7 @@ class GeminiAiService @Inject constructor(
                 401 -> "Your session expired. Please sign out and back in, then try again.$suffix"
                 403 -> "AI assistant access denied. Please try again later.$suffix"
                 404 -> "AI model not found — please update the app.$suffix"
-                429 -> "AI assistant quota exceeded. Free tier allows 15 req/min and 1500 req/day per project. Check Google Cloud quotas or enable billing.$suffix"
+                429 -> "The AI assistant is busy right now. Please try again in a minute.$suffix"
                 in 500..599 -> "Gemini is having trouble right now. Please try again in a moment.$suffix"
                 else -> "AI assistant error ($code).$suffix"
             }
@@ -314,3 +338,7 @@ data class Candidate(
 // Gemini error response shape — used to surface the underlying reason in the chat.
 data class GeminiErrorEnvelope(val error: GeminiErrorBody?)
 data class GeminiErrorBody(val code: Int?, val message: String?, val status: String?)
+
+// Our Worker's typed error shape (e.g. {"error":"user_quota_exceeded","limit":25,"tier":"free"}).
+// Distinguished from Gemini errors by `error` being a string, not an object.
+data class ProxyErrorEnvelope(val error: String?, val limit: Int?, val used: Int?, val tier: String?)

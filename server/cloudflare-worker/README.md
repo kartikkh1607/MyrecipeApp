@@ -54,10 +54,52 @@ the app can be pointed at it.
   Without a token it must return `401`.
 - This replaces the Firebase Cloud Functions version in `server/functions/`, which needed
   the paid Blaze plan. Everything — proxy **and** billing — now runs here, card-free.
-- **Premium gate:** `POST /gemini` requests with `generationConfig.responseMimeType =
-  "application/json"` (recipe generation) require the `premium` custom claim, else `402
-  {"error":"premium_required"}`. Plain chat is unaffected. The claim is set by
-  `/billing/verify` after Google Play validates the subscription.
+- **Premium gate:** Structured AI generation requires the `premium` custom claim, else
+  `402 {"error":"premium_required"}`. Plain chat is unaffected. The claim is set by
+  `/billing/verify` after Google Play validates the subscription. Both upstreams are
+  gated server-side:
+  - `POST /gemini` — gated when `generationConfig.responseMimeType = "application/json"`.
+  - `POST /groq` — gated when `response_format.type` is `"json_object"` or `"json_schema"`.
+    This mirrors `/gemini` so the router's Groq-fallback path on Gemini failures can't
+    bypass the paywall via a crafted direct call.
+- **Per-user daily quota (Gemini):** `POST /gemini` is capped per uid per UTC-day to
+  protect the paid upstream from a runaway user. Defaults (set in `wrangler.toml
+  [vars]`): **25/day free, 200/day premium**. When exceeded the Worker returns `429
+  {"error": "user_quota_exceeded", "limit": N, "tier": "free|premium"}`. Counters live
+  in `BILLING_KV` (`quota:gemini:<uid>:<YYYY-MM-DD>`) and auto-expire 60 h after write.
+- **Per-uid rate limit (all routes):** Every authenticated route is rate-limited per uid
+  per UTC-minute. Default **60/min** (set `RATE_LIMIT_PER_MINUTE` in `wrangler.toml`).
+  Exceeded → `429 {"error":"rate_limit_exceeded","limit":N,"used":M}` with a
+  `Retry-After` header. Counter lives in `BILLING_KV` (`rl:<uid>:<minute>`), TTL 120 s.
+  Fails open if KV is unavailable so a KV blip doesn't lock everyone out.
+- **Shared response cache (first user pays):**
+  - `GET /spoonacular/*` (2xx only) → Cloudflare **Cache API**, 7-day TTL. Key is the
+    normalised path + query (sort + trim + lowercase, `apiKey` excluded), so "Pasta " and
+    "pasta" collapse to one entry. Per-edge on `workers.dev`, zone-wide on a custom domain.
+  - `POST /gemini` structured-output calls (2xx only) → **KV** (`cache:gemini:<sha256>`),
+    30-day TTL. Cross-edge global hits because the same prompt + dietary prefs across
+    users yields the same recipe/meal-plan output. Cache hit short-circuits BEFORE the
+    daily quota increment — a free cached response doesn't burn a slot.
+  - Chat/recommendations are personalised and conversational — never cached. Responses
+    carry `X-Cache: HIT | MISS | SKIP` so you can grep the worker tail for hit rate.
+  Change any of the limits/TTLs in `wrangler.toml` (vars) or `src/index.js` (TTL consts)
+  and `wrangler deploy` — no app update needed.
+
+## Cost guardrails
+
+The per-user quota above caps Gemini abuse on the **app** side. You should also set a
+hard ceiling on the **GCP project** side so a billing/upstream bug can't drain the card.
+
+1. **Set a hard GCP budget alert** — *GCP Console → Billing → Budgets & alerts → Create
+   budget*. Scope to the Gemini-billing project, set a monthly cap (e.g. **$10**), and
+   alert at 50 / 90 / 100 %. (GCP doesn't auto-stop on budget — pair with a Cloud
+   Function that disables the API on the 100 % alert if you want a true kill switch.)
+2. **Cap the Gemini API quota** in *GCP Console → APIs & Services → Generative Language
+   API → Quotas* so the daily request count can't exceed your expected ceiling even if
+   a code bug ignores the per-user cap.
+3. **Watch Worker logs** with `wrangler tail` during launch week — every quota rejection
+   logs nothing by default; if you want to track them, add a `console.log` in
+   `checkAndIncrementGeminiQuota` before the `return` for refused requests.
 
 ## Play Billing (premium subscription)
 
@@ -91,5 +133,3 @@ the Play + Identity Toolkit REST APIs directly. A purchaseToken→uid map lives 
    does not work on a plain local/debug install.
 
 After setup: `wrangler deploy`.
-- Response caching (the cross-user "first user pays" cache) can be added here later
-  with Workers KV — deferred for now to keep v1 simple.

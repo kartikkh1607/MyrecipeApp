@@ -70,3 +70,12 @@ data class ChatMessage(
  * request itself failed.
  */
 class PremiumRequiredException : Exception("Premium subscription required")
+
+/**
+ * Thrown when the AI proxy rejects a request because the user already hit their daily
+ * Gemini cap (HTTP 429 with `user_quota_exceeded`). Distinct from a plain upstream 429
+ * (Gemini's own quota) so the UI can show a clear "you've used your daily AI limit"
+ * message instead of a generic outage error, and so the router never silently falls
+ * back to Groq (that would defeat the cap).
+ */
+class QuotaExceededException(message: String) : Exception(message)

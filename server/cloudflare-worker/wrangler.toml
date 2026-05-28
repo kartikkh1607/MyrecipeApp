@@ -7,8 +7,22 @@ compatibility_date = "2025-01-01"
 
 # Non-secret config. The Firebase project ID is public (it identifies the
 # project) and is used to validate the audience of incoming ID tokens.
+#
+# GEMINI_*_DAILY_QUOTA — per-uid daily cap on /gemini calls (UTC-day).
+# Tune without redeploying code: `wrangler deploy` is enough after editing.
+# Worst-case cost at the premium cap (Gemini 2.0 Flash, ~$0.005/structured call):
+#   200 calls/day × 30 = ~$30/month — well under the ~₹1,444 net annual sub.
+#
+# RATE_LIMIT_PER_MINUTE — per-uid fixed-window cap across ALL authenticated routes
+# (Spoonacular + Gemini + Groq + billing/verify). Protects the shared Spoonacular
+# point quota and Groq provider quota from a single abuser scripting direct calls.
+# A free-plan KV budget note: every blocked-or-allowed request does ~1 KV write,
+# so on the free plan (1k writes/day) keep this low or upgrade to Workers Paid.
 [vars]
 FIREBASE_PROJECT_ID = "mealtime-96386"
+GEMINI_FREE_DAILY_QUOTA = "25"
+GEMINI_PREMIUM_DAILY_QUOTA = "200"
+RATE_LIMIT_PER_MINUTE = "60"
 
 # Play Billing: purchaseToken -> uid map (written by /billing/verify, read by /billing/rtdn).
 # Create once and paste the printed id here:  wrangler kv namespace create BILLING_KV

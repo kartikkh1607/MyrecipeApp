@@ -29,8 +29,38 @@ const GROQ_MODEL = "llama-3.3-70b-versatile";
 // ── Play Billing entitlement ───────────────────────────────────────────────
 const ANDROID_PACKAGE_NAME = "com.kartik.mealtime";
 
+// ── Per-user Gemini quota (KV-backed) ──────────────────────────────────────
+// Caps the *paid* upstream (Gemini) per uid per UTC-day so a runaway user can't
+// drain the AI budget below the subscription's net revenue. Tunable via wrangler
+// vars (GEMINI_FREE_DAILY_QUOTA / GEMINI_PREMIUM_DAILY_QUOTA) so the limits can
+// be changed without a code deploy. Defaults are the safety floor if vars are
+// unset. Counter expires 60h after write so it dies on its own next day.
+const GEMINI_FREE_DAILY_QUOTA_DEFAULT = 25;
+const GEMINI_PREMIUM_DAILY_QUOTA_DEFAULT = 200;
+const QUOTA_KV_TTL_SECONDS = 60 * 60 * 60;
+
+// ── Per-uid request rate limit (KV-backed, fixed window) ───────────────────
+// Protects the Spoonacular point quota and Groq's provider rate limit from a
+// single abuser scripting direct calls. Per-uid per-UTC-minute fixed window —
+// best-effort against KV's eventual consistency (a small burst may slip past,
+// which is acceptable for an abuse cap). Failures fail-open so a KV blip
+// doesn't lock everyone out. Tune via RATE_LIMIT_PER_MINUTE in wrangler.toml.
+const RATE_LIMIT_PER_MINUTE_DEFAULT = 60;
+const RATE_LIMIT_KV_TTL_SECONDS = 120;
+
+// ── Shared response cache (cross-user, "first user pays") ──────────────────
+// Spoonacular GETs → edge Cache API (free, unmetered, per-edge). KV is reserved
+// for low-volume cross-edge data because the free plan caps writes at 1k/day —
+// a hot Spoonacular endpoint would burn that budget in an hour. Cache API has
+// no daily write cap, so it's the right home for the high-volume cache.
+//
+// Gemini structured-generation responses → KV (low volume — premium-gated and
+// per-user-daily-capped — so the cross-edge hit rate is worth the write cost).
+const SPOON_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60;     // recipe data barely changes
+const GEMINI_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;   // generated recipes are reusable
+
 export default {
-  async fetch(request, env) {
+  async fetch(request, env, ctx) {
     const url = new URL(request.url);
 
     // RTDN push from Pub/Sub arrives WITHOUT a Firebase token — it's authenticated by a
@@ -48,10 +78,26 @@ export default {
       return json(401, { error: "Invalid or expired ID token" });
     }
 
+    // Per-uid rate limit, applied to every authenticated route. A single abuser scripting
+    // direct calls can't burn shared Spoonacular points or Groq quota for everyone else.
+    const rl = await checkAndIncrementRateLimit(env, claims.sub);
+    if (!rl.allowed) {
+      return new Response(
+        JSON.stringify({ error: "rate_limit_exceeded", limit: rl.limit, used: rl.used }),
+        {
+          status: 429,
+          headers: {
+            "Content-Type": "application/json",
+            "Retry-After": String(rl.retryAfter),
+          },
+        }
+      );
+    }
+
     // ── Route ────────────────────────────────────────────────────────────────
-    if (url.pathname.startsWith("/spoonacular")) return handleSpoonacular(request, url, env);
-    if (url.pathname === "/gemini") return handleGemini(request, env, claims);
-    if (url.pathname === "/groq") return handleGroq(request, env);
+    if (url.pathname.startsWith("/spoonacular")) return handleSpoonacular(request, url, env, ctx);
+    if (url.pathname === "/gemini") return handleGemini(request, env, ctx, claims);
+    if (url.pathname === "/groq") return handleGroq(request, env, claims);
     if (url.pathname === "/billing/verify") return handleVerifyPurchase(request, env, claims);
     return json(404, { error: "Not found" });
   },
@@ -59,7 +105,7 @@ export default {
 
 // ── Upstream handlers ────────────────────────────────────────────────────────
 
-async function handleSpoonacular(request, url, env) {
+async function handleSpoonacular(request, url, env, ctx) {
   if (request.method !== "GET") return json(405, { error: "Spoonacular proxy is GET only" });
 
   const path = url.pathname.replace(/^\/spoonacular/, "");
@@ -67,14 +113,54 @@ async function handleSpoonacular(request, url, env) {
   for (const [k, v] of url.searchParams.entries()) upstream.searchParams.set(k, v);
   upstream.searchParams.set("apiKey", env.SPOONACULAR_API_KEY);
 
+  // Cache key is derived from the normalised *incoming* params (sort + trim + lowercase),
+  // NOT the upstream URL — that one carries apiKey, which must never leak into the key
+  // and would also defeat sharing. "Pasta " and "pasta" collapse to the same entry.
+  const normQuery = [...url.searchParams.entries()]
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([k, v]) => `${k}=${v.trim().toLowerCase()}`)
+    .join("&");
+  const cacheHash = await sha256(`${path.toLowerCase()}?${normQuery}`);
+  // Synthetic cache key — any URL works as a Cache API key; the host is just a namespace.
+  const cacheKey = new Request(`https://cache.mealtime.invalid/spoonacular/${cacheHash}`, {
+    method: "GET",
+  });
+
+  const cache = caches.default;
+  const cached = await cache.match(cacheKey).catch(() => null);
+  if (cached) {
+    const body = await cached.text();
+    return new Response(body, {
+      status: cached.status,
+      headers: { "Content-Type": "application/json", "X-Cache": "HIT" },
+    });
+  }
+
   try {
-    return passthrough(await fetch(upstream, { method: "GET" }));
+    const upstreamRes = await fetch(upstream, { method: "GET" });
+    const body = await upstreamRes.text();
+    // Only cache successes — never serve a cached 429/500 for days.
+    if (upstreamRes.ok) {
+      const cacheable = new Response(body, {
+        status: upstreamRes.status,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": `public, max-age=${SPOON_CACHE_TTL_SECONDS}`,
+        },
+      });
+      // ctx.waitUntil lets the write finish after we've already returned to the user.
+      ctx.waitUntil(cache.put(cacheKey, cacheable));
+    }
+    return new Response(body, {
+      status: upstreamRes.status,
+      headers: { "Content-Type": "application/json", "X-Cache": "MISS" },
+    });
   } catch (e) {
     return json(502, { error: "Spoonacular upstream failed", detail: String(e) });
   }
 }
 
-async function handleGemini(request, env, claims) {
+async function handleGemini(request, env, ctx, claims) {
   if (request.method !== "POST") return json(405, { error: "Gemini proxy is POST only" });
 
   const body = await request.text(); // forward the GenerateContentRequest untouched
@@ -89,8 +175,39 @@ async function handleGemini(request, env, claims) {
   } catch {
     /* unparseable body → treat as free chat; the upstream will reject if malformed */
   }
-  if (isStructuredGeneration && claims.premium !== true) {
+  const isPremium = claims.premium === true;
+  if (isStructuredGeneration && !isPremium) {
     return json(402, { error: "premium_required" });
+  }
+
+  // Only structured-output calls are cacheable. Chat/recommendations are personalised
+  // and conversational — never cache them. Structured prompts ARE a pure function of
+  // (query + dietary prefs), so identical bodies across users can safely share a result.
+  // Cache lookup runs BEFORE the daily quota check so a cache hit doesn't burn a slot
+  // (we didn't actually call Gemini).
+  const cacheKey = isStructuredGeneration ? `cache:gemini:${await sha256(body)}` : null;
+  if (cacheKey) {
+    const cached = await readKvCache(env, cacheKey);
+    if (cached) {
+      return new Response(cached.body, {
+        status: cached.status,
+        headers: { "Content-Type": "application/json", "X-Cache": "HIT" },
+      });
+    }
+  }
+
+  // Per-user daily cap (run AFTER the premium gate AND cache so neither paywall hits
+  // nor cache hits burn quota slots). The check + increment are best-effort against KV's
+  // eventual consistency — a small burst may race past the limit, which is acceptable
+  // for an abuse cap (we're not enforcing a hard SLA).
+  const quota = await checkAndIncrementGeminiQuota(env, claims.sub, isPremium);
+  if (!quota.allowed) {
+    return json(429, {
+      error: "user_quota_exceeded",
+      limit: quota.limit,
+      used: quota.used,
+      tier: isPremium ? "premium" : "free",
+    });
   }
 
   const upstreamUrl =
@@ -103,13 +220,44 @@ async function handleGemini(request, env, claims) {
       headers: { "Content-Type": "application/json" },
       body,
     });
-    return passthrough(upstream);
+    const upstreamBody = await upstream.text();
+    if (cacheKey && upstream.ok) {
+      // Best-effort write; finishes after we return.
+      ctx.waitUntil(writeKvCache(env, cacheKey, upstreamBody, upstream.status, GEMINI_CACHE_TTL_SECONDS));
+    }
+    return new Response(upstreamBody, {
+      status: upstream.status,
+      headers: {
+        "Content-Type": "application/json",
+        "X-Cache": cacheKey ? "MISS" : "SKIP",
+      },
+    });
   } catch (e) {
     return json(502, { error: "Gemini upstream failed", detail: String(e) });
   }
 }
 
-async function handleGroq(request, env) {
+/**
+ * Reads today's Gemini call count for [uid], rejects if over the tier limit, otherwise
+ * writes count+1. KV writes are eventually consistent — under heavy concurrent fire a
+ * couple of calls may slip past, but that's acceptable for an abuse cap. Per-day key
+ * rotates at UTC midnight (one fixed clock; users in any TZ get a predictable window).
+ */
+async function checkAndIncrementGeminiQuota(env, uid, isPremium) {
+  if (!uid) return { allowed: true, used: 0, limit: 0 }; // shouldn't happen post-auth
+  const limit = isPremium
+    ? parseInt(env.GEMINI_PREMIUM_DAILY_QUOTA, 10) || GEMINI_PREMIUM_DAILY_QUOTA_DEFAULT
+    : parseInt(env.GEMINI_FREE_DAILY_QUOTA, 10) || GEMINI_FREE_DAILY_QUOTA_DEFAULT;
+  const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
+  const key = `quota:gemini:${uid}:${day}`;
+  const raw = await env.BILLING_KV.get(key);
+  const used = raw ? parseInt(raw, 10) || 0 : 0;
+  if (used >= limit) return { allowed: false, used, limit };
+  await env.BILLING_KV.put(key, String(used + 1), { expirationTtl: QUOTA_KV_TTL_SECONDS });
+  return { allowed: true, used: used + 1, limit };
+}
+
+async function handleGroq(request, env, claims) {
   if (request.method !== "POST") return json(405, { error: "Groq proxy is POST only" });
 
   let incoming;
@@ -117,6 +265,18 @@ async function handleGroq(request, env) {
     incoming = await request.json();
   } catch {
     return json(400, { error: "Body must be JSON" });
+  }
+
+  // Premium gate, mirroring /gemini: structured output (response_format = json_object /
+  // json_schema, OpenAI-compatible) is the paid recipe-generation path. Plain chat omits
+  // response_format and stays free. Without this gate the router's Gemini-failure
+  // fallback path would be a paywall bypass — a non-premium user could craft a direct
+  // /groq call with response_format set and get premium AI generation for free.
+  const rfType = incoming?.response_format?.type;
+  const isStructuredGeneration = rfType === "json_object" || rfType === "json_schema";
+  const isPremium = claims.premium === true;
+  if (isStructuredGeneration && !isPremium) {
+    return json(402, { error: "premium_required" });
   }
 
   try {
@@ -234,6 +394,71 @@ async function passthrough(upstream) {
     status: upstream.status,
     headers: { "Content-Type": "application/json" },
   });
+}
+
+// ── Shared response cache helpers ──────────────────────────────────────────
+// Spoonacular cache lives in the edge Cache API (handled inline in handleSpoonacular).
+// Gemini structured-output cache uses KV so the hit is shared across edges.
+
+/** Reads a cached { body, status } envelope by [key]. Never throws — a KV blip must not
+ *  break the request path; we just treat it as a miss and fall through to upstream. */
+async function readKvCache(env, key) {
+  try {
+    const raw = await env.BILLING_KV.get(key);
+    if (!raw) return null;
+    return JSON.parse(raw);
+  } catch {
+    return null;
+  }
+}
+
+/** Best-effort write; called via ctx.waitUntil so a slow KV write never delays the
+ *  user's response. Failures are swallowed for the same reason as readKvCache. */
+async function writeKvCache(env, key, body, status, ttlSeconds) {
+  try {
+    await env.BILLING_KV.put(
+      key,
+      JSON.stringify({ body, status }),
+      { expirationTtl: ttlSeconds }
+    );
+  } catch {
+    /* best-effort */
+  }
+}
+
+/** Per-uid per-UTC-minute fixed-window rate limit. KV reads/writes are eventually
+ *  consistent — under heavy concurrent fire a few calls may slip past the cap, which
+ *  is acceptable for an abuse cap (we're not enforcing a hard SLA). Fails OPEN: if KV
+ *  is unavailable we let the request through rather than locking everyone out. */
+async function checkAndIncrementRateLimit(env, uid) {
+  if (!uid) return { allowed: true, used: 0, limit: 0 };
+  const limit =
+    parseInt(env.RATE_LIMIT_PER_MINUTE, 10) || RATE_LIMIT_PER_MINUTE_DEFAULT;
+  const nowSec = Math.floor(Date.now() / 1000);
+  const minute = Math.floor(nowSec / 60);
+  const key = `rl:${uid}:${minute}`;
+  try {
+    const raw = await env.BILLING_KV.get(key);
+    const used = raw ? parseInt(raw, 10) || 0 : 0;
+    if (used >= limit) {
+      return { allowed: false, used, limit, retryAfter: 60 - (nowSec % 60) };
+    }
+    await env.BILLING_KV.put(key, String(used + 1), {
+      expirationTtl: RATE_LIMIT_KV_TTL_SECONDS,
+    });
+    return { allowed: true, used: used + 1, limit };
+  } catch {
+    return { allowed: true, used: 0, limit }; // fail-open on KV outage
+  }
+}
+
+/** SHA-256 hex digest — used to build stable cache keys from request bodies / URLs. */
+async function sha256(s) {
+  const buf = await crypto.subtle.digest("SHA-256", new TextEncoder().encode(s));
+  const bytes = new Uint8Array(buf);
+  let hex = "";
+  for (let i = 0; i < bytes.length; i++) hex += bytes[i].toString(16).padStart(2, "0");
+  return hex;
 }
 
 // ── Play Billing: verification + entitlement (card-free, no Firebase Functions) ──
