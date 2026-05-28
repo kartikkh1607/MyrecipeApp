@@ -192,8 +192,6 @@ fun HomeScreen(
             // ── Banner Ad ──────────────────────────────────────────────────────────
             Spacer(modifier = Modifier.height(24.dp))
             BannerAd(modifier = Modifier.padding(horizontal = 16.dp))
-
-            Spacer(modifier = Modifier.height(100.dp))
         }
     } // end PullToRefreshBox
 }

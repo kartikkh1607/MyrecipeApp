@@ -5,9 +5,13 @@ import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import com.kartik.mealtime.data.repository.FavoritesRepository
 import com.kartik.mealtime.domain.model.Recipe
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -21,7 +25,8 @@ import javax.inject.Inject
  */
 @HiltViewModel
 class FavoritesViewModel @Inject constructor(
-    private val favoritesRepository: FavoritesRepository
+    private val favoritesRepository: FavoritesRepository,
+    private val userPreferencesRepository: UserPreferencesRepository,
 ) : ViewModel() {
 
     private val _favoriteRecipes = mutableStateOf<List<Recipe>>(emptyList())
@@ -31,12 +36,19 @@ class FavoritesViewModel @Inject constructor(
         _favoriteRecipes.value.mapTo(mutableSetOf()) { it.id }
     }
 
-    /** Persisted grid/list toggle for the Favorites screen. */
-    private val _favoritesGridMode = mutableStateOf(false)
-    val favoritesGridMode: State<Boolean> = _favoritesGridMode
+    /**
+     * Persisted grid/list toggle for the Favorites screen. Backed by DataStore so it
+     * survives tab navigation (which pops this VM's NavBackStackEntry) and process
+     * death — earlier the in-memory state reset to false every time the user left the
+     * tab.
+     */
+    val favoritesGridMode: StateFlow<Boolean> = userPreferencesRepository.favoritesGridMode
+        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
 
     fun toggleFavoritesGridMode() {
-        _favoritesGridMode.value = !_favoritesGridMode.value
+        viewModelScope.launch {
+            userPreferencesRepository.setFavoritesGridMode(!favoritesGridMode.value)
+        }
     }
 
     enum class FavoritesSortOrder(val label: String) {

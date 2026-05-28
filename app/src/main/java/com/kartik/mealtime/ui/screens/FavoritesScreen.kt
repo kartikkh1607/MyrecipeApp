@@ -12,6 +12,7 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -82,6 +83,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.kartik.mealtime.domain.model.Recipe
@@ -106,7 +108,7 @@ fun FavoritesScreen(
     val favoriteRecipes by favoritesViewModel.favoriteRecipes
     val sortedFavorites by favoritesViewModel.sortedFavoriteRecipes
     val favoriteIds by favoritesViewModel.favoriteIds
-    val isGridMode by favoritesViewModel.favoritesGridMode
+    val isGridMode by favoritesViewModel.favoritesGridMode.collectAsStateWithLifecycle()
     val currentSort by favoritesViewModel.favoritesSortOrder
     val hapticFeedback = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -485,15 +487,23 @@ private fun CompactFavoriteCard(
     }
     val ratingText = remember(recipe.rating) { String.format("%.1f", recipe.rating) }
 
+    // Grid card: tap opens the recipe, long-press removes it (matches the list-mode
+    // swipe-to-dismiss + undo flow). The corner heart was a 32dp tap target right where
+    // the thumb grabs the card — too easy to mis-tap, and semantically odd on a screen
+    // of items the user has already favorited.
     Card(
-        onClick = {
-            isPressed = true
-            onClick()
-        },
         modifier = Modifier
             .fillMaxWidth()
             .height(180.dp)
-            .graphicsLayer { scaleX = scale; scaleY = scale },
+            .graphicsLayer { scaleX = scale; scaleY = scale }
+            .combinedClickable(
+                onClick = {
+                    isPressed = true
+                    onClick()
+                },
+                onLongClick = onRemove,
+                onLongClickLabel = "Remove from favorites",
+            ),
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
     ) {
@@ -513,21 +523,6 @@ private fun CompactFavoriteCard(
             Box(modifier = Modifier
                 .fillMaxSize()
                 .background(cardOverlay))
-            IconButton(
-                onClick = onRemove,
-                modifier = Modifier
-                    .align(Alignment.TopEnd)
-                    .padding(4.dp)
-                    .background(Color.Black.copy(alpha = 0.3f), CircleShape)
-                    .size(32.dp)
-            ) {
-                Icon(
-                    Icons.Default.Favorite,
-                    contentDescription = "Remove favorite",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier.size(16.dp)
-                )
-            }
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)

@@ -66,7 +66,7 @@ private val PremiumLightColorScheme = lightColorScheme(
     
     // Tertiary — Warm Amber for ratings, calories, and food highlights
     tertiary = Amber,
-    onTertiary = White,
+    onTertiary = Graphite,                    // White-on-Amber was 2:1 (fail); Graphite is 6.2:1
     tertiaryContainer = AmberLight,
     onTertiaryContainer = AmberDark,
     

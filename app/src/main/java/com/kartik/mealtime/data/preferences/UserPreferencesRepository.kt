@@ -114,6 +114,15 @@ class UserPreferencesRepository @Inject constructor(
         context.userPrefsDataStore.edit { it[KEY_PREMIUM] = enabled }
     }
 
+    /** Persisted Favorites-screen grid/list toggle. Survives nav + process death. */
+    val favoritesGridMode: Flow<Boolean> = context.userPrefsDataStore.data.map { prefs ->
+        prefs[KEY_FAVORITES_GRID_MODE] ?: false
+    }
+
+    suspend fun setFavoritesGridMode(enabled: Boolean) {
+        context.userPrefsDataStore.edit { it[KEY_FAVORITES_GRID_MODE] = enabled }
+    }
+
     /**
      * Records a recipe view. Updates the streak based on the gap between
      * [lastCookedDate] and today:
@@ -186,5 +195,6 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_TOTAL_VIEWED     = intPreferencesKey("total_viewed")
         val KEY_AUTH_GATE_SEEN   = booleanPreferencesKey("auth_gate_seen")
         val KEY_PREMIUM          = booleanPreferencesKey("premium_unlocked")
+        val KEY_FAVORITES_GRID_MODE = booleanPreferencesKey("favorites_grid_mode")
     }
 }

@@ -276,7 +276,10 @@ async function handleVerifyPurchase(request, env, claims) {
     return json(402, { error: "subscription_not_active" });
   }
 
-  await setPremiumClaim(env, uid, true);
+  // Surface claim-set failures: if Identity Toolkit rejects (missing IAM, malformed uid,
+  // transient 5xx), returning 200 would tell the app premium is granted while it isn't.
+  const claimOk = await setPremiumClaim(env, uid, true);
+  if (!claimOk) return json(502, { error: "Failed to set premium claim" });
   await env.BILLING_KV.put(`token:${purchaseToken}`, uid);
   return json(200, { premium: true });
 }
@@ -284,7 +287,13 @@ async function handleVerifyPurchase(request, env, claims) {
 /**
  * POST /billing/rtdn — Pub/Sub push for Real-time Developer Notifications. Authenticated
  * by a shared secret (?key=RTDN_SECRET), NOT a Firebase token. Always 204s so Pub/Sub
- * treats the message as delivered; we re-query Google for the truth and reconcile.
+ * treats the message as delivered.
+ *
+ * We trust Google's notificationType (the actual state transition) instead of re-querying
+ * and mirroring whatever the Play API returns at that moment. In test mode, 5-min monthly
+ * cycles cause the API to briefly report transient non-active states between renewals,
+ * which the old "verify-then-mirror" logic would treat as "subscription ended" and wipe
+ * a valid premium claim. The notification itself is unambiguous — use it directly.
  */
 async function handleRtdn(request, url, env) {
   if (request.method !== "POST") return json(405, { error: "rtdn is POST only" });
@@ -300,23 +309,69 @@ async function handleRtdn(request, url, env) {
     return new Response(null, { status: 204 }); // ack malformed/test pings
   }
 
-  const purchaseToken = notification?.subscriptionNotification?.purchaseToken;
+  const subNotif = notification?.subscriptionNotification;
+  const purchaseToken = subNotif?.purchaseToken;
   if (!purchaseToken) return new Response(null, { status: 204 });
 
   const uid = await env.BILLING_KV.get(`token:${purchaseToken}`);
   if (!uid) return new Response(null, { status: 204 }); // unknown token
 
+  const intent = rtdnIntent(subNotif.notificationType);
+  if (intent === "noop") return new Response(null, { status: 204 });
+
   try {
-    const sub = await verifySubscription(env, purchaseToken);
-    await setPremiumClaim(env, uid, Boolean(sub && isSubscriptionActive(sub)));
-  } catch {
+    if (intent === "promote") {
+      await setPremiumClaim(env, uid, true);
+    } else if (intent === "demote") {
+      await setPremiumClaim(env, uid, false);
+    } else if (intent === "verify") {
+      // CANCELED: user opted out but the paid period may not have expired yet. Re-query
+      // and only DEMOTE if Play confirms a definitively-inactive state. Ambiguous/transient
+      // responses (PENDING, UNSPECIFIED, network noise) leave the claim alone.
+      const sub = await verifySubscription(env, purchaseToken);
+      if (sub && isDefinitelyInactive(sub)) {
+        await setPremiumClaim(env, uid, false);
+      }
+    }
+  } catch (e) {
+    console.error("RTDN handler error:", String(e), "intent:", intent, "uid:", uid);
     /* transient — leave claim as-is; a later notification reconciles */
   }
   return new Response(null, { status: 204 });
 }
 
+/**
+ * Maps Play's subscription notificationType to an entitlement intent.
+ *   promote: clearly entitled    → set premium=true
+ *   demote:  clearly not entitled → set premium=false
+ *   verify:  ambiguous            → re-query Play, demote only on confirmed inactive
+ *   noop:    irrelevant to entitlement (price-change, deferral, pending-cancel, unknown)
+ *
+ * Codes per https://developer.android.com/google/play/billing/rtdn-reference#sub
+ */
+function rtdnIntent(type) {
+  switch (type) {
+    case 1:  // SUBSCRIPTION_RECOVERED
+    case 2:  // SUBSCRIPTION_RENEWED
+    case 4:  // SUBSCRIPTION_PURCHASED
+    case 6:  // SUBSCRIPTION_IN_GRACE_PERIOD
+    case 7:  // SUBSCRIPTION_RESTARTED
+      return "promote";
+    case 5:  // SUBSCRIPTION_ON_HOLD
+    case 10: // SUBSCRIPTION_PAUSED
+    case 12: // SUBSCRIPTION_REVOKED
+    case 13: // SUBSCRIPTION_EXPIRED
+      return "demote";
+    case 3:  // SUBSCRIPTION_CANCELED (still active until expiry; re-check)
+      return "verify";
+    default: // PRICE_CHANGE_CONFIRMED (8), DEFERRED (9), PAUSE_SCHEDULE_CHANGED (11),
+             // PENDING_PURCHASE_CANCELED (20), unknown future codes
+      return "noop";
+  }
+}
+
 /** True if the subscription currently entitles the user (active, in grace, or
- *  cancelled-but-not-yet-expired). Google is the source of truth, not the client. */
+ *  cancelled-but-not-yet-expired). Used by handleVerifyPurchase. */
 function isSubscriptionActive(sub) {
   if (!sub) return false;
   const state = sub.subscriptionState;
@@ -325,6 +380,16 @@ function isSubscriptionActive(sub) {
   }
   const expiry = sub.lineItems?.find((li) => li.expiryTime)?.expiryTime;
   return Boolean(expiry && new Date(expiry).getTime() > Date.now());
+}
+
+/** True ONLY for definitively non-entitled states (EXPIRED, or expiry already past).
+ *  Transient/ambiguous responses (PENDING, UNSPECIFIED) return false so the caller
+ *  can leave the claim alone instead of wiping a valid entitlement. */
+function isDefinitelyInactive(sub) {
+  if (!sub) return false;
+  if (sub.subscriptionState === "SUBSCRIPTION_STATE_EXPIRED") return true;
+  const expiry = sub.lineItems?.find((li) => li.expiryTime)?.expiryTime;
+  return Boolean(expiry && new Date(expiry).getTime() <= Date.now());
 }
 
 async function verifySubscription(env, purchaseToken) {
@@ -337,7 +402,9 @@ async function verifySubscription(env, purchaseToken) {
   return res.json();
 }
 
-/** Sets/clears the `premium` custom claim via Identity Toolkit accounts:update. */
+/** Sets/clears the `premium` custom claim via Identity Toolkit accounts:update.
+ *  Logs the upstream body on failure so misconfigurations (missing IAM, bad uid)
+ *  show up in `wrangler tail` instead of failing silently. */
 async function setPremiumClaim(env, uid, premium) {
   const token = await getGoogleAccessToken(env);
   const url = `https://identitytoolkit.googleapis.com/v1/projects/${env.FIREBASE_PROJECT_ID}/accounts:update`;
@@ -349,6 +416,10 @@ async function setPremiumClaim(env, uid, premium) {
       customAttributes: JSON.stringify(premium ? { premium: true } : {}),
     }),
   });
+  if (!res.ok) {
+    const body = await res.text().catch(() => "<unreadable>");
+    console.error(`setPremiumClaim ${res.status}: ${body} (uid=${uid}, premium=${premium})`);
+  }
   return res.ok;
 }
 

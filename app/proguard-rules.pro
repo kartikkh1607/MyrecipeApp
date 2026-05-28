@@ -79,6 +79,23 @@
 -keep @dagger.hilt.android.lifecycle.HiltViewModel class * { *; }
 -dontwarn dagger.hilt.**
 
+# ── Firebase ──────────────────────────────────────────────────────────────────
+# Firebase auto-initializes via FirebaseInitProvider (a ContentProvider) which
+# discovers SDK components via META-INF/services + ServiceLoader. The aggressive
+# R8 config below (-allowaccessmodification, -repackageclasses, optimizationpasses 5)
+# strips these by default, causing "FirebaseCrashlytics component is not present"
+# NPE at Application.onCreate. Keep all component registrars + init plumbing.
+-keep class * implements com.google.firebase.components.ComponentRegistrar { *; }
+-keepnames class * implements com.google.firebase.components.ComponentRegistrar
+-keep class com.google.firebase.provider.FirebaseInitProvider { *; }
+-keep class com.google.firebase.components.ComponentDiscoveryService { *; }
+-keep class com.google.firebase.crashlytics.** { *; }
+-keep class com.google.firebase.installations.** { *; }
+-keep class com.google.firebase.auth.** { *; }
+-keep class com.google.firebase.firestore.** { *; }
+-keep class com.google.firebase.analytics.** { *; }
+-dontwarn com.google.firebase.**
+
 # ── Logging: strip ALL log calls in release ───────────────────────────────────
 # Removes every android.util.Log call (v/d/i/w/e/wtf) plus printStackTrace and
 # System.out.println from release builds. Prevents API behaviour, user actions,

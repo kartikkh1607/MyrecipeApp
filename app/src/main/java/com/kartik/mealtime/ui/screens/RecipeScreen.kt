@@ -182,6 +182,13 @@ fun CategoryGridDisplay(
     navigateToDetail: (RecipeCategory) -> Unit,
     gridState: LazyGridState = rememberLazyGridState()
 ) {
+    // Captured once per screen entry. Items composing later — whether via fresh
+    // scroll-into-view or after scrolling back to the top (LazyGrid disposes
+    // off-screen cells) — read this to decide whether the entrance animation is
+    // still in its "initial render" window. Without this, every scroll-to-top
+    // re-played the cascade.
+    val screenOpenedAt = remember { System.currentTimeMillis() }
+
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         state = gridState,
@@ -194,6 +201,7 @@ fun CategoryGridDisplay(
             CategoryGridItem(
                 category = category,
                 index = index,
+                screenOpenedAt = screenOpenedAt,
                 navigateToDetail = navigateToDetail
             )
         }
@@ -204,16 +212,27 @@ fun CategoryGridDisplay(
 fun CategoryGridItem(
     category: RecipeCategory,
     index: Int = 0,
+    screenOpenedAt: Long = 0L,
     navigateToDetail: (RecipeCategory) -> Unit
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     var isPressed by remember { mutableStateOf(false) }
 
-    // Staggered entrance — each card delays 60ms × its grid index
-    var visible by remember { mutableStateOf(false) }
+    // Entrance cascade runs only for the initial viewport AND only while the screen
+    // is still fresh (first 800ms after open). The time guard is what stops the
+    // cascade from re-firing when the user scrolls fast back to the top — LazyGrid
+    // disposes off-screen cells, so on scroll-back the first 6 cards recompose and
+    // would otherwise animate again. `remember` evaluates the guard at composition
+    // time, so the elapsed-millis check works correctly on every (re)compose.
+    val shouldAnimate = remember {
+        index < 6 && System.currentTimeMillis() - screenOpenedAt < 800
+    }
+    var visible by remember { mutableStateOf(!shouldAnimate) }
     LaunchedEffect(Unit) {
-        delay(index * 60L)
-        visible = true
+        if (shouldAnimate) {
+            delay(index * 60L)
+            visible = true
+        }
     }
 
     val scale by animateFloatAsState(

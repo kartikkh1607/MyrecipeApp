@@ -3,6 +3,7 @@ package com.kartik.mealtime.ui.screens
 import android.content.ActivityNotFoundException
 import android.content.Intent
 import android.net.Uri
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +26,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.OpenInNew
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
@@ -41,6 +43,7 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -52,6 +55,9 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -60,15 +66,21 @@ import androidx.compose.ui.platform.LocalUriHandler
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
+import com.android.billingclient.api.ProductDetails
 import com.kartik.mealtime.BuildConfig
 import com.kartik.mealtime.R
+import com.kartik.mealtime.data.billing.BillingManager
 import com.kartik.mealtime.domain.model.ThemeMode
+import com.kartik.mealtime.ui.components.UpsellBottomSheet
 import com.kartik.mealtime.ui.components.findActivity
 import com.kartik.mealtime.ui.components.rememberConsentManager
 import com.kartik.mealtime.ui.navigation.LocalTabReselectEvents
 import com.kartik.mealtime.ui.navigation.Profile
+import com.kartik.mealtime.ui.theme.Amber
+import com.kartik.mealtime.ui.viewmodel.BillingViewModel
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.flow.filter
 import com.kartik.mealtime.ui.navigation.Settings as SettingsRoute
@@ -76,7 +88,8 @@ import com.kartik.mealtime.ui.navigation.Settings as SettingsRoute
 @Composable
 fun SettingsScreen(
     navController: NavHostController,
-    viewModel: MainViewModel          // ✅ Issue #4: ViewModel needed for theme control
+    viewModel: MainViewModel,         // ✅ Issue #4: ViewModel needed for theme control
+    billingViewModel: BillingViewModel = hiltViewModel()
 ) {
     val hapticFeedback = LocalHapticFeedback.current
     val context = LocalContext.current
@@ -87,6 +100,23 @@ fun SettingsScreen(
     // Dev-only premium override (debug builds). Lets us exercise premium AI features
     // before Play Billing exists. Never shown in release builds.
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
+    val productDetails by billingViewModel.productDetails.collectAsStateWithLifecycle()
+
+    // Upgrade flow — same paywall used by the AI screens.
+    var showUpsell by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        billingViewModel.purchaseEvents.collect { result ->
+            when (result) {
+                BillingManager.PurchaseResult.Success -> {
+                    showUpsell = false
+                    Toast.makeText(context, "You're Premium now — enjoy!", Toast.LENGTH_SHORT).show()
+                }
+                BillingManager.PurchaseResult.Cancelled -> Unit
+                is BillingManager.PurchaseResult.Error ->
+                    Toast.makeText(context, result.message, Toast.LENGTH_LONG).show()
+            }
+        }
+    }
 
     // Legal links — folded in from the former About screen. Each row appears only
     // when its URL is configured in strings.xml, so we never show a broken link.
@@ -133,6 +163,17 @@ fun SettingsScreen(
             )
         }
         context.startActivity(Intent.createChooser(send, "Share app"))
+    }
+
+    fun openManageSubscription() {
+        val appId = context.packageName.removeSuffix(".debug")
+        val url = "https://play.google.com/store/account/subscriptions" +
+                "?sku=${BillingManager.SUBSCRIPTION_PRODUCT_ID}&package=$appId"
+        try {
+            context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url)))
+        } catch (_: ActivityNotFoundException) {
+            uriHandler.openUri(url)
+        }
     }
 
     var showThemeDialog by remember { mutableStateOf(false) }
@@ -209,6 +250,21 @@ fun SettingsScreen(
         }
 
         LazyColumn(state = listState, verticalArrangement = Arrangement.spacedBy(20.dp)) {
+            // Premium status — the first thing the user sees in Settings.
+            item {
+                PremiumStatusCard(
+                    isPremium = isPremium,
+                    productDetails = productDetails,
+                    onUpgradeClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        showUpsell = true
+                    },
+                    onManageClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        openManageSubscription()
+                    }
+                )
+            }
             item {
                 SettingsSection(title = "Preferences") {
                     // Theme row — tapping opens the AlertDialog picker
@@ -325,11 +381,162 @@ fun SettingsScreen(
                         color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.7f)
                     )
                 }
-                // Bottom breathing room so the footer clears the bottom nav bar.
-                Spacer(Modifier.height(96.dp))
             }
         }
     }
+
+    // ── Premium upsell ────────────────────────────────────────────────────────
+    if (showUpsell) {
+        UpsellBottomSheet(
+            title = "MealTime Premium",
+            description = "Unlock every AI feature and keep MealTime ad-free.",
+            perks = listOf(
+                "AI Recipe Assistant — turn any idea into a full recipe",
+                "Recipe Remix — adapt dishes to your diet",
+                "AI Meal Planner — multi-day plans with shopping list",
+                "No ads, anywhere in the app",
+            ),
+            productDetails = productDetails,
+            onSelectPlan = { offerToken ->
+                activity?.let { billingViewModel.purchase(it, offerToken) }
+            },
+            onDismiss = { showUpsell = false },
+        )
+    }
+}
+
+
+// ── Premium status card ───────────────────────────────────────────────────────
+
+/**
+ * Top-of-Settings card that reflects the user's entitlement. For premium users it
+ * shows an "Active" badge and a Manage-subscription affordance; for free users it
+ * shows the headline benefit + price, opening the paywall on tap.
+ */
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun PremiumStatusCard(
+    isPremium: Boolean,
+    productDetails: ProductDetails?,
+    onUpgradeClick: () -> Unit,
+    onManageClick: () -> Unit,
+) {
+    val cheapestMonthly = remember(productDetails) { productDetails?.cheapestMonthlyPrice() }
+    Surface(
+        onClick = if (isPremium) onManageClick else onUpgradeClick,
+        modifier = Modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(22.dp),
+        color = Color.Transparent,
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .background(
+                    brush = Brush.linearGradient(
+                        colors = if (isPremium) {
+                            listOf(Color(0xFF92400E), Color(0xFFF59E0B))
+                        } else {
+                            listOf(
+                                MaterialTheme.colorScheme.surface,
+                                Amber.copy(alpha = 0.18f),
+                            )
+                        }
+                    )
+                )
+                .padding(18.dp)
+        ) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Box(
+                    modifier = Modifier
+                        .size(52.dp)
+                        .clip(CircleShape)
+                        .background(
+                            if (isPremium) Color.White.copy(alpha = 0.20f)
+                            else Amber.copy(alpha = 0.22f)
+                        ),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.WorkspacePremium,
+                        contentDescription = null,
+                        tint = if (isPremium) Color.White else Amber,
+                        modifier = Modifier.size(28.dp),
+                    )
+                }
+                Spacer(Modifier.width(14.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Text(
+                            text = "MealTime Premium",
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = if (isPremium) Color.White
+                            else MaterialTheme.colorScheme.onSurface,
+                        )
+                        if (isPremium) {
+                            Spacer(Modifier.width(8.dp))
+                            ActiveBadge()
+                        }
+                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = when {
+                            isPremium -> "All premium features unlocked"
+                            cheapestMonthly != null -> "From $cheapestMonthly/mo — unlock AI features & remove ads"
+                            else -> "Unlock AI features & remove ads"
+                        },
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isPremium) Color.White.copy(alpha = 0.85f)
+                        else MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+                Spacer(Modifier.width(8.dp))
+                Icon(
+                    imageVector = if (isPremium) Icons.AutoMirrored.Filled.OpenInNew
+                    else Icons.Default.ChevronRight,
+                    contentDescription = if (isPremium) "Manage subscription" else "Upgrade",
+                    tint = if (isPremium) Color.White
+                    else MaterialTheme.colorScheme.onSurfaceVariant,
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+private fun ActiveBadge() {
+    Surface(
+        shape = RoundedCornerShape(6.dp),
+        color = Color.White.copy(alpha = 0.22f),
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
+            verticalAlignment = Alignment.CenterVertically,
+        ) {
+            Icon(
+                imageVector = Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(10.dp),
+            )
+            Spacer(Modifier.width(4.dp))
+            Text(
+                text = "ACTIVE",
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = Color.White,
+            )
+        }
+    }
+}
+
+/** Localized price of the monthly base plan (e.g. "₹149.00"), or null if unavailable. */
+private fun ProductDetails.cheapestMonthlyPrice(): String? {
+    val offers = subscriptionOfferDetails ?: return null
+    val monthly = offers.firstOrNull { it.basePlanId == BillingManager.BASE_PLAN_MONTHLY }
+        ?: return null
+    return monthly.pricingPhases.pricingPhaseList.lastOrNull()?.formattedPrice
 }
 
 
@@ -372,6 +579,14 @@ fun SettingsItem(
         shape = RoundedCornerShape(16.dp),
         elevation = CardDefaults.cardElevation(defaultElevation = 0.dp)
     ) {
+        // In dark mode, primary-on-primaryContainer is only 1.4:1 (Teal on darker Teal).
+        // Flip to solid primary + onPrimary so the icon actually reads (7.5:1).
+        val isDarkScheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+        val tileBackground = if (isDarkScheme) MaterialTheme.colorScheme.primary
+        else MaterialTheme.colorScheme.primaryContainer
+        val iconTint = if (isDarkScheme) MaterialTheme.colorScheme.onPrimary
+        else MaterialTheme.colorScheme.primary
+
         Row(
             modifier = Modifier
                 .fillMaxWidth()
@@ -383,14 +598,14 @@ fun SettingsItem(
                 modifier = Modifier
                     .size(44.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(MaterialTheme.colorScheme.primaryContainer),
+                    .background(tileBackground),
                 contentAlignment = Alignment.Center
             ) {
                 Icon(
                     icon,
                     null,
                     modifier = Modifier.size(22.dp),
-                    tint = MaterialTheme.colorScheme.primary
+                    tint = iconTint
                 )
             }
             Spacer(modifier = Modifier.width(16.dp))
