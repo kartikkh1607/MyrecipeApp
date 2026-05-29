@@ -28,20 +28,32 @@ class AuthViewModel @Inject constructor(
     val currentUser: StateFlow<FirebaseUser?> = userRepository.authState
         .stateIn(viewModelScope, SharingStarted.Eagerly, userRepository.currentUser)
 
-    /** True when user already passed the gate (signed in OR tapped "Maybe later"). */
-    val authGateSeen: StateFlow<Boolean> = userPreferencesRepository.authGateSeen
-        .stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    /** Top-level route MainActivity renders, based on auth + email-verification state. */
+    enum class AuthDestination { SignIn, VerifyEmail, Main }
+
+    // Bumped after a manual reload() so [authDestination] re-evaluates the freshly
+    // fetched isEmailVerified flag (Firebase doesn't push verification changes).
+    private val _verificationRefresh = MutableStateFlow(0)
 
     /**
-     * Drives the first-launch (and post-sign-out) auth gate in MainActivity.
-     * Show the AuthScreen iff the user is signed out AND has not yet skipped.
+     * Single source of truth for the top-level auth route:
+     *  - signed out                  → SignIn (mandatory gate, no guest path)
+     *  - email/password, unverified  → VerifyEmail (blocks the app + Worker proxy until verified)
+     *  - otherwise                   → Main
+     *
+     * Sign-in being mandatory also stops the app from making unauthenticated calls to the
+     * Cloudflare Worker proxy (Spoonacular / Gemini / Groq), which require a Firebase ID
+     * token and otherwise 401. Reading live [UserRepository] state (not the captured flow
+     * value) lets a reload() flip VerifyEmail → Main without waiting for a new auth event.
      */
-    val needsAuthGate: StateFlow<Boolean> = combine(currentUser, authGateSeen) { user, seen ->
-        user == null && !seen
-    }.stateIn(viewModelScope, SharingStarted.Eagerly, false)
+    val authDestination: StateFlow<AuthDestination> =
+        combine(currentUser, _verificationRefresh) { _, _ -> computeDestination() }
+            .stateIn(viewModelScope, SharingStarted.Eagerly, computeDestination())
 
-    fun markAuthGateSeen() {
-        viewModelScope.launch { userPreferencesRepository.setAuthGateSeen(true) }
+    private fun computeDestination(): AuthDestination = when {
+        userRepository.currentUser == null -> AuthDestination.SignIn
+        userRepository.requiresEmailVerification() -> AuthDestination.VerifyEmail
+        else -> AuthDestination.Main
     }
 
     sealed interface AuthUiState {
@@ -78,6 +90,9 @@ class AuthViewModel @Inject constructor(
             val trimmedName = name.trim()
             userRepository.register(email, password, trimmedName)
                 .onSuccess {
+                    // New email/password account starts unverified — send the link now.
+                    // Best-effort: the VerifyEmail screen offers a resend if this fails.
+                    userRepository.sendEmailVerification()
                     // Persist the name locally so the greeting + Profile screen show it
                     // immediately (DataStore is the source of truth the UI reads from).
                     if (trimmedName.isNotBlank()) {
@@ -122,12 +137,47 @@ class AuthViewModel @Inject constructor(
         }
     }
 
+    /**
+     * Re-checks email verification after the user says they clicked the link. Reloads the
+     * user from the server, then re-evaluates [authDestination]. If verified, the route
+     * flips to Main automatically; if not, surfaces a gentle nudge.
+     */
+    fun refreshVerification() {
+        viewModelScope.launch {
+            _uiState.value = AuthUiState.Loading
+            userRepository.reloadUser()
+            _verificationRefresh.value += 1
+            _uiState.value = if (userRepository.requiresEmailVerification()) {
+                AuthUiState.Error("Email not verified yet. Tap the link in your inbox, then try again.")
+            } else {
+                AuthUiState.Idle
+            }
+        }
+    }
+
+    /** Silent verification re-check, e.g. when the screen resumes after the inbox app. */
+    fun checkVerificationSilently() {
+        viewModelScope.launch {
+            userRepository.reloadUser()
+            _verificationRefresh.value += 1
+        }
+    }
+
+    /** Resends the verification link to the signed-in (still-unverified) user. */
+    fun resendVerificationEmail() {
+        viewModelScope.launch {
+            _uiState.value = AuthUiState.Loading
+            userRepository.sendEmailVerification()
+                .onSuccess { _uiState.value = AuthUiState.Info("Verification email sent. Check your inbox.") }
+                .onFailure { _uiState.value = AuthUiState.Error(it.friendlyMessage()) }
+        }
+    }
+
     fun signOut() {
         userRepository.signOut()
         _uiState.value = AuthUiState.Idle
-        // Reset the gate so the user is greeted with AuthScreen again next launch
-        // (matches the documented "Reset to false on sign-out" contract).
-        viewModelScope.launch { userPreferencesRepository.setAuthGateSeen(false) }
+        // Clearing currentUser re-asserts the AuthScreen automatically (the gate now
+        // tracks sign-in state directly), so the user is greeted with sign-in again.
     }
 
     fun resetState() {
@@ -158,8 +208,8 @@ class AuthViewModel @Inject constructor(
      * data FIRST (so no PII is orphaned in Firestore), then delete the Firebase Auth
      * record. If Firebase requires a recent login, we surface [DeleteAccountState.NeedsReauth]
      * so the UI can ask the user to sign in again and retry — the data is already gone.
-     * On success the auth-state listener clears [currentUser], which (with the gate reset)
-     * re-asserts the AuthScreen automatically, exactly like sign-out.
+     * On success the auth-state listener clears [currentUser], which re-asserts the
+     * AuthScreen automatically, exactly like sign-out.
      */
     fun deleteAccount() {
         val uid = userRepository.currentUser?.uid
@@ -180,7 +230,6 @@ class AuthViewModel @Inject constructor(
 
             userRepository.deleteCurrentUser()
                 .onSuccess {
-                    userPreferencesRepository.setAuthGateSeen(false)
                     _deleteState.value = DeleteAccountState.Success
                 }
                 .onFailure { e ->
@@ -224,7 +273,6 @@ class AuthViewModel @Inject constructor(
     private suspend fun finishAuthDeletion() {
         userRepository.deleteCurrentUser()
             .onSuccess {
-                userPreferencesRepository.setAuthGateSeen(false)
                 _deleteState.value = DeleteAccountState.Success
             }
             .onFailure {

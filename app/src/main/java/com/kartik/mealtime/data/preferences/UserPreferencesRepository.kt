@@ -85,19 +85,6 @@ class UserPreferencesRepository @Inject constructor(
     }
 
     /**
-     * Whether the user has already passed the first-launch auth gate (either by
-     * signing in or by tapping "Maybe later"). Reset to false on sign-out so the
-     * gate appears again on the next cold launch.
-     */
-    val authGateSeen: Flow<Boolean> = context.userPrefsDataStore.data.map { prefs ->
-        prefs[KEY_AUTH_GATE_SEEN] ?: false
-    }
-
-    suspend fun setAuthGateSeen(seen: Boolean) {
-        context.userPrefsDataStore.edit { it[KEY_AUTH_GATE_SEEN] = seen }
-    }
-
-    /**
      * Whether the user currently has premium entitlement.
      *
      * v1 is a LOCAL placeholder flag, default false. It is the single source of
@@ -193,7 +180,6 @@ class UserPreferencesRepository @Inject constructor(
         val KEY_STREAK_DAYS      = intPreferencesKey("streak_days")
         val KEY_LAST_COOKED_DATE = stringPreferencesKey("last_cooked_date")
         val KEY_TOTAL_VIEWED     = intPreferencesKey("total_viewed")
-        val KEY_AUTH_GATE_SEEN   = booleanPreferencesKey("auth_gate_seen")
         val KEY_PREMIUM          = booleanPreferencesKey("premium_unlocked")
         val KEY_FAVORITES_GRID_MODE = booleanPreferencesKey("favorites_grid_mode")
     }

@@ -4,6 +4,7 @@ import com.kartik.mealtime.data.analytics.AnalyticsHelper
 import com.kartik.mealtime.data.local.CachedRecipeDao
 import com.kartik.mealtime.data.local.FavoriteDao
 import com.kartik.mealtime.data.local.FavoriteEntity
+import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import com.kartik.mealtime.data.repository.FavoritesRepository
 import com.kartik.mealtime.data.repository.SyncRepository
 import com.kartik.mealtime.data.repository.UserRepository
@@ -19,6 +20,7 @@ import org.junit.Assert.assertEquals
 import org.junit.Before
 import org.junit.Test
 import org.mockito.Mockito.mock
+import org.mockito.Mockito.`when`
 
 /**
  * Unit tests for [FavoritesViewModel]'s sorting logic (relocated from
@@ -56,7 +58,10 @@ class FavoritesViewModelTest {
             userRepository = mock(UserRepository::class.java),
             syncRepository = mock(SyncRepository::class.java)
         )
-        return FavoritesViewModel(repo)
+        val userPrefs = mock(UserPreferencesRepository::class.java).apply {
+            `when`(favoritesGridMode).thenReturn(flowOf(false))
+        }
+        return FavoritesViewModel(repo, userPrefs)
     }
 
     private fun fav(

@@ -78,6 +78,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
@@ -368,6 +369,14 @@ private fun StatTile(
     value: String,
     modifier: Modifier = Modifier
 ) {
+    // In dark mode, primary-on-primaryContainer is only 1.4:1 (Teal on darker Teal).
+    // Flip to solid primary + onPrimary so the icon actually reads (7.5:1).
+    val isDarkScheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val tileBackground = if (isDarkScheme) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.primaryContainer
+    val iconTint = if (isDarkScheme) MaterialTheme.colorScheme.onPrimary
+    else MaterialTheme.colorScheme.primary
+
     Card(
         modifier = modifier,
         colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
@@ -385,7 +394,7 @@ private fun StatTile(
                 modifier = Modifier
                     .size(38.dp)
                     .background(
-                        MaterialTheme.colorScheme.primaryContainer,
+                        tileBackground,
                         RoundedCornerShape(10.dp)
                     ),
                 contentAlignment = Alignment.Center
@@ -393,7 +402,7 @@ private fun StatTile(
                 Icon(
                     imageVector = icon,
                     contentDescription = null,
-                    tint = MaterialTheme.colorScheme.primary,
+                    tint = iconTint,
                     modifier = Modifier.size(20.dp)
                 )
             }
@@ -417,6 +426,14 @@ private fun StatTile(
 // ── "About this recipe" tappable row — opens description bottom sheet ────────
 @Composable
 fun AboutRecipeRow(onClick: () -> Unit) {
+    // In dark mode, primary-on-primaryContainer is only 1.4:1 (Teal on darker Teal).
+    // Flip to solid primary + onPrimary so the icon actually reads (7.5:1).
+    val isDarkScheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
+    val tileBackground = if (isDarkScheme) MaterialTheme.colorScheme.primary
+    else MaterialTheme.colorScheme.primaryContainer
+    val iconTint = if (isDarkScheme) MaterialTheme.colorScheme.onPrimary
+    else MaterialTheme.colorScheme.primary
+
     Surface(
         onClick = onClick,
         modifier = Modifier
@@ -442,7 +459,7 @@ fun AboutRecipeRow(onClick: () -> Unit) {
                     modifier = Modifier
                         .size(38.dp)
                         .background(
-                            MaterialTheme.colorScheme.primaryContainer,
+                            tileBackground,
                             RoundedCornerShape(10.dp)
                         ),
                     contentAlignment = Alignment.Center
@@ -450,7 +467,7 @@ fun AboutRecipeRow(onClick: () -> Unit) {
                     Icon(
                         imageVector = Icons.Default.Restaurant,
                         contentDescription = null,
-                        tint = MaterialTheme.colorScheme.primary,
+                        tint = iconTint,
                         modifier = Modifier.size(20.dp)
                     )
                 }

@@ -22,6 +22,7 @@ import com.kartik.mealtime.domain.model.ThemeMode
 import com.kartik.mealtime.ui.components.BrandSplash
 import com.kartik.mealtime.ui.screens.AuthScreen
 import com.kartik.mealtime.ui.screens.MainScreen
+import com.kartik.mealtime.ui.screens.VerifyEmailScreen
 import com.kartik.mealtime.ui.theme.MyrecipeAppTheme
 import com.kartik.mealtime.ui.viewmodel.AuthViewModel
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
@@ -48,7 +49,7 @@ class MainActivity : ComponentActivity() {
             val recipeViewModel: MainViewModel = hiltViewModel()
             val authViewModel: AuthViewModel = hiltViewModel()
             val themeMode by recipeViewModel.themeMode.collectAsStateWithLifecycle()
-            val needsAuthGate by authViewModel.needsAuthGate.collectAsStateWithLifecycle()
+            val authDestination by authViewModel.authDestination.collectAsStateWithLifecycle()
             val systemDark = isSystemInDarkTheme()
             val darkTheme = when (themeMode) {
                 ThemeMode.LIGHT -> false
@@ -58,8 +59,8 @@ class MainActivity : ComponentActivity() {
 
             // Brand splash extends the visual moment past the system splash —
             // showing "MealTime" title + tagline before fading into the app.
-            // Once finished, [showBrandSplash] flips false and either the auth
-            // gate (first launch, signed-out) or MainScreen takes over.
+            // Once finished, [showBrandSplash] flips false and [authDestination]
+            // decides: sign-in gate (mandatory), email-verification hold, or MainScreen.
             var showBrandSplash by remember { mutableStateOf(true) }
 
             MyrecipeAppTheme(
@@ -72,13 +73,12 @@ class MainActivity : ComponentActivity() {
                 ) {
                     when {
                         showBrandSplash -> BrandSplash(onFinished = { showBrandSplash = false })
-                        needsAuthGate -> AuthScreen(
-                            viewModel = authViewModel,
-                            // Successful sign-in flips currentUser → needsAuthGate
-                            // becomes false; "Continue as Guest" stays signed out
-                            // but flags the gate as seen so it doesn't reappear.
-                            onAuthSuccess = { authViewModel.markAuthGateSeen() }
-                        )
+                        // Sign-in is mandatory and email/password accounts must verify
+                        // their email before reaching the app (and the Worker proxy).
+                        authDestination == AuthViewModel.AuthDestination.SignIn ->
+                            AuthScreen(viewModel = authViewModel)
+                        authDestination == AuthViewModel.AuthDestination.VerifyEmail ->
+                            VerifyEmailScreen(viewModel = authViewModel)
                         else -> MainScreen(viewModel = recipeViewModel)
                     }
                 }

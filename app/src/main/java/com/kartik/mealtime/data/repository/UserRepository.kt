@@ -67,6 +67,33 @@ class UserRepository @Inject constructor(
         auth.sendPasswordResetEmail(email).await()
     }
 
+    /** Sends a verification link to the signed-in user's email address. */
+    suspend fun sendEmailVerification(): Result<Unit> = runCatching {
+        val user = auth.currentUser ?: error("No signed-in user")
+        user.sendEmailVerification().await()
+    }
+
+    /**
+     * Refreshes the cached [FirebaseUser] from the server so [FirebaseUser.isEmailVerified]
+     * reflects the current state — Firebase does not push verification changes, so this
+     * must be called (e.g. when the user returns from their inbox) before re-checking.
+     */
+    suspend fun reloadUser(): Result<Unit> = runCatching {
+        auth.currentUser?.reload()?.await()
+        Unit
+    }
+
+    /**
+     * True when the signed-in user authenticated with email/password but has NOT yet
+     * verified their email. Google (and other federated) users are inherently verified,
+     * so they never gate on this — only the password provider does.
+     */
+    fun requiresEmailVerification(): Boolean {
+        val user = auth.currentUser ?: return false
+        val isPasswordUser = user.providerData.any { it.providerId == EmailAuthProvider.PROVIDER_ID }
+        return isPasswordUser && !user.isEmailVerified
+    }
+
     fun signOut() = auth.signOut()
 
     /**

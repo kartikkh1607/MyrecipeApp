@@ -195,10 +195,7 @@ fun Navigation(
         // ── Secondary screens ──────────────────────────────────────────────────────
 
         composable<Auth> {
-            AuthScreen(
-                viewModel = authViewModel,
-                onAuthSuccess = { navController.popBackStack() }
-            )
+            AuthScreen(viewModel = authViewModel)
         }
 
         composable<Profile> {

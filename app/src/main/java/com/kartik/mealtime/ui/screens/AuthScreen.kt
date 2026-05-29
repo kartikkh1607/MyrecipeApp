@@ -95,8 +95,7 @@ internal enum class AuthPath { None, Email, Google }
 
 @Composable
 fun AuthScreen(
-    viewModel: AuthViewModel,
-    onAuthSuccess: () -> Unit
+    viewModel: AuthViewModel
 ) {
     val uiState by viewModel.uiState.collectAsStateWithLifecycle()
     val snackbarHostState = remember { SnackbarHostState() }
@@ -248,8 +247,10 @@ fun AuthScreen(
     LaunchedEffect(uiState) {
         when (val state = uiState) {
             is AuthViewModel.AuthUiState.Success -> {
+                // Firebase emits the signed-in user → authDestination recomputes →
+                // MainActivity swaps in MainScreen (verified) or VerifyEmailScreen
+                // (new/unverified email account) automatically. No explicit nav needed.
                 activePath = AuthPath.None
-                onAuthSuccess()
             }
 
             is AuthViewModel.AuthUiState.Error -> {
@@ -633,38 +634,6 @@ fun AuthScreen(
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                         }
-                    }
-
-                    Spacer(Modifier.height(12.dp))
-
-                    // ── Guest button ──────────────────────────────────────────
-                    OutlinedButton(
-                        onClick = onAuthSuccess,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.5.dp,
-                            MaterialTheme.colorScheme.outline
-                        ),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        )
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.Person,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Spacer(Modifier.width(8.dp))
-                        Text(
-                            text = "Continue as Guest",
-                            style = MaterialTheme.typography.titleSmall,
-                            fontWeight = FontWeight.Medium,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
                     }
 
                     // ── Tab switch hint ───────────────────────────────────────

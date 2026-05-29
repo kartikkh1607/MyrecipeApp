@@ -46,9 +46,8 @@ class AuthViewModelTest {
         userRepository = mock(UserRepository::class.java)
         syncRepository = mock(SyncRepository::class.java)
         userPrefs = mock(UserPreferencesRepository::class.java)
-        // Stubs read during the VM's init (eager stateIn collection).
+        // Stub read during the VM's init (eager stateIn collection).
         `when`(userRepository.authState).thenReturn(flowOf(null))
-        `when`(userPrefs.authGateSeen).thenReturn(flowOf(false))
     }
 
     @After
@@ -118,7 +117,7 @@ class AuthViewModelTest {
     // ── Account deletion ─────────────────────────────────────────────────────────
 
     @Test
-    fun `deleteAccount wipes data, deletes auth, resets gate, and reports Success`() {
+    fun `deleteAccount wipes data, deletes auth, and reports Success`() {
         val user = fakeUser("uid1")
         `when`(userRepository.currentUser).thenReturn(user)
         runBlocking {
@@ -132,7 +131,6 @@ class AuthViewModelTest {
         runBlocking {
             verify(syncRepository).deleteAllUserData("uid1")
             verify(userRepository).deleteCurrentUser()
-            verify(userPrefs).setAuthGateSeen(false)
         }
     }
 
@@ -183,7 +181,7 @@ class AuthViewModelTest {
         vm.reauthenticateWithPasswordAndDelete("pw")
 
         assertTrue(vm.deleteState.value is AuthViewModel.DeleteAccountState.Success)
-        runBlocking { verify(userPrefs).setAuthGateSeen(false) }
+        runBlocking { verify(userRepository).deleteCurrentUser() }
     }
 
     @Test
