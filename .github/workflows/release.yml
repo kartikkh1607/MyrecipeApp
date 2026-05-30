@@ -1,0 +1,145 @@
+name: Release
+
+# Triggered by pushing a semver tag (e.g. `git tag v1.0.2 && git push --tags`).
+# Builds a signed AAB and uploads it to the Play internal-testing track.
+# Promotion to closed/open/production stays manual in the Play Console — this
+# workflow is intentionally not wired to ship straight to production.
+on:
+  push:
+    tags:
+      - 'v*'
+
+# A failed release shouldn't leave secrets cached in a half-finished run;
+# never cancel a release in flight.
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  release:
+    name: Build signed AAB and upload to Play internal
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    # Required secrets (set in Settings → Secrets and variables → Actions):
+    #   RELEASE_KEYSTORE_BASE64       — `base64 -w0 upload-keystore.jks`
+    #   RELEASE_KEYSTORE_PASSWORD     — store password
+    #   RELEASE_KEY_ALIAS             — key alias inside the keystore
+    #   RELEASE_KEY_PASSWORD          — key password (often same as store)
+    #   GOOGLE_SERVICES_JSON_BASE64   — `base64 -w0 app/google-services.json`
+    #                                   (the real one from Firebase, not the CI stub)
+    #   PLAY_SERVICE_ACCOUNT_JSON     — JSON for a Play Console service account
+    #                                   with "Release manager" role on the app
+    # Optional:
+    #   PROXY_BASE_URL                — override the hardcoded Worker URL
+    #   ADMOB_APP_ID / _BANNER_ID / _INTERSTITIAL_ID — only if shipping ads
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # Decode the upload keystore from the base64 secret into a runner-local
+      # path. RUNNER_TEMP is wiped after the job so the keystore never persists.
+      - name: Decode release keystore
+        env:
+          KEYSTORE_BASE64: ${{ secrets.RELEASE_KEYSTORE_BASE64 }}
+        run: |
+          if [ -z "$KEYSTORE_BASE64" ]; then
+            echo "::error::RELEASE_KEYSTORE_BASE64 secret is not set"
+            exit 1
+          fi
+          echo "$KEYSTORE_BASE64" | base64 -d > "$RUNNER_TEMP/upload-keystore.jks"
+
+      # Decode the real google-services.json. Required for Firebase Auth /
+      # Crashlytics / Analytics to actually work in the shipped AAB — the CI
+      # stub used in ci.yml would build successfully but point at a dead project.
+      - name: Decode google-services.json
+        env:
+          GS_JSON_BASE64: ${{ secrets.GOOGLE_SERVICES_JSON_BASE64 }}
+        run: |
+          if [ -z "$GS_JSON_BASE64" ]; then
+            echo "::error::GOOGLE_SERVICES_JSON_BASE64 secret is not set"
+            exit 1
+          fi
+          mkdir -p app
+          echo "$GS_JSON_BASE64" | base64 -d > app/google-services.json
+
+      # The app's build script reads signing config + buildConfig fields from
+      # local.properties (see app/build.gradle.kts). Generate one from secrets
+      # rather than inlining signing config in the workflow — keeps the
+      # release-vs-local build path identical.
+      - name: Write local.properties from secrets
+        env:
+          KEYSTORE_PASSWORD: ${{ secrets.RELEASE_KEYSTORE_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.RELEASE_KEY_ALIAS }}
+          KEY_PASSWORD: ${{ secrets.RELEASE_KEY_PASSWORD }}
+          PROXY_BASE_URL: ${{ secrets.PROXY_BASE_URL }}
+          ADMOB_APP_ID: ${{ secrets.ADMOB_APP_ID }}
+          ADMOB_BANNER_ID: ${{ secrets.ADMOB_BANNER_ID }}
+          ADMOB_INTERSTITIAL_ID: ${{ secrets.ADMOB_INTERSTITIAL_ID }}
+        run: |
+          {
+            echo "keystore.path=${RUNNER_TEMP}/upload-keystore.jks"
+            echo "keystore.store.password=${KEYSTORE_PASSWORD}"
+            echo "keystore.key.alias=${KEY_ALIAS}"
+            echo "keystore.key.password=${KEY_PASSWORD}"
+            # Optional overrides — only emit when set, so build.gradle.kts
+            # falls back to its hardcoded defaults otherwise.
+            [ -n "$PROXY_BASE_URL" ] && echo "proxy.base.url=${PROXY_BASE_URL}"
+            [ -n "$ADMOB_APP_ID" ] && echo "admob.app.id=${ADMOB_APP_ID}"
+            [ -n "$ADMOB_BANNER_ID" ] && echo "admob.banner.id=${ADMOB_BANNER_ID}"
+            [ -n "$ADMOB_INTERSTITIAL_ID" ] && echo "admob.interstitial.id=${ADMOB_INTERSTITIAL_ID}"
+          } > local.properties
+
+      - name: Build signed release AAB
+        run: ./gradlew :app:bundleRelease --no-daemon
+
+      # Sanity-check the AAB was produced and signed before attempting Play
+      # upload — gives a clearer failure than the upload step would.
+      - name: Verify AAB exists
+        run: |
+          AAB="app/build/outputs/bundle/release/app-release.aab"
+          if [ ! -f "$AAB" ]; then
+            echo "::error::Expected $AAB to exist"
+            exit 1
+          fi
+          ls -lh "$AAB"
+
+      # Upload artifact regardless of Play outcome — gives a fallback if the
+      # Play upload step fails (auth, quota, version-code clash, etc.) so the
+      # signed build isn't lost.
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: app-release-aab
+          path: app/build/outputs/bundle/release/app-release.aab
+          retention-days: 30
+
+      - name: Upload mapping.txt artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: mapping-${{ github.ref_name }}
+          path: app/build/outputs/mapping/release/mapping.txt
+          if-no-files-found: warn
+          retention-days: 90
+
+      # Pushes to the "internal" track as draft — final "Send to testers"
+      # click stays in the Play Console so a bad tag can be aborted before
+      # any tester sees the build.
+      - name: Upload to Play Console (internal track, draft)
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.PLAY_SERVICE_ACCOUNT_JSON }}
+          packageName: com.kartik.mealtime
+          releaseFiles: app/build/outputs/bundle/release/app-release.aab
+          track: internal
+          status: draft
+          mappingFile: app/build/outputs/mapping/release/mapping.txt
