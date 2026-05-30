@@ -6,7 +6,7 @@ permalink: /terms-of-service/
 
 # Terms of Service for MealTime
 
-**Last updated: May 25, 2026**
+**Last updated: May 31, 2026**
 
 These Terms of Service ("Terms") govern your use of the MealTime mobile
 application (the "App") operated by Kartik Khandelwal ("we", "us", or
@@ -24,9 +24,10 @@ the App only with the consent of a parent or guardian.
 ---
 
 ## 2. Your account
-- You may use parts of the App without an account. Some features
-  (cloud sync of favorites, AI-generated recipes, shopping lists, and
-  preferences) require you to sign in.
+- An account is **required** to use the App. There is no guest mode. You
+  may sign in with an email/password account or with Google.
+- Email/password accounts must verify their email address before they
+  can use the App's features.
 - You are responsible for maintaining the confidentiality of your
   account credentials and for all activity under your account.
 - You agree to provide accurate information and to keep it current.

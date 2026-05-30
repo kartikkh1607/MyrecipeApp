@@ -6,7 +6,7 @@ permalink: /privacy-policy/
 
 # Privacy Policy for MealTime
 
-**Last updated: May 25, 2026**
+**Last updated: May 31, 2026**
 
 Kartik Khandelwal ("we", "us", or "our") operates the MealTime mobile
 application (the "App"). This page explains what information the App
@@ -19,22 +19,26 @@ accordance with this policy.
 
 ## 1. Information we collect
 
-### 1.1 Account information (only if you sign in)
-If you choose to create an account, we collect:
-- **Email address** — used as your login identifier.
-- **Password** — stored only by Firebase Authentication; we never see
-  or store your plaintext password.
-
-You can use the App without signing in; in that case no account data is
-collected.
+### 1.1 Account information (required to use the App)
+Sign-in is **mandatory** — the App does not offer guest access. When you
+create an account or sign in we collect:
+- **Email address** — used as your login identifier and, for password
+  accounts, for the verification link.
+- **Password** — only when you choose email/password sign-in. Stored
+  exclusively by Firebase Authentication; we never see or store your
+  plaintext password. Google Sign-In users authenticate directly with
+  Google and we never receive a password.
+- **Email-verification status** — for email/password accounts, we hold
+  unverified users on a verification screen until their email is verified;
+  Google sign-in is treated as already verified.
 
 ### 1.2 User content
-If you are signed in, the following data is synced to your account via
-**Cloud Firestore** so you can access it on other devices:
+The following data is synced to your account via **Cloud Firestore** so
+you can access it on other devices:
 - Recipes you mark as favorites.
 - Recipes you generate with the AI assistant.
 - Shopping-list items you add.
-- Your in-app preferences (e.g. theme).
+- Your in-app preferences (e.g. theme, dietary preferences).
 
 This content is associated with your account and is not shared with
 other users.
@@ -53,16 +57,22 @@ commands (e.g. "next", "back", "repeat").
   and have explicitly tapped the mic button.
 
 ### 1.4 Recipe / AI query data
+All recipe and AI traffic is routed through our **Cloudflare Worker
+proxy**, which forwards requests to the upstream providers. The Worker
+sees the bearer Firebase ID token (used only to authenticate the request
+and enforce per-account rate limits and the premium gate); it does not
+store request content.
+
 - **Spoonacular API**: when you search for a recipe, your search query
-  and the recipe IDs you view are sent to Spoonacular's API to return
-  results. No account information is sent.
+  and the recipe IDs you view are forwarded to Spoonacular to return
+  results. No account information is sent to Spoonacular.
 - **AI providers (Google Gemini, with Groq as fallback)**: when you use
-  the AI features (recipe generation, chat assistant), the text prompts
-  you send are transmitted to **Google (Gemini API)** for inference. If
-  the Gemini request fails and a fallback is configured, the same prompt
-  may instead be sent to **Groq** for inference. No account information
-  is attached to these requests by the App. Do not enter personal
-  information into AI prompts.
+  the AI features (recipe generation, chat assistant, meal planner), the
+  text prompts you send are transmitted to **Google (Gemini API)** for
+  inference. If the Gemini request fails and a fallback is configured,
+  the same prompt may instead be sent to **Groq** for inference. No
+  account information is attached to these requests by the App. Do not
+  enter personal information into AI prompts.
 
 ### 1.5 Advertising
 The free version of the App displays ads served by **Google AdMob**.
