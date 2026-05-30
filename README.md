@@ -34,7 +34,8 @@
 - Add ingredients from any recipe; items are **grouped by recipe** with collapsible sections, per-section progress, swipe-to-delete, and share/copy export.
 
 ### 🔐 Accounts & Sync (Firebase)
-- **First-launch AuthScreen gate** — sign in before using the app.
+- **Mandatory sign-in** — no guest mode; the app never makes unauthenticated calls to the Worker proxy.
+- **Email verification** for email/password accounts — a dedicated `VerifyEmailScreen` holds unverified users (silent re-check on resume, resend, switch account). Google sign-in users are inherently verified and pass straight through.
 - **Google Sign-In via Credential Manager** (the modern replacement for `GoogleSignInClient`) → exchanged for a Firebase ID token.
 - Favorites & shopping list sync via **Firestore**; **Crashlytics** + **Analytics** wired in.
 - Full **account deletion** flow (Play Data Safety compliant) including partial-data deletion.
@@ -67,7 +68,7 @@ Three AI-powered features gated behind a Play subscription, all routed through t
 | Layer | Technology |
 |---|---|
 | **Language** | Kotlin 2.0 (JVM 17 toolchain) |
-| **UI** | Jetpack Compose · Material 3 · Google Fonts (Playfair Display) · Material Icons Extended |
+| **UI** | Jetpack Compose · Material 3 · Google Fonts (Newsreader + Hanken Grotesk) · Material Icons Extended |
 | **Architecture** | MVVM + Clean Architecture (data / domain / ui) |
 | **DI** | **Hilt** (Hilt Navigation Compose for ViewModel scoping) |
 | **Async** | Coroutines · StateFlow / Flow |
@@ -237,11 +238,11 @@ Or hit **▶ Run** in Android Studio.
 
 ## 🎨 Design System
 
-Custom **"Premium Brand"** tokens in `ui/theme/`:
+Custom **"Linen"** tokens in `ui/theme/` (Direction A from the official handoff prototype):
 
-- **Color**: `PremiumLightColorScheme` / `PremiumDarkColorScheme` — curated, no Material defaults.
-- **Typography**: Playfair Display (display / headline) + Material 3 body scale.
-- **Shape**: Consistent rounded-corner tokens across components.
+- **Color**: warm-paper light palette (`Linen` background, `ForestGreen` primary) and an "aged linen in shadow" dark palette — curated, no Material defaults.
+- **Typography**: **Newsreader** (editorial serif, display / headline) + **Hanken Grotesk** (humanist sans, titles / body / labels) via the Google Fonts provider.
+- **Shape**: tighter Linen radii (`sm 9` / `md 13` / `lg 18` / `xl 26` / pill) replacing the prior soft 12dp rounding.
 - **Motion**: Spring-physics tokens (`dampingRatio`, `stiffness`) for iOS-style transitions.
 - **Edge-to-edge**: `enableEdgeToEdge()` everywhere; screens use `statusBarsPadding` / `navigationBarsPadding`.
 

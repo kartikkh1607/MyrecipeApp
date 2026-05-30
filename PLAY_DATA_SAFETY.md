@@ -8,7 +8,7 @@ and the source — and is consistent with `docs/privacy-policy.md`.
 > ⚠️ You are responsible for the final declaration. Re-check it whenever you
 > add an SDK or a feature that sends data off the device. Google audits these.
 
-**Last reviewed:** May 25, 2026 · app versionCode 1 / versionName 1.0
+**Last reviewed:** May 30, 2026 · app versionCode 2 / versionName 1.0.1
 
 ---
 
@@ -18,7 +18,7 @@ and the source — and is consistent with `docs/privacy-policy.md`.
 | `play-services-ads` (AdMob) | Google Mobile Ads SDK | **Advertising ID**, ad-interaction + device info |
 | `firebase-analytics` | Analytics | Usage/diagnostic events, app-instance ID |
 | `firebase-crashlytics` | Crashlytics (release builds only) | Crash logs, device model, OS, stack traces |
-| `firebase-auth` | Firebase Auth | Email, User ID (UID) — only if user signs in |
+| `firebase-auth` | Firebase Auth | Email, User ID (UID) — sign-in is mandatory; no guest mode |
 | `firebase-firestore` | Cloud Firestore | Favorites, AI recipes, shopping list, preferences |
 | Spoonacular API | Retrofit call | Search query text (transient) |
 | Gemini API + Groq (fallback) | OkHttp call | AI prompt text (transient) |
@@ -48,15 +48,15 @@ counts as *collected* but **not shared**. AdMob personalized ads **is** sharing.
 ### ✅ Declare these as COLLECTED
 
 **Personal info → Email address**
-- Collected: **Yes** · Shared: **No** · Ephemeral: No · **Optional** (only if the user signs in)
+- Collected: **Yes** · Shared: **No** · Ephemeral: No · **Required** (sign-in is mandatory — guest mode was removed in commit `4718355`)
 - Purposes: **Account management**, **App functionality**
 
 **Personal info → User IDs** (Firebase Auth UID)
-- Collected: **Yes** · Shared: **No** · Ephemeral: No · **Optional** (sign-in only)
+- Collected: **Yes** · Shared: **No** · Ephemeral: No · **Required** (sign-in is mandatory)
 - Purposes: **Account management**, **App functionality**
 
 **App activity → Other user-generated content** (favorites, AI-generated recipes, shopping-list items, dietary/theme preferences synced to Firestore)
-- Collected: **Yes** · Shared: **No** · Ephemeral: No · **Optional** (sign-in only)
+- Collected: **Yes** · Shared: **No** · Ephemeral: No · **Required** (sign-in is mandatory; sync is the default mode)
 - Purposes: **App functionality**
 
 **Device or other IDs → Device or other IDs** (Advertising ID via AdMob; Firebase installation / Analytics app-instance ID)

@@ -1,546 +1,148 @@
-# MyrecipeApp Premium UI/UX Design System
-## Intentional Minimalism for Culinary Excellence
+# MealTime — Design System
+
+**Direction A · "Linen"** · Editorial serif + humanist sans on warm paper, with thin rules and generous whitespace. The whole app was rebuilt to this spec in commit `b911b75` (May 30 2026); this document is the canonical text reference for the tokens.
+
+Tokens live in `app/src/main/java/com/kartik/mealtime/ui/theme/` — `Color.kt`, `Type.kt`, `Theme.kt` (shapes + color schemes). When in doubt, read those files; this doc explains the *intent* behind the values.
 
 ---
 
-## 1. Global Design System (The Foundation)
+## 1. Brand & philosophy
 
-### Brand Identity
-**Philosophy**: Intentional Minimalism - Elegant typography, refined color palette, beautiful and effortless UX
-**Aesthetic**: Earthy, natural, and premium
-
-### Color Palette
-
-#### Light Theme (Linen Palette)
-- **Background**: Linen (`0xFFFAF7F5`) - Warm, inviting off-white
-- **Text Primary**: Graphite (`0xFF2E2E2E`) - Deep, soft charcoal
-- **Text Secondary**: Stone (`0xFF8A8A8A`) - Neutral gray for subtitles
-- **Primary Accent**: ForestGreen (`0xFF2D5A5A`) - Elegant, deep green
-- **Surfaces**: White (`0xFFFFFFFF`) - Clean, pure white
-
-#### Dark Theme (Midnight Palette)
-- **Background**: Midnight (`0xFF1B1D21`) - Sophisticated dark blue-gray
-- **Text Primary**: Cream (`0xFFF0EBE8`) - Soft, warm off-white
-- **Text Secondary**: MutedGray (`0xFF7A7A7A`) - Gentle gray
-- **Primary Accent**: Teal (`0xFF66B5B5`) - Vibrant teal for accents
-- **Surfaces**: DarkSurface (`0xFF24262B`) - Lighter charcoal
-
-### Typography Hierarchy
-- **Display Large**: 32sp, Light weight, -0.5sp letter spacing
-- **Headline Large**: 24sp, Medium weight, clean spacing
-- **Title Large**: 16sp, Normal weight, subtle spacing
-- **Body Large**: 16sp, Normal weight, generous 28sp line height
-- **Label Large**: 14sp, Medium weight, 0.5sp letter spacing
+- **Aesthetic**: warm, editorial, premium. Paper-like backgrounds, forest-green primary, terracotta accent, hair-thin rules.
+- **Principles**: tight radii, restrained elevation, deliberate whitespace, no gradients unless they earn their place (only on the gradient AI hero, the gradient chat avatar, and the shopping-list progress hatch).
+- **Dark mode**: "aged linen in shadow" — same warm tone, just unlit. No cold blue.
 
 ---
 
-## Component Styling Guidelines
+## 2. Color tokens
 
-### 1. Card Component
-```kotlin
-// Premium Card Styling
-Card(
-    colors = CardDefaults.cardColors(
-        containerColor = MaterialTheme.colorScheme.surface
-    ),
-    elevation = CardDefaults.cardElevation(
-        defaultElevation = 2.dp,        // Subtle elevation for elegance
-        pressedElevation = 4.dp
-    ),
-    shape = RoundedCornerShape(12.dp),  // Refined corner radius
-    border = BorderStroke(
-        width = 0.5.dp,                 // Hair-thin border
-        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f)
-    )
-)
-```
+### Light — warm paper
 
-**Design Principles:**
-- Minimal elevation (2dp) for subtle depth
-- 12dp corner radius for modern, soft feel
-- Optional hair-thin border for definition
-- Pure white/DarkSurface backgrounds
+| Token | Hex | Role |
+|---|---|---|
+| `Linen` | `#F4EEE5` | Background — warm paper |
+| `White` | `#FFFFFF` | Surface — clean white |
+| `LinenSurface2` | `#FBF7F0` | Subtle raised / inset surface |
+| `Graphite` | `#23201B` | Text primary — warm near-black |
+| `Stone` | `#7C756A` | Text secondary — warm muted gray |
+| `LinenFaint` | `#A79E91` | Faintest text (placeholders, hints) |
+| `ForestGreen` | `#2D5A4E` | **Primary** — elegant deep green |
+| `OnForest` | `#FBF8F2` | On-primary text (warm white) |
+| `ForestQuiet` | `#E6EEE9` | Primary container / quiet green |
+| `ForestDeep` | `#1F4136` | Deepest green (emphasis, gradients) |
+| `Terracotta` | `#BC6B30` | Accent — warm terracotta |
+| `TerracottaQuiet` | `#F4E7D9` | Accent container |
+| `StarGold` | `#C8861C` | Ratings / stars |
+| `Heart` | `#C0492F` | Saved / favorite / destructive |
+| `LightGray` | `#E8E0D3` | Outline / thin rules |
 
-### 2. Button Components
+### Dark — aged linen in shadow
 
-#### Primary Button (Filled)
-```kotlin
-Button(
-    colors = ButtonDefaults.buttonColors(
-        containerColor = MaterialTheme.colorScheme.primary,
-        contentColor = MaterialTheme.colorScheme.onPrimary
-    ),
-    shape = RoundedCornerShape(8.dp),   // Slightly rounded
-    contentPadding = PaddingValues(
-        horizontal = 24.dp,
-        vertical = 16.dp
-    )
-) {
-    Text(
-        text = "Start Cooking",
-        style = MaterialTheme.typography.labelLarge,
-        letterSpacing = 0.5.sp
-    )
-}
-```
+| Token | Hex | Role |
+|---|---|---|
+| `Midnight` | `#17140D` | Background |
+| `DarkSurface` | `#251F16` | Surface — raised warm charcoal |
+| `DarkSurface2` | `#322A1E` | Subtle raised / inset surface |
+| `Cream` | `#F3EEE4` | Text primary — warm off-white |
+| `MutedGray` | `#A89E8B` | Text secondary — warm gray |
+| `DarkFaint` | `#7C7361` | Faintest text |
+| `Teal` (sage) | `#8FCBAE` | **Primary** — luminous sage |
+| `OnSageDark` | `#0D1A13` | On-primary text |
+| `SageQuietDark` | `8FCBAE @ 16%` | Primary container |
+| `SageDeepDark` | `#B4DEC8` | Deepest sage (emphasis) |
+| `TerracottaDark` | `#E9AE66` | Accent — warm glowing amber |
+| `TerracottaQuietDark` | `E9AE66 @ 18%` | Accent container |
+| `StarGoldDark` | `#E7BB5E` | Ratings / stars |
+| `HeartDark` | `#E78C70` | Saved / favorite |
+| `LineDark` | `F4E9D2 @ 13%` | Outline — warm paper-tinted hairline |
 
-#### Secondary Button (Outlined)
-```kotlin
-OutlinedButton(
-    colors = ButtonDefaults.outlinedButtonColors(
-        contentColor = MaterialTheme.colorScheme.primary
-    ),
-    border = BorderStroke(
-        width = 1.dp,
-        color = MaterialTheme.colorScheme.primary.copy(alpha = 0.5f)
-    ),
-    shape = RoundedCornerShape(8.dp)
-) {
-    Text(
-        text = "Save Recipe",
-        style = MaterialTheme.typography.labelLarge
-    )
-}
-```
+### Semantic
 
-### 3. TextField/Search Bar
-```kotlin
-OutlinedTextField(
-    colors = OutlinedTextFieldDefaults.colors(
-        focusedBorderColor = MaterialTheme.colorScheme.primary,
-        unfocusedBorderColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.3f),
-        focusedContainerColor = MaterialTheme.colorScheme.surface,
-        unfocusedContainerColor = MaterialTheme.colorScheme.surface
-    ),
-    shape = RoundedCornerShape(12.dp),  // Matches card radius
-    textStyle = MaterialTheme.typography.bodyMedium
-)
-```
+| Token | Light | Dark |
+|---|---|---|
+| Success | `#3C7A4E` | `#85C89B` |
+| Error | `#C0492F` | `Heart` (shared) |
 
-### 4. Bottom Navigation Bar
-```kotlin
-NavigationBar(
-    containerColor = MaterialTheme.colorScheme.surface,
-    tonalElevation = 4.dp,              // Slightly elevated
-    windowInsets = WindowInsets(0)
-) {
-    NavigationBarItem(
-        selected = selected,
-        onClick = onClick,
-        icon = { Icon(...) },
-        label = { 
-            Text(
-                text = label,
-                style = MaterialTheme.typography.labelSmall
-            ) 
-        },
-        colors = NavigationBarItemDefaults.colors(
-            selectedIconColor = MaterialTheme.colorScheme.primary,
-            selectedTextColor = MaterialTheme.colorScheme.primary,
-            unselectedIconColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            unselectedTextColor = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f),
-            indicatorColor = MaterialTheme.colorScheme.primary.copy(alpha = 0.1f)
-        )
-    )
-}
-```
+Color schemes are wired in `Theme.kt` as `LinenLightColorScheme` / `LinenDarkColorScheme` — they replace the prior `PremiumLight/Dark` schemes wholesale.
 
 ---
 
-## 2. Screen-by-Screen Design Application
+## 3. Typography
 
-### HomeScreen Design
-**Layout Simplification:**
-```kotlin
-Column(
-    modifier = Modifier
-        .fillMaxSize()
-        .background(MaterialTheme.colorScheme.background)
-        .padding(horizontal = 20.dp)  // Generous side padding
-) {
-    // Integrated Header (no separate section)
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(vertical = 24.dp),
-        horizontalArrangement = Arrangement.SpaceBetween,
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        Text(
-            text = "Good morning, Chef",
-            style = MaterialTheme.typography.displayMedium,
-            color = MaterialTheme.colorScheme.onBackground
-        )
-        // Profile/Settings icon
-    }
-    
-    // Search integrated naturally
-    SearchBar(
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(bottom = 32.dp)
-    )
-    
-    // Featured section with minimal header
-    Text(
-        text = "Featured Today",
-        style = MaterialTheme.typography.headlineMedium,
-        modifier = Modifier.padding(bottom = 16.dp)
-    )
-    
-    // Carousel with refined cards
-    FeaturedCarousel()
-    
-    // Categories with chip-style design
-    CategoryChips()
-}
-```
+Two Google Fonts loaded via `GoogleFont.Provider`:
 
-**Carousel Card Styling:**
-- Background: Pure white with 2dp elevation
-- Corner radius: 16dp for premium feel
-- Image overlay: Subtle gradient (Black 0% to Black 40%)
-- Typography: Light titles, Stone subtitles
-- Spacing: 16dp between cards
+- **Newsreader** — editorial serif. Display + headline only (screen titles, hero copy). Weights: 400 / 500 / 600 / 700. Display tracking is gently negative (≈ −0.01em) per the Linen direction; serif weights use editorial **Medium (500)** rather than Bold for an editorial feel.
+- **Hanken Grotesk** — clean humanist sans. Titles, body, labels, all UI chrome. Weights: 400 / 500 / 600 / 700 / 800.
 
-### RecipeDetailScreen Design
-**Information Hierarchy:**
-```kotlin
-LazyColumn(
-    contentPadding = PaddingValues(bottom = 100.dp)
-) {
-    // Hero image with minimal overlay
-    item {
-        HeroImageSection(
-            recipe = recipe,
-            modifier = Modifier.height(300.dp)
-        )
-    }
-    
-    // Content with breathing room
-    item {
-        Column(
-            modifier = Modifier.padding(
-                horizontal = 20.dp,
-                vertical = 24.dp
-            )
-        ) {
-            // Title with generous spacing
-            Text(
-                text = recipe.name,
-                style = MaterialTheme.typography.displayMedium,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-            
-            // Subtitle in Stone color
-            Text(
-                text = recipe.description,
-                style = MaterialTheme.typography.bodyLarge,
-                color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.7f),
-                modifier = Modifier.padding(bottom = 24.dp)
-            )
-        }
-    }
-    
-    // Ingredients section
-    item {
-        IngredientsSection(
-            ingredients = recipe.ingredients,
-            modifier = Modifier.padding(horizontal = 20.dp)
-        )
-    }
-    
-    // Instructions section
-    item {
-        InstructionsSection(
-            steps = recipe.steps,
-            modifier = Modifier.padding(horizontal = 20.dp)
-        )
-    }
-}
-```
+Mapping to Material 3 type scale lives in `Type.kt`. Rule of thumb:
 
-**Ingredients Section Styling:**
-```kotlin
-@Composable
-fun IngredientsSection(
-    ingredients: List<Ingredient>,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        modifier = modifier.fillMaxWidth(),
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column(
-            modifier = Modifier.padding(20.dp)
-        ) {
-            Text(
-                text = "Ingredients",
-                style = MaterialTheme.typography.headlineSmall,
-                modifier = Modifier.padding(bottom = 16.dp)
-            )
-            
-            ingredients.forEachIndexed { index, ingredient ->
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(vertical = 8.dp),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = ingredient.name,
-                        style = MaterialTheme.typography.bodyMedium,
-                        modifier = Modifier.weight(1f)
-                    )
-                    Text(
-                        text = "${ingredient.amount} ${ingredient.unit}",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-                
-                if (index < ingredients.lastIndex) {
-                    Divider(
-                        color = MaterialTheme.colorScheme.outline.copy(alpha = 0.1f),
-                        thickness = 0.5.dp
-                    )
-                }
-            }
-        }
-    }
-}
-```
-
-### CookingModeScreen Design
-**Ultra-Focused Dark UI:**
-```kotlin
-@Composable
-fun CookingModeScreen() {
-    // Force dark theme for cooking mode
-    MyrecipeAppTheme(darkTheme = true) {
-        Column(
-            modifier = Modifier
-                .fillMaxSize()
-                .background(Midnight)  // Force dark background
-                .padding(20.dp)
-        ) {
-            // Minimal header
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(bottom = 32.dp),
-                horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                IconButton(onClick = onBack) {
-                    Icon(
-                        imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "Back",
-                        tint = Cream
-                    )
-                }
-                
-                Text(
-                    text = "Step ${currentStep + 1} of ${totalSteps}",
-                    style = MaterialTheme.typography.titleMedium,
-                    color = MutedGray
-                )
-            }
-            
-            // Current step card - high contrast
-            Card(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(1f),
-                colors = CardDefaults.cardColors(
-                    containerColor = DarkSurface
-                ),
-                elevation = CardDefaults.cardElevation(defaultElevation = 8.dp),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .padding(24.dp)
-                        .fillMaxSize(),
-                    verticalArrangement = Arrangement.Center
-                ) {
-                    Text(
-                        text = currentStep.instruction,
-                        style = MaterialTheme.typography.headlineMedium,
-                        color = Cream,
-                        lineHeight = 32.sp
-                    )
-                }
-            }
-            
-            // Navigation controls - teal accents
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(top = 24.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                OutlinedButton(
-                    onClick = onPrevious,
-                    enabled = hasPrevious,
-                    colors = ButtonDefaults.outlinedButtonColors(
-                        contentColor = Teal
-                    ),
-                    border = BorderStroke(1.dp, Teal)
-                ) {
-                    Text("Previous")
-                }
-                
-                Button(
-                    onClick = onNext,
-                    colors = ButtonDefaults.buttonColors(
-                        containerColor = Teal,
-                        contentColor = Midnight
-                    )
-                ) {
-                    Text("Next Step")
-                }
-            }
-        }
-    }
-}
-```
-
-### List & Grid Screens Template
-**Consistent Layout for All Recipe Lists:**
-```kotlin
-@Composable
-fun RecipeListScreen(
-    title: String,
-    recipes: List<Recipe>,
-    onRecipeClick: (Recipe) -> Unit
-) {
-    LazyVerticalGrid(
-        columns = GridCells.Fixed(2),
-        contentPadding = PaddingValues(20.dp),
-        horizontalArrangement = Arrangement.spacedBy(16.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        item(span = { GridItemSpan(2) }) {
-            Text(
-                text = title,
-                style = MaterialTheme.typography.displayMedium,
-                modifier = Modifier.padding(bottom = 8.dp)
-            )
-        }
-        
-        items(recipes) { recipe ->
-            RecipeGridCard(
-                recipe = recipe,
-                onClick = { onRecipeClick(recipe) }
-            )
-        }
-    }
-}
-
-@Composable
-fun RecipeGridCard(
-    recipe: Recipe,
-    onClick: () -> Unit,
-    modifier: Modifier = Modifier
-) {
-    Card(
-        onClick = onClick,
-        modifier = modifier
-            .fillMaxWidth()
-            .aspectRatio(0.8f),  // Portrait ratio
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(12.dp)
-    ) {
-        Column {
-            // Image section (60% of card)
-            AsyncImage(
-                model = recipe.imageUrl,
-                contentDescription = recipe.name,
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .weight(0.6f)
-                    .clip(RoundedCornerShape(topStart = 12.dp, topEnd = 12.dp)),
-                contentScale = ContentScale.Crop
-            )
-            
-            // Content section (40% of card)
-            Column(
-                modifier = Modifier
-                    .weight(0.4f)
-                    .padding(12.dp)
-            ) {
-                Text(
-                    text = recipe.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    maxLines = 2,
-                    overflow = TextOverflow.Ellipsis,
-                    modifier = Modifier.weight(1f)
-                )
-                
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = "${recipe.totalTime} min",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                    )
-                    
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = null,
-                            modifier = Modifier.size(14.dp),
-                            tint = MaterialTheme.colorScheme.primary
-                        )
-                        Text(
-                            text = recipe.rating.toString(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.6f)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-```
+| Slot | Family | Why |
+|---|---|---|
+| `displayLarge` / `displayMedium` / `displaySmall` | Newsreader | Hero headings |
+| `headlineLarge` / `headlineMedium` / `headlineSmall` | Newsreader | Screen titles, section headers |
+| `titleLarge` / `titleMedium` / `titleSmall` | Hanken Grotesk | Card titles, component labels |
+| `bodyLarge` / `bodyMedium` / `bodySmall` | Hanken Grotesk | Body copy |
+| `labelLarge` / `labelMedium` / `labelSmall` | Hanken Grotesk | Buttons, chips, captions |
 
 ---
 
-## Design Principles Summary
+## 4. Shape
 
-### Spacing System
-- **Macro spacing**: 20dp, 24dp, 32dp for major sections
-- **Micro spacing**: 8dp, 12dp, 16dp for component internal spacing
-- **Typography spacing**: Generous line heights (28sp for body text)
+A tighter Linen radius scale (in `Theme.kt`) replaces Material's default soft 12dp rounding:
 
-### Elevation System
-- **Cards**: 1-2dp for subtle depth
-- **Navigation**: 4dp for definition
-- **Modals/Cooking mode**: 8dp for prominence
-- **Floating elements**: 12dp+ for clear hierarchy
+| Token | Radius | Used on |
+|---|---|---|
+| `sm` | 9 dp | Chips, small pills, inset icon tiles |
+| `md` | 13 dp | Cards, surfaces, text fields |
+| `lg` | 18 dp | Hero cards, larger surfaces |
+| `xl` | 26 dp | Sheets, full-screen modals |
+| `pill` | 999 dp | Search pills, segmented controls, FAB-style buttons |
 
-### Interactive States
-- **Hover**: Subtle scale (0.98x) or elevation increase
-- **Press**: Scale down to 0.95x with haptic feedback
-- **Focus**: Primary color outline with 2dp width
-- **Disabled**: 0.38 opacity with no interaction
+Borders are **0.5–1.0 dp** hairlines at ≈ 13–20% outline alpha. Cards default to **bordered Surface** rather than elevated Card — elevation is reserved for the sticky cooking bar, snackbars, and the gradient AI hero.
 
-### Accessibility
-- **Contrast**: All text meets WCAG AA standards
-- **Touch targets**: Minimum 48dp for all interactive elements
-- **Focus indicators**: Clear visual focus states
-- **Content descriptions**: Comprehensive for all UI elements
+---
 
-This design system ensures a consistent, premium, and accessible experience across all screens while maintaining the intentional minimalism philosophy.
+## 5. Motion
+
+Spring-physics tokens (defined where they are used — there is no central `Motion.kt`):
+
+- `dampingRatioMediumBouncy` for screen-level transitions
+- `dampingRatioLowBouncy` for press / scale feedback
+- `stiffnessMedium` / `stiffnessHigh` paired accordingly
+
+Cooking-mode progress segments animate width per step; the recipe-of-the-week hero uses an auto-scroll pager with spring-snap. Featured image fades use a 250ms cubic ease.
+
+---
+
+## 6. Layout & spacing
+
+- **Macro spacing** between sections: 20 / 24 / 32 dp
+- **Micro spacing** inside components: 8 / 12 / 16 dp
+- **Edge-to-edge** everywhere via `enableEdgeToEdge()`; screens consume `statusBarsPadding` / `navigationBarsPadding` themselves
+- **Hairline dividers** at 0.5–1.0 dp with ≈10–15% outline alpha — never solid lines
+
+---
+
+## 7. Per-screen highlights
+
+Each screen was rebuilt against the official "MealTime Redesign" prototype in `_design_handoff/`. Notable per-screen calls:
+
+- **Splash** — forest-green background + diagonal hatch + white badge + serif wordmark
+- **Auth** — photo hero with overlapping Linen card; Google button stacked above email/password
+- **Home** — paper header, search pill, "Recipe of the week" editorial hero, carousel, quick actions, browse-by-mood chips, today's pick, recently viewed
+- **Recipe Detail** — lean hero with paper title block below, 4-cell meta strip, nutrition grid, segmented tabs, ingredient check-off rows, method step rows, sticky bag + start-cooking bar
+- **Cooking Mode** — equal-width per-step progress segments
+- **Shopping List** — primary-green progress card with diagonal hatch + ring
+- **Meal Planner** / **AI Creations** — gradient AI banner ("Auto-plan your week" / hero + Generate/Remix/Plan tool buttons row)
+- **Chat** — header "AI Chef" + green-dot "Always ready"; gradient avatar
+- **Settings** — muted uppercase section labels, bordered Linen group cards, 34dp radius-sm icon tiles, hairline row dividers; Theme picker as three cards
+- **Profile** — muted section labels matching Settings, identity row at 22sp serif, bordered Surface group cards
+
+---
+
+## 8. Accessibility
+
+- All text/background pairs target WCAG AA. Dark-mode StatTile / AboutRecipeRow specifically flipped to `primary / onPrimary` because `primary-on-primaryContainer` measured 1.4:1.
+- Touch targets ≥ 48 dp everywhere interactive.
+- Every interactive image / icon button supplies a `contentDescription`.
+- Speech recognition (cooking mode) requires the OS mic permission and is announced via accessible status text.

@@ -1,69 +1,68 @@
-# Spoonacular API Setup Guide
+# API Setup Guide
 
-## Current Status
-🟡 **API is currently DISABLED** - The app is using sample data to avoid API quota issues.
+> **This document is now historical.** As of the Play Billing / Worker refactor (commit `99c42a4`), the app does **not** hold any third-party API keys. All Spoonacular, Gemini, and Groq traffic is proxied through a **Cloudflare Worker** that holds the keys server-side.
+>
+> If you are setting the project up for the first time, follow **[`server/cloudflare-worker/README.md`](./server/cloudflare-worker/README.md)** — it is the only place that needs API keys, and the setup is `wrangler login` → three `wrangler secret put` calls → `wrangler deploy`.
 
-## Why is the API disabled?
-The HTTP 401 error you encountered indicates one of these issues:
-- API key has exceeded its free quota (150 requests/day)
-- API key is invalid or expired
-- Network connectivity issues
+---
 
-## How to Enable Spoonacular API
+## What the app needs in `local.properties`
 
-### Step 1: Get a Valid API Key
-1. Visit [Spoonacular API](https://spoonacular.com/food-api)
-2. Sign up for a free account
-3. Get your API key from the dashboard
+Only the Worker URL (and AdMob IDs for signed release builds). API keys are not part of this file.
 
-### Step 2: Update API Key
-1. Open `local.properties` file
-2. Update the line: `spoonacular.api.key="YOUR_NEW_API_KEY"`
-3. Make sure to keep the quotes
+```properties
+# Cloudflare Worker proxy URL (override for dev / staging)
+proxy.base.url=https://mealtime-proxy.<your-subdomain>.workers.dev
 
-### Step 3: Enable API in Code
-1. Open `app/src/main/java/com/example/myrecipeapp/MainViewModel.kt`
-2. Find the `isSpoonacularApiConfigured()` function
-3. Change `return false` to `return true`
-
-```kotlin
-private fun isSpoonacularApiConfigured(): Boolean {
-    // Set to true when you have a valid Spoonacular API key and sufficient quota
-    return true // Change this to true
-}
+# AdMob (release only — debug uses Google's baked-in test IDs)
+admob.app.id=ca-app-pub-XXXX~XXXX
+admob.banner.id=ca-app-pub-XXXX/XXXX
+admob.interstitial.id=ca-app-pub-XXXX/XXXX
 ```
 
-### Step 4: Test the API
-1. Build and run the app
-2. Click on Indian or Italian cuisine
-3. You should see recipes loading from the API
+`local.properties` is gitignored. If `admob.*` values are blank, `AdConfig.adsEnabled` returns `false` for release builds so test IDs can never ship as production.
 
-## API Quota Management
-- **Free Plan**: 150 requests/day
-- **Paid Plans**: Higher limits available
-- Monitor your usage in the Spoonacular dashboard
+---
 
-## Fallback Strategy
-Even with API enabled, the app will automatically fallback to sample data if:
-- API requests fail
-- Network is unavailable
-- API quota is exceeded
+## What the Worker forwards
 
-## Current Sample Data
-With API disabled, the app shows:
-- 4 Indian recipes (Butter Chicken, Palak Paneer, Biryani, etc.)
-- 4 Italian recipes (Margherita Pizza, Chicken Parmesan, Carbonara, Risotto)
-- Other cuisine sample recipes
+| Route | Forwards to | Notes |
+|---|---|---|
+| `GET  /spoonacular/<path>` | `api.spoonacular.com/<path>` | Worker appends `apiKey` |
+| `POST /gemini` | Gemini `:generateContent` | JSON-mode (structured AI features) requires the `premium` custom claim |
+| `POST /groq` | Groq `chat/completions` | Free chat / recommendations fallback; structured calls (`generateRecipe`, `transformRecipe`, `generateMealPlan`) never fall back to Groq on a 402 to prevent paywall bypass |
+| `POST /billing/verify` | Play Developer API | Validates a purchase and mints the `premium` custom claim |
+| `POST /billing/rtdn` | (Pub/Sub push) | Real-time Developer Notifications keep the claim current on renewal / cancellation |
 
-This ensures users always see relevant recipes even without API access.
+The Cloudflare free plan (no credit card, 100k requests/day) is enough for development and small-scale launches.
+
+---
+
+## Auth requirement
+
+Every Worker call carries a Firebase ID token attached by `FirebaseAuthInterceptor`. The Worker rejects un-authenticated traffic with `401`. This is why the app dropped guest mode (commit `4718355`) — there is no graceful fallback for an un-signed-in user.
+
+---
+
+## Offline fallback
+
+Even when the Worker is unreachable, the app does not crash:
+
+1. Repositories first try the Worker route.
+2. On failure, they read from the local **Room** cache (`cached_recipes`, `favorites`, `shopping_items`).
+3. If the cache is empty, they read from `SampleDataSource` — a small bundled set of recipes that ships with the APK.
+
+Search and AI features degrade to an error state (with a friendly retry button); browse / favorites / shopping list remain fully usable.
+
+---
 
 ## Troubleshooting
-1. **401 Error**: Check API key validity and quota
-2. **Network Error**: Check internet connection
-3. **Empty Results**: API might not have recipes for that cuisine
-4. **App Crash**: Check logs for detailed error messages
 
-## Need Help?
-- Check Spoonacular API documentation
-- Monitor API usage in your dashboard
-- Consider upgrading to a paid plan for higher limits
+| Symptom | Likely cause | Fix |
+|---|---|---|
+| `401` on every Worker call | Firebase ID token missing — user not signed in, or token expired before refresh | Sign in again; check `FirebaseAuthInterceptor` is registered |
+| `402 premium_required` from `/gemini` | Free user hit JSON-mode (structured AI) feature | Expected — the UI surfaces this as the upsell sheet |
+| `429` from `/gemini` or `/groq` | Worker rate limit (per-IP / per-user) | Wait or upgrade the user to premium |
+| Recipe browse shows only the same handful of items | Worker URL wrong / unreachable; falling back to `SampleDataSource` | Verify `proxy.base.url` in `local.properties`, then redeploy with `wrangler deploy` |
+
+For Worker-side logs, run `wrangler tail` while reproducing the issue.
