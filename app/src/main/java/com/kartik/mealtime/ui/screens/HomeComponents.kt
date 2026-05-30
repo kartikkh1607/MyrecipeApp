@@ -77,6 +77,8 @@ import com.kartik.mealtime.domain.model.RecipeCategory
 import com.kartik.mealtime.ui.theme.StarGold
 import com.kartik.mealtime.ui.viewmodel.FavoritesViewModel
 import java.util.Locale
+import androidx.compose.ui.text.intl.Locale as ComposeLocale
+import androidx.compose.ui.text.toUpperCase
 
 // ── Section header — serif title + optional "action ›" (the Linen pattern) ────
 @Composable
@@ -525,7 +527,7 @@ private fun GlassMetaPill(text: String) {
         border = BorderStroke(1.dp, Color.White.copy(alpha = 0.18f))
     ) {
         Text(
-            text = text.uppercase(Locale.getDefault()),
+            text = text.toUpperCase(ComposeLocale.current),
             style = MaterialTheme.typography.labelSmall,
             fontWeight = FontWeight.SemiBold,
             color = Color.White,

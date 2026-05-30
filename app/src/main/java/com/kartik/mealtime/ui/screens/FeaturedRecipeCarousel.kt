@@ -63,6 +63,8 @@ import com.kartik.mealtime.ui.theme.StarGold
 import com.kartik.mealtime.ui.viewmodel.FavoritesViewModel
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
 import java.util.Locale
+import androidx.compose.ui.text.intl.Locale as ComposeLocale
+import androidx.compose.ui.text.toUpperCase
 
 // ── Featured today — horizontal rail of editorial cards (Linen prototype) ─────
 // A plain snapping rail (no dot indicators): 256-wide cards, diet pills top-left,
@@ -233,7 +235,7 @@ fun FeaturedRecipeCard(
             ) {
                 if (recipe.cuisine.isNotBlank()) {
                     Text(
-                        text = recipe.cuisine.uppercase(Locale.getDefault()),
+                        text = recipe.cuisine.toUpperCase(ComposeLocale.current),
                         style = MaterialTheme.typography.labelSmall,
                         fontWeight = FontWeight.Bold,
                         color = Color.White.copy(alpha = 0.82f),
