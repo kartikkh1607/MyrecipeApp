@@ -84,7 +84,7 @@ Deploy prints the function URLs, e.g.
 1. **Remove the keys from the client**: delete the `buildConfigField` lines for
    `SPOONACULAR_API_KEY`, `GEMINI_API_KEY`, `GROQ_API_KEY` in `app/build.gradle.kts`
    and the matching entries in `local.properties`.
-2. **Spoonacular** (`data/remote/NetworkModule.kt`): change `BASE_URL` to the
+2. **Spoonacular** (`di/NetworkModule.kt`): change `BASE_URL` to the
    `spoonacular` function URL and **delete `ApiKeyInterceptor`** (the server adds the key).
 3. **Auth header**: add an interceptor that attaches the current user's Firebase ID
    token — `FirebaseAuth.getInstance().currentUser?.getIdToken(false)` — as

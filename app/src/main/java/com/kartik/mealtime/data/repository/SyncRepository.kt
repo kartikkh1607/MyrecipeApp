@@ -4,11 +4,26 @@ import com.kartik.mealtime.data.local.FavoriteDao
 import com.kartik.mealtime.data.local.FavoriteEntity
 import com.kartik.mealtime.data.local.ShoppingDao
 import com.kartik.mealtime.data.local.ShoppingItemEntity
+import com.google.firebase.crashlytics.FirebaseCrashlytics
 import com.google.firebase.firestore.CollectionReference
 import com.google.firebase.firestore.FirebaseFirestore
 import kotlinx.coroutines.tasks.await
 import javax.inject.Inject
 import javax.inject.Singleton
+
+/**
+ * Best-effort wrapper for background Firestore sync operations. We want sync failures
+ * to STAY non-fatal (a bad network shouldn't crash the app), but invisible failures
+ * means a quietly broken sync looks identical to a healthy one. Recording as a
+ * Crashlytics non-fatal gets us visibility without changing user-facing behavior.
+ */
+internal suspend inline fun syncBestEffort(tag: String, crossinline block: suspend () -> Unit) {
+    runCatching { block() }.onFailure { e ->
+        FirebaseCrashlytics.getInstance().recordException(
+            RuntimeException("Sync failed: $tag", e)
+        )
+    }
+}
 
 @Singleton
 class SyncRepository @Inject constructor(

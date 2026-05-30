@@ -2,9 +2,9 @@ package com.kartik.mealtime.ui.viewmodel
 
 import android.app.Application
 import com.kartik.mealtime.data.analytics.AnalyticsHelper
+import com.kartik.mealtime.data.local.ThemePreferences
 import com.kartik.mealtime.data.preferences.RecentRecipesRepository
 import com.kartik.mealtime.data.preferences.UserPreferencesRepository
-import com.kartik.mealtime.domain.model.DietaryFilter
 import com.kartik.mealtime.domain.model.FeaturedRecipe
 import com.kartik.mealtime.domain.model.FeaturedType
 import com.kartik.mealtime.domain.model.Recipe
@@ -12,10 +12,8 @@ import com.kartik.mealtime.domain.model.RecipeCategory
 import com.kartik.mealtime.domain.model.SearchResult
 import com.kartik.mealtime.domain.repository.RecipeRepository
 import com.kartik.mealtime.domain.usecase.FindRecipeVideoUseCase
-import com.kartik.mealtime.domain.usecase.GetCategoriesUseCase
 import com.kartik.mealtime.domain.usecase.GetFeaturedRecipesUseCase
 import com.kartik.mealtime.domain.usecase.GetRecipeDetailsUseCase
-import com.kartik.mealtime.domain.usecase.GetRecipesByCategoryUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
@@ -36,13 +34,13 @@ import org.robolectric.RuntimeEnvironment
 import org.robolectric.annotation.Config
 
 /**
- * Unit tests for [MainViewModel] — the app's largest ViewModel.
+ * Unit tests for [MainViewModel] — covers featured-recipes + recipe-detail state
+ * (theme/premium flows + cross-screen swipe list). Category state has its own
+ * VM and test class — see [CategoryViewModelTest].
  *
- * The four recipe use cases are *real* (they only wrap repository calls in
+ * The recipe use cases are *real* (they only wrap repository calls in
  * `runCatching`); a single [FakeRecipeRepository] drives every code path, which
- * keeps assertions about call-counts / caching honest without Mockito suspend
- * stubbing. The concrete analytics + preferences collaborators are mocked since
- * the VM only fires-and-forgets at them.
+ * keeps assertions about call-counts honest without Mockito suspend stubbing.
  *
  * Robolectric is required: the VM builds a DataStore-backed `themeMode` flow off
  * the injected [android.content.Context] in its field initializer. `sdk = 34`
@@ -60,19 +58,13 @@ class MainViewModelTest {
 
     private class FakeRecipeRepository : RecipeRepository {
         var featured: List<FeaturedRecipe> = emptyList()
-        var categories: List<RecipeCategory> = emptyList()
         var detailsResult: Recipe? = null
-        var categoryRecipesResult: List<Recipe> = emptyList()
         var videoId: String? = null
 
         var failFeatured = false
-        var failCategories = false
         var failDetails = false
-        var failCategoryRecipes = false
 
         var detailsCallCount = 0
-        var byCategoryCallCount = 0
-        val byCategoryArgs = mutableListOf<Triple<String, Int, Boolean>>()
 
         override suspend fun getFeaturedRecipes(forceRefresh: Boolean): List<FeaturedRecipe> {
             if (failFeatured) throw RuntimeException("featured failed")
@@ -88,19 +80,11 @@ class MainViewModelTest {
             return detailsResult
         }
 
-        override suspend fun getCategories(): List<RecipeCategory> {
-            if (failCategories) throw RuntimeException("categories failed")
-            return categories
-        }
+        override suspend fun getCategories(): List<RecipeCategory> = emptyList()
 
         override suspend fun getRecipesByCategory(
             categoryId: String, limit: Int, offset: Int, append: Boolean
-        ): List<Recipe> {
-            byCategoryCallCount++
-            byCategoryArgs += Triple(categoryId, offset, append)
-            if (failCategoryRecipes) throw RuntimeException("category recipes failed")
-            return categoryRecipesResult
-        }
+        ): List<Recipe> = emptyList()
 
         override suspend fun findRecipeVideoId(recipeName: String): String? = videoId
     }
@@ -112,11 +96,6 @@ class MainViewModelTest {
 
     private fun featured(id: String) =
         FeaturedRecipe(recipe = recipe(id), type = FeaturedType.RECIPE_OF_THE_DAY)
-
-    private fun category(id: String) =
-        RecipeCategory(id = id, name = "Cat $id", description = "", imageUrl = "")
-
-    private fun recipes(idRange: IntRange) = idRange.map { recipe("r$it") }
 
     @Before
     fun setUp() {
@@ -132,9 +111,7 @@ class MainViewModelTest {
         MainViewModel(
             getFeaturedRecipes = GetFeaturedRecipesUseCase(repo),
             getRecipeDetails = GetRecipeDetailsUseCase(repo),
-            getCategories = GetCategoriesUseCase(repo),
-            getByCategoryUseCase = GetRecipesByCategoryUseCase(repo),
-            appContext = RuntimeEnvironment.getApplication(),
+            themePreferences = ThemePreferences(RuntimeEnvironment.getApplication()),
             analytics = mock(AnalyticsHelper::class.java),
             userPrefsRepo = mock(UserPreferencesRepository::class.java),
             recentRecipesRepo = mock(RecentRecipesRepository::class.java),
@@ -144,17 +121,14 @@ class MainViewModelTest {
     // ── init ───────────────────────────────────────────────────────────────────
 
     @Test
-    fun `init loads featured recipes and categories into state`() {
+    fun `init loads featured recipes into state`() {
         val repo = FakeRecipeRepository().apply {
             featured = listOf(featured("1"), featured("2"))
-            categories = listOf(category("c1"))
         }
         val vm = buildVm(repo)
 
         assertFalse(vm.homeRecipeState.value.loading)
         assertEquals(2, vm.homeRecipeState.value.featuredRecipes.size)
-        assertFalse(vm.recipeCategoriesState.value.loading)
-        assertEquals(listOf("c1"), vm.recipeCategoriesState.value.categories.map { it.id })
     }
 
     @Test
@@ -207,95 +181,12 @@ class MainViewModelTest {
         assertEquals(1, repo.detailsCallCount)
     }
 
-    // ── getRecipesByCategory + caching ───────────────────────────────────────────
-
     @Test
-    fun `getRecipesByCategory loads a full page and flags hasMore`() {
-        val repo = FakeRecipeRepository().apply { categoryRecipesResult = recipes(0..19) }
-        val vm = buildVm(repo)
-
-        vm.getRecipesByCategory("cat1")
-
-        val state = vm.categoryRecipesState.value
-        assertFalse(state.loading)
-        assertEquals(20, state.recipes.size)
-        assertEquals(20, state.totalLoaded)
-        assertTrue(state.hasMore)
-    }
-
-    @Test
-    fun `getRecipesByCategory serves a second call from cache`() {
-        val repo = FakeRecipeRepository().apply { categoryRecipesResult = recipes(0..4) }
-        val vm = buildVm(repo)
-
-        vm.getRecipesByCategory("cat1")
-        vm.getRecipesByCategory("cat1")
-
-        assertEquals(1, repo.byCategoryCallCount)
-        assertEquals(5, vm.categoryRecipesState.value.recipes.size)
-    }
-
-    @Test
-    fun `refreshCategoryRecipes evicts the cache and re-fetches`() {
-        val repo = FakeRecipeRepository().apply { categoryRecipesResult = recipes(0..4) }
-        val vm = buildVm(repo)
-
-        vm.getRecipesByCategory("cat1")
-        vm.refreshCategoryRecipes("cat1")
-
-        assertEquals(2, repo.byCategoryCallCount)
-    }
-
-    @Test
-    fun `getRecipesByCategory shows a friendly error message on failure`() {
-        val repo = FakeRecipeRepository().apply { failCategoryRecipes = true }
-        val vm = buildVm(repo)
-
-        vm.getRecipesByCategory("cat1")
-
-        val state = vm.categoryRecipesState.value
-        assertFalse(state.loading)
-        assertTrue(state.recipes.isEmpty())
-        assertEquals("API temporarily unavailable. Please try again later.", state.error)
-    }
-
-    @Test
-    fun `loadMoreCategoryRecipes appends the next page with the right offset`() {
-        val repo = FakeRecipeRepository().apply { categoryRecipesResult = recipes(0..19) }
-        val vm = buildVm(repo)
-        vm.getRecipesByCategory("cat1")          // 20 loaded, hasMore = true
-
-        repo.categoryRecipesResult = recipes(20..24)  // next page = 5
-        vm.loadMoreCategoryRecipes("cat1")
-
-        val state = vm.categoryRecipesState.value
-        assertEquals(25, state.recipes.size)
-        assertEquals(25, state.totalLoaded)
-        assertFalse(state.hasMore)               // 5 < 20 → no more pages
-        assertFalse(state.isLoadingMore)
-        assertEquals(Triple("cat1", 20, true), repo.byCategoryArgs.last())
-    }
-
-    // ── small state holders ───────────────────────────────────────────────────────
-
-    @Test
-    fun `category filter defaults to ALL and persists per category`() {
+    fun `setRecipeSwipeList updates the cross-screen swipe state`() {
         val vm = buildVm()
 
-        assertEquals(DietaryFilter.ALL, vm.getCategoryFilter("cat1"))
-        vm.setCategoryFilter("cat1", DietaryFilter.VEGAN)
-        assertEquals(DietaryFilter.VEGAN, vm.getCategoryFilter("cat1"))
-        assertEquals(DietaryFilter.ALL, vm.getCategoryFilter("cat2"))
-    }
-
-    @Test
-    fun `selectCategory and setRecipeSwipeList update their state`() {
-        val vm = buildVm()
-
-        vm.selectCategory("cat9")
         vm.setRecipeSwipeList(listOf("a", "b", "c"))
 
-        assertEquals("cat9", vm.selectedCategoryId.value)
         assertEquals(listOf("a", "b", "c"), vm.recipeSwipeIds.value)
     }
 

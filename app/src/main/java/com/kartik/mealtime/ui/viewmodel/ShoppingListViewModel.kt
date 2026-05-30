@@ -10,6 +10,7 @@ import com.kartik.mealtime.data.local.ShoppingItemEntity
 import com.kartik.mealtime.data.local.toShoppingListItem
 import com.kartik.mealtime.data.repository.SyncRepository
 import com.kartik.mealtime.data.repository.UserRepository
+import com.kartik.mealtime.data.repository.syncBestEffort
 import com.kartik.mealtime.domain.model.Recipe
 import com.kartik.mealtime.domain.model.ShoppingListItem
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -68,7 +69,7 @@ class ShoppingListViewModel @Inject constructor(
                     recipeName = recipe.name
                 )
                 shoppingDao.insert(entity)
-                uid?.let { runCatching { syncRepository.uploadShoppingItem(it, entity) } }
+                uid?.let { syncBestEffort("uploadShoppingItem") { syncRepository.uploadShoppingItem(it, entity) } }
             }
         }
     }
@@ -88,7 +89,7 @@ class ShoppingListViewModel @Inject constructor(
         viewModelScope.launch {
             shoppingDao.deleteByKey(key)
             userRepository.currentUser?.uid?.let { uid ->
-                runCatching { syncRepository.deleteShoppingItem(uid, key) }
+                syncBestEffort("deleteShoppingItem") { syncRepository.deleteShoppingItem(uid, key) }
             }
         }
     }
@@ -113,7 +114,7 @@ class ShoppingListViewModel @Inject constructor(
         viewModelScope.launch {
             shoppingDao.deleteAll()
             userRepository.currentUser?.uid?.let { uid ->
-                runCatching { syncRepository.clearShoppingList(uid) }
+                syncBestEffort("clearShoppingList") { syncRepository.clearShoppingList(uid) }
             }
         }
     }

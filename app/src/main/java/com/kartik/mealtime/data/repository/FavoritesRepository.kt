@@ -38,20 +38,20 @@ class FavoritesRepository @Inject constructor(
         val uid = userRepository.currentUser?.uid
         if (isCurrentlyFavorite) {
             favoriteDao.delete(recipe.id)
-            uid?.let { runCatching { syncRepository.deleteFavorite(it, recipe.id) } }
+            uid?.let { syncBestEffort("deleteFavorite") { syncRepository.deleteFavorite(it, recipe.id) } }
         } else {
             val entity = recipe.toFavoriteEntity()
             favoriteDao.insert(entity)
             cachedRecipeDao.upsert(recipe.toCachedEntity())
             analytics.logRecipeFavorited(recipe.id, recipe.name)
-            uid?.let { runCatching { syncRepository.uploadFavorite(it, entity) } }
+            uid?.let { syncBestEffort("uploadFavorite") { syncRepository.uploadFavorite(it, entity) } }
         }
     }
 
     suspend fun removeFavorite(recipeId: String) {
         favoriteDao.delete(recipeId)
         userRepository.currentUser?.uid?.let { uid ->
-            runCatching { syncRepository.deleteFavorite(uid, recipeId) }
+            syncBestEffort("deleteFavoriteById") { syncRepository.deleteFavorite(uid, recipeId) }
         }
     }
 

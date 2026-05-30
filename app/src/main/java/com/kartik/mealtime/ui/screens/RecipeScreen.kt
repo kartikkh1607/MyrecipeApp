@@ -68,14 +68,14 @@ import com.kartik.mealtime.domain.model.RecipeCategory
 import com.kartik.mealtime.ui.components.GridSkeletonScreen
 import com.kartik.mealtime.ui.navigation.Categories
 import com.kartik.mealtime.ui.navigation.LocalTabReselectEvents
-import com.kartik.mealtime.ui.viewmodel.MainViewModel
+import com.kartik.mealtime.ui.viewmodel.CategoryViewModel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.filter
 
 @Composable
 fun RecipeScreen(
     modifier: Modifier = Modifier,
-    viewstate: MainViewModel.RecipeCategoryState,
+    viewstate: CategoryViewModel.RecipeCategoryState,
     navigateToDetail: (RecipeCategory) -> Unit,
     onRetry: () -> Unit = {}
 ) {

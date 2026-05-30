@@ -39,6 +39,7 @@ import com.kartik.mealtime.ui.navigation.Profile
 import com.kartik.mealtime.ui.navigation.RecipeDetail
 import com.kartik.mealtime.ui.navigation.Search
 import com.kartik.mealtime.ui.navigation.ShoppingList
+import com.kartik.mealtime.ui.viewmodel.CategoryViewModel
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
 import com.kartik.mealtime.ui.viewmodel.UserViewModel
 import kotlinx.coroutines.flow.filter
@@ -48,10 +49,11 @@ import kotlinx.coroutines.flow.filter
 fun HomeScreen(
     navController: NavHostController,
     viewModel: MainViewModel,
+    categoryViewModel: CategoryViewModel,
     userViewModel: UserViewModel = hiltViewModel()
 ) {
     val hapticFeedback = LocalHapticFeedback.current
-    val categoriesState by viewModel.recipeCategoriesState
+    val categoriesState by categoryViewModel.recipeCategoriesState
     val homeRecipeState by viewModel.homeRecipeState
     val userPrefs by userViewModel.preferences.collectAsStateWithLifecycle()
     val recentRecipes by userViewModel.recentRecipes.collectAsStateWithLifecycle()
@@ -91,7 +93,7 @@ fun HomeScreen(
             manualRefresh = true
             hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
             viewModel.refreshFeaturedRecipes()
-            viewModel.refreshRecipeCategories()
+            categoryViewModel.refreshRecipeCategories()
         },
         modifier = Modifier.fillMaxSize()
     ) {

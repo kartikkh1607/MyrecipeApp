@@ -1,8 +1,6 @@
 package com.kartik.mealtime.data.local
 
-import android.content.Context
 import androidx.room.Database
-import androidx.room.Room
 import androidx.room.RoomDatabase
 import androidx.room.TypeConverters
 import androidx.room.migration.Migration
@@ -43,8 +41,6 @@ abstract class AppDatabase : RoomDatabase() {
     abstract fun aiRecipeDao(): AiRecipeDao
 
     companion object {
-        @Volatile private var INSTANCE: AppDatabase? = null
-
         /**
          * Adds the `cached_recipes` table that was introduced in version 2.
          * The columns match [CachedRecipeEntity] exactly.
@@ -100,16 +96,6 @@ abstract class AppDatabase : RoomDatabase() {
             }
         }
 
-        fun getInstance(context: Context): AppDatabase =
-            INSTANCE ?: synchronized(this) {
-                INSTANCE ?: Room.databaseBuilder(
-                    context.applicationContext,
-                    AppDatabase::class.java,
-                    "myrecipe_db"
-                )
-                    .addMigrations(MIGRATION_1_2, MIGRATION_2_3, MIGRATION_3_4)
-                    .build()
-                    .also { INSTANCE = it }
-            }
+        const val DB_NAME = "myrecipe_db"
     }
 }

@@ -6,13 +6,20 @@ import com.kartik.mealtime.domain.model.Recipe
 import com.google.gson.Gson
 import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.suspendCancellableCoroutine
 import kotlinx.coroutines.withContext
+import okhttp3.Call
+import okhttp3.Callback
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
 import okhttp3.RequestBody.Companion.toRequestBody
+import okhttp3.Response
+import java.io.IOException
 import javax.inject.Inject
 import javax.inject.Named
+import kotlin.coroutines.resume
+import kotlin.coroutines.resumeWithException
 
 /**
  * Gemini AI API client for recipe chat and recommendations.
@@ -112,7 +119,7 @@ class GeminiAiService @Inject constructor(
                 .addHeader("Content-Type", "application/json")
                 .build()
 
-            val response = client.newCall(request).execute()
+            val response = client.await(request)
             val responseBody = response.body?.string() ?: return@withContext Result.failure(
                 Exception("Empty response from Gemini API")
             )
@@ -177,7 +184,7 @@ class GeminiAiService @Inject constructor(
                 .addHeader("Content-Type", "application/json")
                 .build()
 
-            val response = client.newCall(request).execute()
+            val response = client.await(request)
             val responseBody = response.body?.string() ?: return@withContext Result.failure(
                 Exception("Empty response")
             )
@@ -247,7 +254,7 @@ class GeminiAiService @Inject constructor(
      * Posts [prompt] with JSON response mode and returns the raw model text.
      * Shared by the structured-output features (recipe generation, transform, etc.).
      */
-    private fun postForJson(
+    private suspend fun postForJson(
         prompt: String,
         temperature: Float,
         maxTokens: Int
@@ -272,7 +279,7 @@ class GeminiAiService @Inject constructor(
                 .addHeader("Content-Type", "application/json")
                 .build()
 
-            val response = client.newCall(request).execute()
+            val response = client.await(request)
             val responseBody = response.body?.string()
                 ?: return Result.failure(Exception("Empty response from Gemini API"))
 
@@ -342,3 +349,23 @@ data class GeminiErrorBody(val code: Int?, val message: String?, val status: Str
 // Our Worker's typed error shape (e.g. {"error":"user_quota_exceeded","limit":25,"tier":"free"}).
 // Distinguished from Gemini errors by `error` being a string, not an object.
 data class ProxyErrorEnvelope(val error: String?, val limit: Int?, val used: Int?, val tier: String?)
+
+/**
+ * Suspending OkHttp call that propagates coroutine cancellation to the underlying
+ * request. Cancelling the calling coroutine triggers [Call.cancel], so a user who
+ * navigates away from a long Gemini generation stops paying for it immediately
+ * instead of letting the request run to completion on its own thread.
+ */
+private suspend fun OkHttpClient.await(request: Request): Response =
+    suspendCancellableCoroutine { cont ->
+        val call = newCall(request)
+        cont.invokeOnCancellation { call.cancel() }
+        call.enqueue(object : Callback {
+            override fun onFailure(call: Call, e: IOException) {
+                if (cont.isActive) cont.resumeWithException(e)
+            }
+            override fun onResponse(call: Call, response: Response) {
+                if (cont.isActive) cont.resume(response)
+            }
+        })
+    }

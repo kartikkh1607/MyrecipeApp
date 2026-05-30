@@ -1,0 +1,93 @@
+name: CI
+
+# Runs on every PR and every push to master.
+# Catches what reviewers can't see at a glance: a broken compile, a regressed
+# unit test, or an Android Lint error introduced since the previous commit.
+on:
+  push:
+    branches: [ master ]
+  pull_request:
+
+# Cancel any in-flight CI run for the same ref when a new commit lands —
+# saves runner minutes when someone force-pushes a stack of fixes.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  build:
+    name: Build, lint, unit tests
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+
+    steps:
+      - uses: actions/checkout@v4
+
+      # AGP 9.x + Kotlin 2.3 require JDK 17. Temurin distribution matches the
+      # local dev environment defaults.
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      # Gradle action handles wrapper validation, dependency cache, and
+      # configuration cache — collapses ~3 manual steps into one.
+      - name: Set up Gradle
+        uses: gradle/actions/setup-gradle@v4
+
+      # The app reads PROXY_BASE_URL out of local.properties at build time
+      # (see app/build.gradle.kts buildConfigField). CI has no real Worker —
+      # any HTTPS URL keeps the build happy; tests don't hit the network.
+      - name: Stub local.properties for CI
+        run: echo "PROXY_BASE_URL=https://ci.invalid" > local.properties
+
+      # google-services.json is gitignored; supply a no-op file so the
+      # GoogleServices plugin task doesn't fail the build. Real Firebase
+      # integration is exercised in the production release pipeline, not here.
+      - name: Stub google-services.json for CI
+        run: |
+          mkdir -p app
+          cat > app/google-services.json <<'EOF'
+          {
+            "project_info": {
+              "project_number": "0",
+              "project_id": "ci-stub",
+              "storage_bucket": "ci-stub.appspot.com"
+            },
+            "client": [
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:0:android:0000000000000000",
+                  "android_client_info": { "package_name": "com.kartik.mealtime" }
+                },
+                "oauth_client": [],
+                "api_key": [ { "current_key": "ci-stub" } ],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              }
+            ],
+            "configuration_version": "1"
+          }
+          EOF
+
+      - name: Build debug
+        run: ./gradlew :app:assembleDebug --no-daemon
+
+      - name: Android lint (debug)
+        run: ./gradlew :app:lintDebug --no-daemon
+
+      - name: Unit tests
+        run: ./gradlew :app:testDebugUnitTest --no-daemon
+
+      # Surface test + lint reports on every run so failures are debuggable
+      # without re-running locally. Keep small — 7-day retention is enough.
+      - name: Upload reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: reports
+          path: |
+            app/build/reports/tests/
+            app/build/reports/lint-results-*.html
+          if-no-files-found: ignore
+          retention-days: 7

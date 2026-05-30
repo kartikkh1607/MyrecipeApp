@@ -1,6 +1,7 @@
 package com.kartik.mealtime.di
 
 import android.content.Context
+import androidx.room.Room
 import com.kartik.mealtime.data.local.AiRecipeDao
 import com.kartik.mealtime.data.local.AppDatabase
 import com.kartik.mealtime.data.local.CachedRecipeDao
@@ -21,7 +22,13 @@ object DatabaseModule {
     @Provides
     @Singleton
     fun provideDatabase(@ApplicationContext context: Context): AppDatabase =
-        AppDatabase.getInstance(context)
+        Room.databaseBuilder(context, AppDatabase::class.java, AppDatabase.DB_NAME)
+            .addMigrations(
+                AppDatabase.MIGRATION_1_2,
+                AppDatabase.MIGRATION_2_3,
+                AppDatabase.MIGRATION_3_4,
+            )
+            .build()
 
     @Provides
     fun provideFavoriteDao(db: AppDatabase): FavoriteDao = db.favoriteDao()

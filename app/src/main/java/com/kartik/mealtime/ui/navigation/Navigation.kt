@@ -36,6 +36,7 @@ import com.kartik.mealtime.ui.screens.SearchScreen
 import com.kartik.mealtime.ui.screens.SettingsScreen
 import com.kartik.mealtime.ui.screens.ShoppingListScreen
 import com.kartik.mealtime.ui.viewmodel.AuthViewModel
+import com.kartik.mealtime.ui.viewmodel.CategoryViewModel
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
 import com.kartik.mealtime.ui.viewmodel.SearchViewModel
 import com.kartik.mealtime.ui.viewmodel.ShoppingListViewModel
@@ -65,7 +66,12 @@ fun Navigation(
     viewModel: MainViewModel,
     authViewModel: AuthViewModel,
     shoppingListViewModel: ShoppingListViewModel,
-    searchViewModel: SearchViewModel
+    searchViewModel: SearchViewModel,
+    // Category state is now owned by a dedicated ViewModel. Sourced here at the
+    // NavHost scope so HomeScreen, RecipeScreen (Categories tab), and
+    // CategoryDetailScreen all share the same instance — pull-to-refresh on one
+    // surface is visible on the others, and the in-memory cache survives back-nav.
+    categoryViewModel: CategoryViewModel = hiltViewModel(),
 ) {
     NavHost(
         navController = navController,
@@ -102,18 +108,22 @@ fun Navigation(
         // ── Bottom nav screens ─────────────────────────────────────────────────────
 
         composable<Home> {
-            HomeScreen(navController = navController, viewModel = viewModel)
+            HomeScreen(
+                navController = navController,
+                viewModel = viewModel,
+                categoryViewModel = categoryViewModel,
+            )
         }
 
         composable<Categories> {
             RecipeScreen(
-                viewstate = viewModel.recipeCategoriesState.value,
+                viewstate = categoryViewModel.recipeCategoriesState.value,
                 navigateToDetail = { category ->
                     navController.navigate(CategoryDetail(categoryId = category.id)) {
                         launchSingleTop = true
                     }
                 },
-                onRetry = { viewModel.refreshRecipeCategories() }
+                onRetry = { categoryViewModel.refreshRecipeCategories() }
             )
         }
 
@@ -147,6 +157,7 @@ fun Navigation(
             CategoryDetailScreen(
                 category = category,
                 viewModel = viewModel,
+                categoryViewModel = categoryViewModel,
                 onBackClick = { navController.popBackStack() },
                 onRecipeClick = { recipeId ->
                     navController.navigate(RecipeDetail(recipeId = recipeId)) {

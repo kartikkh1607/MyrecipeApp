@@ -52,6 +52,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.kartik.mealtime.domain.model.DietaryFilter
 import com.kartik.mealtime.domain.model.RecipeCategory
+import com.kartik.mealtime.ui.viewmodel.CategoryViewModel
 import com.kartik.mealtime.ui.viewmodel.FavoritesViewModel
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
 
@@ -60,12 +61,13 @@ import com.kartik.mealtime.ui.viewmodel.MainViewModel
 fun CategoryDetailScreen(
     category: RecipeCategory,
     viewModel: MainViewModel,
+    categoryViewModel: CategoryViewModel,
     onBackClick: () -> Unit = {},
     onRecipeClick: (String) -> Unit = {}
 ) {
     // Restore persisted filter so it survives back-navigation
     var selectedDietaryFilter by remember(category.id) {
-        mutableStateOf(viewModel.getCategoryFilter(category.id))
+        mutableStateOf(categoryViewModel.getCategoryFilter(category.id))
     }
     var showFilterBottomSheet by remember { mutableStateOf(false) }
     var sortByRating by remember { mutableStateOf(false) }
@@ -73,7 +75,7 @@ fun CategoryDetailScreen(
     // Persist filter change to ViewModel so it's restored on re-visit
     val updateFilter = { newFilter: DietaryFilter ->
         selectedDietaryFilter = newFilter
-        viewModel.setCategoryFilter(category.id, newFilter)
+        categoryViewModel.setCategoryFilter(category.id, newFilter)
     }
 
     // Observe favorites at composable scope — reads inside items{} won't
@@ -82,11 +84,11 @@ fun CategoryDetailScreen(
     val favoriteIds by favoritesViewModel.favoriteIds
 
     // Get category recipes state from ViewModel
-    val categoryRecipesState by viewModel.categoryRecipesState
+    val categoryRecipesState by categoryViewModel.categoryRecipesState
 
     // Fetch recipes when category changes or screen is first loaded
     LaunchedEffect(category.id) {
-        viewModel.getRecipesByCategory(category.id)
+        categoryViewModel.getRecipesByCategory(category.id)
     }
 
     // remember() so the filter only re-runs when recipes, filter, or sort changes
@@ -253,7 +255,7 @@ fun CategoryDetailScreen(
             isRefreshing = isRefreshing,
             onRefresh = {
                 manualRefresh = true
-                viewModel.refreshCategoryRecipes(category.id)
+                categoryViewModel.refreshCategoryRecipes(category.id)
             },
             modifier = Modifier.fillMaxSize()
         ) {
@@ -353,7 +355,7 @@ fun CategoryDetailScreen(
                                     textAlign = TextAlign.Center
                                 )
                                 Button(
-                                    onClick = { viewModel.getRecipesByCategory(category.id) },
+                                    onClick = { categoryViewModel.getRecipesByCategory(category.id) },
                                     modifier = Modifier.padding(top = 8.dp)
                                 ) {
                                     Text("Try Again")
@@ -456,7 +458,7 @@ fun CategoryDetailScreen(
                         item(key = "load_more") {
                             Spacer(modifier = Modifier.height(4.dp))
                             androidx.compose.material3.Button(
-                                onClick = { viewModel.loadMoreCategoryRecipes(category.id) },
+                                onClick = { categoryViewModel.loadMoreCategoryRecipes(category.id) },
                                 modifier = Modifier
                                     .fillMaxWidth()
                                     .padding(horizontal = 16.dp),

@@ -1,7 +1,9 @@
-package com.kartik.mealtime.data.remote
+package com.kartik.mealtime.di
 
 import android.content.Context
 import com.kartik.mealtime.BuildConfig
+import com.kartik.mealtime.data.remote.FirebaseAuthInterceptor
+import com.kartik.mealtime.data.remote.SpoonacularApiService
 import dagger.Module
 import dagger.Provides
 import dagger.hilt.InstallIn
