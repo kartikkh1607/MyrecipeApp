@@ -2,10 +2,11 @@
 
 <p align="center">
   <img src="https://img.shields.io/badge/Platform-Android-3DDC84?style=for-the-badge&logo=android&logoColor=white"/>
-  <img src="https://img.shields.io/badge/Kotlin-2.0-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white"/>
+  <img src="https://img.shields.io/badge/Kotlin-2.3-7F52FF?style=for-the-badge&logo=kotlin&logoColor=white"/>
   <img src="https://img.shields.io/badge/Jetpack_Compose-Latest-4285F4?style=for-the-badge&logo=jetpackcompose&logoColor=white"/>
   <img src="https://img.shields.io/badge/Min_SDK-26-orange?style=for-the-badge"/>
   <img src="https://img.shields.io/badge/Target_SDK-36-green?style=for-the-badge"/>
+  <img src="https://img.shields.io/github/actions/workflow/status/kartikkh1607/MyrecipeApp/ci.yml?branch=master&style=for-the-badge&label=CI"/>
 </p>
 
 **MealTime** is a production-ready Android recipe & meal-planning app built entirely with **Jetpack Compose**. It pairs a polished, spring-physics-driven UI with a live recipe database, Firebase-backed accounts, an AI cooking assistant, and a Play Billing premium tier — all backed by a serverless Cloudflare Worker proxy so no API keys ever ship inside the APK.
@@ -49,7 +50,7 @@ Three AI-powered features gated behind a Play subscription, all routed through t
 - Falls back to **Groq** if Gemini is unavailable (transparent to the user; disclosed in-app per Play policy).
 
 ### 💳 Premium Subscription
-- **Google Play Billing v6** — `premium` subscription with `monthly` and `annual` base plans.
+- **Google Play Billing v7** — `premium` subscription with `monthly` and `annual` base plans.
 - Entitlement is enforced server-side: purchase tokens are validated against the **Play Developer API** and a `premium` Firebase **custom claim** is minted on the user. Real-time Developer Notifications keep it current on renewal / cancellation.
 - Local `EntitlementRepository` seam means the rest of the app reads a single source of truth.
 
@@ -67,22 +68,23 @@ Three AI-powered features gated behind a Play subscription, all routed through t
 
 | Layer | Technology |
 |---|---|
-| **Language** | Kotlin 2.0 (JVM 17 toolchain) |
-| **UI** | Jetpack Compose · Material 3 · Google Fonts (Newsreader + Hanken Grotesk) · Material Icons Extended |
+| **Language** | Kotlin 2.3 (JVM 17 toolchain) |
+| **UI** | Jetpack Compose (BOM 2026.05) · Material 3 · Google Fonts (Newsreader + Hanken Grotesk) · Material Icons Extended |
 | **Architecture** | MVVM + Clean Architecture (data / domain / ui) |
-| **DI** | **Hilt** (Hilt Navigation Compose for ViewModel scoping) |
-| **Async** | Coroutines · StateFlow / Flow |
+| **DI** | **Hilt** 2.59 (Hilt Navigation Compose for ViewModel scoping) |
+| **Async** | Coroutines 1.10 · StateFlow / Flow |
 | **Networking** | Retrofit 3 · OkHttp 5 · Gson · HTTP logging interceptor |
-| **AI streaming** | OkHttp directly (SSE) for Gemini / Groq |
-| **Image loading** | Coil 2 (Compose) |
-| **Local DB** | Room 2.6 (favorites, shopping list, API cache) |
-| **Navigation** | Compose Navigation 2.8 — type-safe routes via `kotlinx.serialization` |
+| **AI calls** | OkHttp directly for Gemini / Groq, wrapped in `suspendCancellableCoroutine` so coroutine cancellation cancels the in-flight request |
+| **Image loading** | Coil 2.7 (Compose) |
+| **Local DB** | Room 2.8 — 5 tables: favorites · shopping list · API cache · featured cache · AI creations |
+| **Navigation** | Compose Navigation 2.9 — type-safe routes via `kotlinx.serialization` |
 | **Auth** | Firebase Auth · AndroidX Credential Manager · `googleid` (Google ID token) |
-| **Backend** | Firebase Firestore · Crashlytics · Analytics |
-| **Billing** | Google Play Billing KTX |
+| **Backend** | Firebase Firestore · Crashlytics (also collects best-effort sync failures as non-fatals) · Analytics |
+| **Billing** | Google Play Billing 7.1 |
 | **Ads & Consent** | Google Mobile Ads SDK · UMP (User Messaging Platform) |
 | **Theme persistence** | DataStore Preferences |
-| **Build** | Gradle KTS · KSP (Room + Hilt) · Firebase Crashlytics Gradle plugin |
+| **Build** | Gradle 9.4 (KTS) · AGP 9.2 · KSP (Room + Hilt) · Firebase Crashlytics Gradle plugin |
+| **CI** | GitHub Actions — build + lint + unit tests on every PR / push to `master` (see [`.github/workflows/ci.yml`](./.github/workflows/ci.yml)) |
 | **Server** | Cloudflare Worker (free plan, no credit card) |
 | **Min / Compile / Target SDK** | 26 / 36 / 36 |
 
@@ -119,7 +121,10 @@ app/src/main/java/com/kartik/mealtime/
     ├── screens/      # Auth, Home, Search, Recipe, Cooking, Favorites, Shopping,
     │                 # Profile, Settings, Chat, AiCreations, MealPlanner, CategoryDetail
     ├── theme/        # PremiumLight/Dark color schemes, typography, shape, motion tokens
-    └── viewmodel/    # MainViewModel + screen-specific ViewModels
+    └── viewmodel/    # MainViewModel (featured + detail + theme + premium) +
+                      # CategoryViewModel (categories + per-category pages, scoped to
+                      # NavHost so Home / Categories / CategoryDetail share state) +
+                      # screen-specific ViewModels
 ```
 
 ### Data Flow
@@ -141,11 +146,15 @@ UI (Compose) ──▶ ViewModel ──▶ UseCase ──▶ Repository
 
 ## 🗄️ Local Database (Room)
 
+Currently at schema **v4**, with auto-tested migrations from v1 → v4.
+
 | Table | Purpose |
 |---|---|
-| `favorites` | Persisted saved recipes |
-| `shopping_items` | Shopping-list items grouped by recipe |
-| `cached_recipes` | Full Spoonacular detail responses |
+| `favorites` | Persisted saved recipes (synced to Firestore) |
+| `shopping_items` | Shopping-list items grouped by recipe (synced to Firestore) |
+| `cached_recipes` | Full Spoonacular detail responses for offline access (24 h TTL) |
+| `featured_cache` | Single-row JSON cache of the home featured list (24 h TTL) — saves a 5-pt random-recipes API call |
+| `ai_recipes` | The user's "AI Creations" — recipes generated or remixed via the premium AI features |
 
 Schemas are exported under `app/schemas/` for migration safety.
 
@@ -223,7 +232,7 @@ Or hit **▶ Run** in Android Studio.
 
 ---
 
-## 🧪 Testing
+## 🧪 Testing & CI
 
 - **JVM unit tests**: ViewModels, repositories, sync / favorites — JUnit · Mockito · `kotlinx-coroutines-test` · **Robolectric** (for Android-resource-aware tests).
 - **Instrumented tests** (`androidTest` source set): Room migrations + Compose UI flows — AndroidX Test · Espresso · Compose UI Test.
@@ -233,6 +242,16 @@ Or hit **▶ Run** in Android Studio.
 ./gradlew test                  # unit
 ./gradlew connectedAndroidTest  # instrumented (device / emulator required)
 ```
+
+### Continuous integration
+
+[`.github/workflows/ci.yml`](./.github/workflows/ci.yml) runs on every PR and every push to `master`:
+
+1. **Build debug** (`./gradlew :app:assembleDebug`)
+2. **Android lint** (`./gradlew :app:lintDebug`) — fails the build on any lint *error*
+3. **Unit tests** (`./gradlew :app:testDebugUnitTest`)
+
+Test + lint reports are uploaded as a workflow artifact on every run (7-day retention) so failures are debuggable without re-running locally. The workflow stubs `local.properties` and `google-services.json` for both the release and `.debug` application IDs so the build runs on a clean checkout.
 
 ---
 

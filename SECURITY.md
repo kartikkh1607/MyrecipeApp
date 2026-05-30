@@ -9,6 +9,10 @@ This document describes what the app protects against, what it does **not** prot
 ### Network
 - **HTTPS-only enforced** via `res/xml/network_security_config.xml`. Cleartext HTTP traffic is blocked on Android 7+.
 - **System CA store only** in release. User-installed certs (Charles Proxy, etc.) only trusted in debug builds.
+- **No third-party API keys in the APK.** Spoonacular / Gemini / Groq calls are all routed through a **Cloudflare Worker** that holds the keys server-side. The APK only knows the Worker's URL.
+- **Every Worker call is Firebase-authenticated.** `FirebaseAuthInterceptor` attaches the current user's Firebase ID token; the Worker validates it (RS256, against Google's JWK set) and rejects un-authenticated traffic with `401`. The Worker is not an open relay.
+- **Per-uid rate-limit + quota** enforced on the Worker (`RATE_LIMIT_PER_MINUTE`, plus per-day Gemini quota that distinguishes free vs `premium` tier) so a single bad actor with a token can't drain shared API quota for everyone.
+- **Premium gating is server-side.** Structured-output Gemini and Groq calls (recipe generation, transform, meal plan) require the `premium` Firebase custom claim — the Worker returns `402 premium_required` otherwise, and the client surfaces the upsell sheet. The Groq path enforces the same gate so the AI failover can't be used as a paywall bypass.
 
 ### Code
 - **R8/ProGuard obfuscation** enabled in release (`isMinifyEnabled = true`, `isShrinkResources = true`).
@@ -36,19 +40,18 @@ This document describes what the app protects against, what it does **not** prot
 
 No `READ_EXTERNAL_STORAGE`, `READ_CONTACTS`, `ACCESS_FINE_LOCATION`, or other high-risk permissions.
 
+### Observability of background failures
+- Firestore sync is best-effort by design (a bad network shouldn't crash the app), but silent failures used to mean a quietly broken sync looked identical to a healthy one. The `syncBestEffort` helper in `data/repository/SyncRepository.kt` records every failure as a **Crashlytics non-fatal** with the operation name (`uploadFavorite`, `clearShoppingList`, etc.) — so we get visibility without changing user-facing behaviour.
+- Coroutine cancellation propagates to in-flight Gemini requests via `suspendCancellableCoroutine`, so a user navigating away from a long generation stops paying for it immediately instead of letting the request finish on its own.
+
+### Build verification
+Every push and PR runs `./gradlew :app:assembleDebug :app:lintDebug :app:testDebugUnitTest` via [GitHub Actions](./.github/workflows/ci.yml). Lint *errors* fail the build, so issues like `NonObservableLocale` in composables can't sneak back in.
+
 ---
 
 ## What's NOT Protected
 
 Be honest about limits.
-
-### API Keys in the APK
-**Spoonacular and Gemini API keys live in `BuildConfig`.** R8 obfuscation makes them mildly harder to find by string-scanning the APK, but a determined attacker WILL extract them via tools like `apktool` or `jadx`.
-
-**Mitigations available:**
-1. **Spoonacular**: set per-key daily/monthly quotas in your Spoonacular dashboard. If a key gets abused, it stops working before your bill explodes.
-2. **Gemini**: enable [API key restrictions](https://console.cloud.google.com/apis/credentials) — restrict to Android app + your app's SHA-1 fingerprint. Abusers can't use the key from elsewhere.
-3. **Long-term**: move all API calls to a Firebase Cloud Function. App authenticates to YOUR function with a Firebase Auth token; YOUR function calls Spoonacular/Gemini with the real key. The key never leaves the server. See "Cloud Function Proxy" below.
 
 ### Rooted / Modified Devices
 We don't detect root, custom ROMs, or modified APKs. Standard hardening only. A motivated user CAN:
@@ -124,15 +127,7 @@ In the Play Console, fill in the "Data Safety" section honestly:
 
 If the app gets traction and faces real attacks:
 
-### Cloud Function Proxy (eliminates API key leak risk)
-1. Upgrade Firebase to Blaze plan (pay-as-you-go, free tier covers small apps)
-2. Create `functions/src/index.ts` with two callable functions: `spoonacularSearch`, `geminiChat`
-3. Each function reads the API key from `functions.config()` (server-side env vars)
-4. Each function verifies `context.auth` (Firebase Auth token) and rate-limits per `uid`
-5. Update `SpoonacularApiService` and `GeminiAiService` to call your Cloud Functions instead of the third-party APIs directly
-6. Rotate the leaked Spoonacular/Gemini keys in their dashboards
-
-Estimated work: 1-2 days. Estimated cost: free for <2M function invocations/month.
+> The original "Cloud Function Proxy" item from this section has been **shipped** — see [`server/cloudflare-worker/`](./server/cloudflare-worker/). All third-party API calls now go through the Worker, which holds the keys, validates Firebase ID tokens, enforces per-uid rate limits + daily quotas, and gates premium AI features server-side. We're on Cloudflare's free plan rather than Firebase Blaze, so no credit card is required.
 
 ### Play Integrity API
 1. Enable Play Integrity in Play Console
