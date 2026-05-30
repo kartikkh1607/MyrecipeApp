@@ -77,5 +77,10 @@ class PremiumRequiredException : Exception("Premium subscription required")
  * (Gemini's own quota) so the UI can show a clear "you've used your daily AI limit"
  * message instead of a generic outage error, and so the router never silently falls
  * back to Groq (that would defeat the cap).
+ *
+ * [tier] is the server-reported tier the cap was checked against ("free" or "premium",
+ * null if absent). Free-tier callers route to the upsell sheet — subscribing lifts the
+ * cap immediately — while premium-tier callers see the message verbatim (the action
+ * is to wait for UTC midnight, not to subscribe again).
  */
-class QuotaExceededException(message: String) : Exception(message)
+class QuotaExceededException(message: String, val tier: String? = null) : Exception(message)

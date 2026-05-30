@@ -55,7 +55,7 @@ class GeminiAiService @Inject constructor(
                     else ->
                         "You've used your free daily AI limit. Upgrade to premium or try again tomorrow."
                 }
-                return QuotaExceededException(message)
+                return QuotaExceededException(message, tier = proxy.tier)
             }
         }
         // Gemini error JSON shape: { "error": { "code": ..., "message": "...", "status": "..." } }

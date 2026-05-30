@@ -143,6 +143,13 @@ class GroqAiService @Inject constructor(
                 ?: return Result.failure(Exception("Empty response from Groq API"))
 
             if (!response.isSuccessful) {
+                // 402 = proxy's premium gate (structured generation is premium-only).
+                // Surface as PremiumRequiredException so the UI opens the upsell sheet
+                // instead of showing a generic Groq error in the rare case the router
+                // falls back to Groq on a non-quota Gemini failure for a structured call.
+                if (response.code == 402) {
+                    return Result.failure(PremiumRequiredException())
+                }
                 return Result.failure(friendlyError(response.code, responseBody))
             }
 

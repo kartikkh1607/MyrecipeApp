@@ -11,6 +11,7 @@ import com.kartik.mealtime.data.local.AiRecipeSource
 import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import com.kartik.mealtime.data.remote.AiService
 import com.kartik.mealtime.data.remote.PremiumRequiredException
+import com.kartik.mealtime.data.remote.QuotaExceededException
 import com.kartik.mealtime.data.repository.AiRecipeRepository
 import com.kartik.mealtime.domain.model.MealPlan
 import com.kartik.mealtime.domain.model.Recipe
@@ -88,7 +89,9 @@ class MealPlannerViewModel @Inject constructor(
             aiService.generateMealPlan(_selectedDays.intValue, prefs).fold(
                 onSuccess = { _planState.value = MealPlanState.Ready(it) },
                 onFailure = { error ->
-                    if (error is PremiumRequiredException) {
+                    if (error is PremiumRequiredException ||
+                        (error is QuotaExceededException && error.tier == "free")
+                    ) {
                         _planState.value = MealPlanState.Idle
                         _upsellEvents.tryEmit(Unit)
                     } else {

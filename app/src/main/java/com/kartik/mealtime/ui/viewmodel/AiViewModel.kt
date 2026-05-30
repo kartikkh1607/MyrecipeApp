@@ -11,6 +11,7 @@ import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import com.kartik.mealtime.data.remote.AiService
 import com.kartik.mealtime.data.remote.ChatMessage
 import com.kartik.mealtime.data.remote.PremiumRequiredException
+import com.kartik.mealtime.data.remote.QuotaExceededException
 import com.kartik.mealtime.data.repository.AiRecipeRepository
 import com.kartik.mealtime.domain.model.Recipe
 import com.kartik.mealtime.domain.repository.EntitlementRepository
@@ -162,10 +163,17 @@ class AiViewModel @Inject constructor(
                     )
                 },
                 onFailure = { error ->
-                    _chatState.value = _chatState.value.copy(
-                        isTyping = false,
-                        error = error.message ?: "Something went wrong. Please try again."
-                    )
+                    // Free-tier daily cap → upsell (same psychological wall as a premium gate).
+                    // Premium-tier cap is genuinely "wait for midnight UTC" — keep the message.
+                    if (error is QuotaExceededException && error.tier == "free") {
+                        _chatState.value = _chatState.value.copy(isTyping = false)
+                        _upsellEvents.tryEmit(Unit)
+                    } else {
+                        _chatState.value = _chatState.value.copy(
+                            isTyping = false,
+                            error = error.message ?: "Something went wrong. Please try again."
+                        )
+                    }
                 }
             )
         }
@@ -230,7 +238,11 @@ class AiViewModel @Inject constructor(
                 onSuccess = { _recipeGenState.value = RecipeGenState.Ready(it) },
                 onFailure = { error ->
                     // A 402 means entitlement lapsed/out-of-sync — show the upsell, not an error.
-                    if (error is PremiumRequiredException) {
+                    // A free-tier quota error here is theoretically impossible (server gates premium
+                    // before checking quota) but we route it to the upsell for defense-in-depth.
+                    if (error is PremiumRequiredException ||
+                        (error is QuotaExceededException && error.tier == "free")
+                    ) {
                         _recipeGenState.value = RecipeGenState.Idle
                         _upsellEvents.tryEmit(Unit)
                     } else {
@@ -266,7 +278,9 @@ class AiViewModel @Inject constructor(
             aiService.transformRecipe(base, trimmed, personalization).fold(
                 onSuccess = { _recipeGenState.value = RecipeGenState.Ready(it) },
                 onFailure = { error ->
-                    if (error is PremiumRequiredException) {
+                    if (error is PremiumRequiredException ||
+                        (error is QuotaExceededException && error.tier == "free")
+                    ) {
                         _recipeGenState.value = RecipeGenState.Idle
                         _upsellEvents.tryEmit(Unit)
                     } else {
