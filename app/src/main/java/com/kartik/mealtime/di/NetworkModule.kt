@@ -44,6 +44,18 @@ object NetworkModule {
         }
     }
 
+    /**
+     * Linear-backoff retry for transient failures (IOException or 503). Backoff is
+     * 1s / 2s / 3s — so the worst-case extra wall time is 6s across three attempts.
+     *
+     * `Thread.sleep` blocks the dispatcher thread holding this interceptor — fine in
+     * practice for a single-user mobile client (OkHttp's default dispatcher has 64
+     * slots, of which we use ≤2 concurrently), but we honour [Call.isCanceled] before
+     * and after each sleep so a coroutine cancellation during backoff aborts the
+     * request promptly instead of waiting out the timer. [InterruptedException] is
+     * also surfaced as an IOException so it doesn't disappear into a "Request failed"
+     * generic at the end of the loop.
+     */
     private class RetryInterceptor(
         private val maxRetries: Int = 3,
         private val initialBackoffMs: Long = 1_000L
@@ -52,20 +64,44 @@ object NetworkModule {
             val request = chain.request()
             var lastException: java.io.IOException? = null
             repeat(maxRetries) { attempt ->
+                if (chain.call().isCanceled()) throw java.io.IOException("Canceled")
                 try {
                     val response = chain.proceed(request)
                     if (response.code == 503 && attempt < maxRetries - 1) {
                         response.close()
-                        Thread.sleep(initialBackoffMs * (attempt + 1))
+                        if (!backoff(chain, initialBackoffMs * (attempt + 1))) {
+                            throw java.io.IOException("Canceled")
+                        }
                         return@repeat
                     }
                     return response
                 } catch (e: java.io.IOException) {
                     lastException = e
-                    if (attempt < maxRetries - 1) Thread.sleep(initialBackoffMs * (attempt + 1))
+                    if (attempt < maxRetries - 1 &&
+                        !backoff(chain, initialBackoffMs * (attempt + 1))
+                    ) {
+                        throw java.io.IOException("Canceled", e)
+                    }
                 }
             }
             throw lastException ?: java.io.IOException("Request failed after $maxRetries retries")
+        }
+
+        /** Sleeps in 100 ms chunks so a Call.cancel during backoff is observed within
+         *  ~100 ms rather than waiting out the full backoff. Returns false if the call
+         *  was cancelled or the thread was interrupted, true otherwise. */
+        private fun backoff(chain: Interceptor.Chain, totalMs: Long): Boolean {
+            val deadline = System.currentTimeMillis() + totalMs
+            while (System.currentTimeMillis() < deadline) {
+                if (chain.call().isCanceled()) return false
+                try {
+                    Thread.sleep(minOf(100L, deadline - System.currentTimeMillis()).coerceAtLeast(0))
+                } catch (_: InterruptedException) {
+                    Thread.currentThread().interrupt()
+                    return false
+                }
+            }
+            return true
         }
     }
 

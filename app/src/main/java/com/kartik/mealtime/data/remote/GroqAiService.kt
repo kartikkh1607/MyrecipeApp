@@ -106,7 +106,7 @@ class GroqAiService @Inject constructor(
     // The combined prompt (system instructions + history + "Assistant:") is sent
     // as a single user message. This reuses Gemini's exact prompt verbatim, so
     // fallback output matches; the conversation is already embedded in the text.
-    private fun complete(
+    private suspend fun complete(
         prompt: String,
         temperature: Float,
         maxTokens: Int,
@@ -138,7 +138,9 @@ class GroqAiService @Inject constructor(
                 // supplies the real Groq key server-side.
                 .build()
 
-            val response = client.newCall(request).execute()
+            // OkHttpClient.await is the shared suspendCancellableCoroutine wrapper —
+            // see OkHttpExt.kt. Coroutine cancellation cancels the in-flight Groq call.
+            val response = client.await(request)
             val responseBody = response.body?.string()
                 ?: return Result.failure(Exception("Empty response from Groq API"))
 

@@ -5,8 +5,8 @@ plugins {
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.serialization)
     id("kotlin-parcelize")
-    id("com.google.devtools.ksp") version "2.3.7"
-    id("com.google.dagger.hilt.android")
+    alias(libs.plugins.ksp)
+    alias(libs.plugins.hilt)
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics.plugin)
 }
@@ -136,6 +136,13 @@ android {
             isReturnDefaultValues = true
         }
     }
+
+    // Expose the exported Room schemas as androidTest assets so MigrationTestHelper
+    // can replay each schema version against an in-memory database. Schemas live in
+    // app/schemas/ (configured via `ksp.arg("room.schemaLocation", ...)` above).
+    sourceSets {
+        getByName("androidTest").assets.srcDirs("$projectDir/schemas")
+    }
 }
 
 kotlin {
@@ -231,6 +238,7 @@ dependencies {
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
     androidTestImplementation(libs.androidx.ui.test.junit4)
+    androidTestImplementation(libs.androidx.room.testing)
 
     // Baseline Profile
     androidTestImplementation(libs.androidx.benchmark.macro.junit4)
