@@ -45,24 +45,36 @@ jobs:
       # google-services.json is gitignored; supply a no-op file so the
       # GoogleServices plugin task doesn't fail the build. Real Firebase
       # integration is exercised in the production release pipeline, not here.
+      # Two client entries: the release applicationId AND the debug variant
+      # (`applicationIdSuffix = ".debug"` — see app/build.gradle.kts) — the
+      # plugin matches per-variant and fails the build if either is missing.
       - name: Stub google-services.json for CI
         run: |
           mkdir -p app
           cat > app/google-services.json <<'EOF'
           {
             "project_info": {
-              "project_number": "0",
+              "project_number": "1234567890",
               "project_id": "ci-stub",
               "storage_bucket": "ci-stub.appspot.com"
             },
             "client": [
               {
                 "client_info": {
-                  "mobilesdk_app_id": "1:0:android:0000000000000000",
+                  "mobilesdk_app_id": "1:1234567890:android:1111111111111111",
                   "android_client_info": { "package_name": "com.kartik.mealtime" }
                 },
                 "oauth_client": [],
-                "api_key": [ { "current_key": "ci-stub" } ],
+                "api_key": [ { "current_key": "ci-stub-key" } ],
+                "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
+              },
+              {
+                "client_info": {
+                  "mobilesdk_app_id": "1:1234567890:android:2222222222222222",
+                  "android_client_info": { "package_name": "com.kartik.mealtime.debug" }
+                },
+                "oauth_client": [],
+                "api_key": [ { "current_key": "ci-stub-key" } ],
                 "services": { "appinvite_service": { "other_platform_oauth_client": [] } }
               }
             ],
