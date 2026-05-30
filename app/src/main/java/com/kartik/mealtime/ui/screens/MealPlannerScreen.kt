@@ -2,6 +2,7 @@ package com.kartik.mealtime.ui.screens
 
 import android.widget.Toast
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -21,7 +22,9 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.AddShoppingCart
+import androidx.compose.material.icons.filled.AutoAwesome
 import androidx.compose.material.icons.filled.CalendarMonth
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Lock
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
@@ -45,6 +48,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
@@ -126,7 +130,6 @@ fun MealPlannerScreen(
             Text(
                 "Meal Planner",
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
             )
         }
 
@@ -217,32 +220,7 @@ private fun PlannerConfig(
         horizontalAlignment = Alignment.CenterHorizontally,
     ) {
         Spacer(Modifier.height(8.dp))
-        Surface(
-            shape = RoundedCornerShape(28.dp),
-            color = Amber.copy(alpha = 0.18f),
-            modifier = Modifier.size(88.dp),
-        ) {
-            Box(contentAlignment = Alignment.Center) {
-                Icon(
-                    Icons.Default.CalendarMonth,
-                    contentDescription = null,
-                    tint = Amber,
-                    modifier = Modifier.size(42.dp),
-                )
-            }
-        }
-        Spacer(Modifier.height(20.dp))
-        Text(
-            "Plan your meals",
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-        )
-        Spacer(Modifier.height(6.dp))
-        Text(
-            "Let AI map out balanced breakfasts, lunches, and dinners for you.",
-            style = MaterialTheme.typography.bodyMedium,
-            color = MaterialTheme.colorScheme.onSurfaceVariant,
-        )
+        PlannerAiBanner(onClick = onGenerate)
 
         Spacer(Modifier.height(28.dp))
         Text(
@@ -274,6 +252,60 @@ private fun PlannerConfig(
                 Icon(Icons.Default.Lock, contentDescription = "Premium", modifier = Modifier.size(16.dp))
             }
         }
+    }
+}
+
+@Composable
+private fun PlannerAiBanner(onClick: () -> Unit) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(18.dp))
+            .background(
+                Brush.linearGradient(
+                    listOf(
+                        MaterialTheme.colorScheme.primary,
+                        MaterialTheme.colorScheme.secondary,
+                    ),
+                ),
+            )
+            .clickable(onClick = onClick)
+            .padding(16.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(13.dp),
+    ) {
+        Box(
+            modifier = Modifier
+                .size(40.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color.White.copy(alpha = 0.16f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                Icons.Default.AutoAwesome,
+                contentDescription = null,
+                tint = MaterialTheme.colorScheme.onPrimary,
+                modifier = Modifier.size(22.dp),
+            )
+        }
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                "Auto-plan your week",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onPrimary,
+            )
+            Text(
+                "Let AI map balanced breakfasts, lunches & dinners.",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onPrimary.copy(alpha = 0.82f),
+            )
+        }
+        Icon(
+            Icons.Default.ChevronRight,
+            contentDescription = null,
+            tint = MaterialTheme.colorScheme.onPrimary,
+        )
     }
 }
 
@@ -405,12 +437,15 @@ private fun MealCard(
     onClick: () -> Unit,
     onAdd: () -> Unit,
 ) {
-    Card(
+    androidx.compose.material3.Surface(
         onClick = onClick,
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 1.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(
+            1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+        ),
+        shadowElevation = 1.dp,
     ) {
         Row(
             modifier = Modifier

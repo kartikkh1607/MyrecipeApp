@@ -1,12 +1,10 @@
 package com.kartik.mealtime.ui.screens
 
 import androidx.compose.animation.core.Spring
-import androidx.compose.animation.core.animateDpAsState
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
-import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.gestures.snapping.rememberSnapFlingBehavior
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -19,28 +17,27 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
-import androidx.compose.foundation.pager.HorizontalPager
-import androidx.compose.foundation.pager.PageSize
-import androidx.compose.foundation.pager.PagerState
-import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Favorite
+import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Timer
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -54,364 +51,256 @@ import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.util.lerp
-import androidx.core.graphics.toColorInt
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.kartik.mealtime.domain.model.FeaturedRecipe
+import com.kartik.mealtime.domain.model.Recipe
 import com.kartik.mealtime.ui.navigation.Categories
+import com.kartik.mealtime.ui.navigation.Home
 import com.kartik.mealtime.ui.navigation.RecipeDetail
+import com.kartik.mealtime.ui.theme.StarGold
+import com.kartik.mealtime.ui.viewmodel.FavoritesViewModel
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
-import kotlinx.coroutines.delay
-import kotlinx.coroutines.launch
-import kotlin.math.absoluteValue
+import java.util.Locale
 
-@OptIn(ExperimentalFoundationApi::class)
+// ── Featured today — horizontal rail of editorial cards (Linen prototype) ─────
+// A plain snapping rail (no dot indicators): 256-wide cards, diet pills top-left,
+// a heart save button top-right, cuisine kicker + serif name + time/rating.
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeaturedRecipeCarousel(
     navController: NavHostController,
     viewModel: MainViewModel,
-    modifier: Modifier = Modifier
+    modifier: Modifier = Modifier,
+    favoritesViewModel: FavoritesViewModel = hiltViewModel()
 ) {
     val homeRecipeState by viewModel.homeRecipeState
     val featuredRecipes = homeRecipeState.featuredRecipes
-    val pagerState = rememberPagerState(
-        initialPage = 0,
-        pageCount = { featuredRecipes.size }
-    )
+    val favoriteIds by favoritesViewModel.favoriteIds
     val hapticFeedback = LocalHapticFeedback.current
 
-    // Auto-scroll with spring physics — feels smoother than a linear tween
-    LaunchedEffect(pagerState, featuredRecipes.size) {
-        if (featuredRecipes.size > 1) {
-            while (true) {
-                delay(4000)
-                val nextPage = (pagerState.currentPage + 1) % featuredRecipes.size
-                if (nextPage == 0) {
-                    // Instantly snap to the first page to avoid backwards rewind animation
-                    pagerState.scrollToPage(0)
-                } else {
-                    pagerState.animateScrollToPage(
-                        page = nextPage,
-                        animationSpec = spring(
-                            dampingRatio = Spring.DampingRatioNoBouncy,
-                            stiffness = 90f
-                        )
-                    )
+    val listState = rememberLazyListState()
+    val flingBehavior = rememberSnapFlingBehavior(lazyListState = listState)
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        HomeSectionHead(
+            title = "Featured today",
+            action = "See all",
+            onAction = {
+                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                navController.navigate(Categories) {
+                    popUpTo<Home> { saveState = true }
+                    launchSingleTop = true
+                    restoreState = true
                 }
             }
-        }
-    }
-
-    Column(
-        modifier = modifier.fillMaxWidth()
-    ) {
-        // Carousel Section Header
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Featured Recipes",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-
-            TextButton(
-                onClick = {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    navController.navigate(Categories) {
-                        popUpTo<com.kartik.mealtime.ui.navigation.Home> { saveState = true }
-                        launchSingleTop = true
-                        restoreState = true
-                    }
-                }
-            ) {
-                Text("See All")
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Featured Recipe Carousel
-        HorizontalPager(
-            state = pagerState,
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(280.dp),
-            pageSpacing = 16.dp,
-            contentPadding = PaddingValues(horizontal = 24.dp),
-            pageSize = PageSize.Fixed(320.dp) // Show peek of next/previous pages
-        ) { page ->
-            val featuredRecipe = featuredRecipes[page]
-            val onCardClick = remember(featuredRecipe.recipe.id, featuredRecipes) {
-                {
-                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    viewModel.setRecipeSwipeList(featuredRecipes.map { it.recipe.id })
-                    navController.navigate(RecipeDetail(recipeId = featuredRecipe.recipe.id))
-                }
-            }
-
-            FeaturedRecipeCard(
-                featuredRecipe = featuredRecipe,
-                onClick = onCardClick,
-                // Reads pagerState inside graphicsLayer (draw phase) — avoids per-frame recomposition
-                modifier = Modifier.graphicsLayer {
-                    val pageOffset =
-                        (pagerState.currentPage - page) + pagerState.currentPageOffsetFraction
-                    val fraction = pageOffset.absoluteValue.coerceIn(0f, 1f)
-                    scaleX = lerp(0.85f, 1f, 1f - fraction)
-                    scaleY = lerp(0.85f, 1f, 1f - fraction)
-                    alpha = lerp(0.5f, 1f, 1f - fraction)
-                }
-            )
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        // Carousel Indicators
-        CarouselIndicators(
-            pagerState = pagerState,
-            pageCount = featuredRecipes.size,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
         )
+
+        Spacer(modifier = Modifier.height(14.dp))
+
+        LazyRow(
+            state = listState,
+            flingBehavior = flingBehavior,
+            horizontalArrangement = Arrangement.spacedBy(14.dp),
+            contentPadding = PaddingValues(horizontal = 20.dp)
+        ) {
+            items(featuredRecipes, key = { it.recipe.id }) { featured ->
+                FeaturedRecipeCard(
+                    featuredRecipe = featured,
+                    saved = favoriteIds.contains(featured.recipe.id),
+                    onSave = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        favoritesViewModel.toggleFavorite(featured.recipe)
+                    },
+                    onClick = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.setRecipeSwipeList(featuredRecipes.map { it.recipe.id })
+                        navController.navigate(RecipeDetail(recipeId = featured.recipe.id)) {
+                            launchSingleTop = true
+                        }
+                    }
+                )
+            }
+        }
     }
 }
 
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun FeaturedRecipeCard(
     featuredRecipe: FeaturedRecipe,
+    saved: Boolean,
+    onSave: () -> Unit,
     onClick: () -> Unit,
     modifier: Modifier = Modifier
 ) {
-    var isPressed by remember { mutableStateOf(false) }
-    val badgeColor = remember(featuredRecipe.gradientColors) {
-        parseColor(featuredRecipe.gradientColors.firstOrNull() ?: "#FF6B6B").copy(alpha = 0.9f)
-    }
-    // Cache static gradient brush — avoids allocating a new Brush + List on every recompose
-    val overlayGradient = remember {
-        Brush.verticalGradient(
-            colors = listOf(
-                Color.Transparent,
-                Color.Black.copy(alpha = 0.3f),
-                Color.Black.copy(alpha = 0.8f)
-            ),
-            startY = 0f,
-            endY = 1000f
-        )
-    }
-    val pressScale by animateFloatAsState(
-        targetValue = if (isPressed) 0.97f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "press_scale"
+    val recipe = featuredRecipe.recipe
+    val diets = remember(recipe) { recipe.dietShorts() }
+    val totalTime = recipe.prepTime + recipe.cookTime
+
+    var pressed by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (pressed) 0.97f else 1f,
+        animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessMedium),
+        label = "featured_scale",
+        finishedListener = { pressed = false }
     )
 
+    val scrim = remember {
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.0f to Color.Transparent,
+                0.38f to Color.Transparent,
+                1.0f to Color.Black.copy(alpha = 0.82f)
+            )
+        )
+    }
+
     Card(
+        onClick = { pressed = true; onClick() },
         modifier = modifier
-            .fillMaxSize()
-            .graphicsLayer { scaleX = pressScale; scaleY = pressScale }
-            .clickable {
-                isPressed = true
-                onClick()
-            },
-        colors = CardDefaults.cardColors(
-            containerColor = MaterialTheme.colorScheme.surface
-        ),
-        elevation = CardDefaults.cardElevation(defaultElevation = 12.dp),
-        shape = RoundedCornerShape(20.dp)
+            .width(256.dp)
+            .height(300.dp)
+            .graphicsLayer { scaleX = scale; scaleY = scale },
+        shape = RoundedCornerShape(26.dp),
+        elevation = CardDefaults.cardElevation(defaultElevation = 8.dp)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
-            // Background Image with Parallax
             AsyncImage(
-                model = featuredRecipe.recipe.imageUrl,
-                contentDescription = featuredRecipe.recipe.name,
+                model = recipe.imageUrl,
+                contentDescription = recipe.name,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
-
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .background(overlayGradient)
+                    .background(scrim)
             )
 
-            Surface(
-                modifier = Modifier
-                    .align(Alignment.TopStart)
-                    .padding(16.dp),
-                color = badgeColor,
-                shape = RoundedCornerShape(20.dp)
-            ) {
-                Text(
-                    text = featuredRecipe.badgeText,
-                    style = MaterialTheme.typography.labelSmall,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                )
+            // Top-left: diet pills (frosted glass)
+            if (diets.isNotEmpty()) {
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(13.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    diets.forEach { short ->
+                        Surface(
+                            shape = RoundedCornerShape(7.dp),
+                            color = Color.White.copy(alpha = 0.18f)
+                        ) {
+                            Text(
+                                text = short,
+                                style = MaterialTheme.typography.labelSmall,
+                                fontWeight = FontWeight.Bold,
+                                color = Color.White,
+                                modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                            )
+                        }
+                    }
+                }
             }
 
-            // Recipe Information
+            // Top-right: heart save button (glass circle)
+            Surface(
+                onClick = onSave,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(11.dp)
+                    .size(34.dp),
+                shape = CircleShape,
+                color = Color.Black.copy(alpha = 0.34f)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(
+                        imageVector = if (saved) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                        contentDescription = if (saved) "Remove from saved" else "Save",
+                        tint = if (saved) MaterialTheme.colorScheme.error else Color.White,
+                        modifier = Modifier.size(17.dp)
+                    )
+                }
+            }
+
+            // Bottom content
             Column(
                 modifier = Modifier
                     .align(Alignment.BottomStart)
                     .fillMaxWidth()
-                    .padding(20.dp)
+                    .padding(16.dp)
             ) {
+                if (recipe.cuisine.isNotBlank()) {
+                    Text(
+                        text = recipe.cuisine.uppercase(Locale.getDefault()),
+                        style = MaterialTheme.typography.labelSmall,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White.copy(alpha = 0.82f),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(5.dp))
+                }
                 Text(
-                    text = featuredRecipe.subtitle,
-                    style = MaterialTheme.typography.labelMedium,
-                    color = Color.White.copy(alpha = 0.8f)
-                )
-
-                Spacer(modifier = Modifier.height(4.dp))
-
-                Text(
-                    text = featuredRecipe.recipe.name,
+                    text = recipe.name,
                     style = MaterialTheme.typography.headlineSmall,
                     color = Color.White,
-                    fontWeight = FontWeight.Bold,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
-
-                Spacer(modifier = Modifier.height(8.dp))
-
-                // Recipe Stats Row
+                Spacer(modifier = Modifier.height(9.dp))
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(16.dp)
+                    horizontalArrangement = Arrangement.spacedBy(14.dp)
                 ) {
-                    // Rating
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Star,
-                            contentDescription = null,
-                            tint = MaterialTheme.colorScheme.tertiary,
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = featuredRecipe.recipe.rating.toString(),
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-
-                    // Cooking Time
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            imageVector = Icons.Default.Timer,
-                            contentDescription = null,
-                            tint = Color.White.copy(alpha = 0.8f),
-                            modifier = Modifier.size(16.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "${featuredRecipe.recipe.prepTime + featuredRecipe.recipe.cookTime} min",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = Color.White
-                        )
-                    }
-
-                    // Difficulty
-                    Text(
-                        text = "${featuredRecipe.recipe.difficulty.emoji()} ${featuredRecipe.recipe.difficulty.displayName()}",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = Color.White
-                    )
-                }
-            }
-        }
-    }
-
-    // Auto-reset press scale so card looks normal on back-navigation
-    LaunchedEffect(isPressed) {
-        if (isPressed) {
-            delay(200)
-            isPressed = false
-        }
-    }
-}
-
-// ── Indicator dot — own composable so only the selected/deselected dot recomposes ──
-@Composable
-private fun IndicatorDot(isSelected: Boolean, onClick: () -> Unit) {
-    val animatedSize by animateDpAsState(
-        targetValue = if (isSelected) 24.dp else 8.dp,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "indicator_size"
-    )
-    val animatedAlpha by animateFloatAsState(
-        targetValue = if (isSelected) 1f else 0.35f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "indicator_alpha"
-    )
-    Box(
-        modifier = Modifier
-            .size(width = animatedSize, height = 8.dp)
-            .clip(CircleShape)
-            .background(MaterialTheme.colorScheme.primary.copy(alpha = animatedAlpha))
-            .clickable(onClick = onClick)
-    )
-}
-
-@OptIn(ExperimentalFoundationApi::class)
-@Composable
-fun CarouselIndicators(
-    pagerState: PagerState,
-    pageCount: Int,
-    modifier: Modifier = Modifier
-) {
-    val scope = rememberCoroutineScope()
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(8.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        repeat(pageCount) { index ->
-            val onClick = remember(index) {
-                {
-                    scope.launch {
-                        pagerState.animateScrollToPage(
-                            page = index,
-                            animationSpec = spring(
-                                dampingRatio = Spring.DampingRatioNoBouncy,
-                                stiffness = 280f
+                    if (totalTime > 0) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Timer,
+                                contentDescription = null,
+                                tint = Color.White,
+                                modifier = Modifier.size(14.dp)
                             )
-                        )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = "${totalTime}m",
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White
+                            )
+                        }
                     }
-                    Unit
+                    if (recipe.rating > 0f) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(
+                                imageVector = Icons.Default.Star,
+                                contentDescription = null,
+                                tint = StarGold,
+                                modifier = Modifier.size(13.dp)
+                            )
+                            Spacer(modifier = Modifier.width(4.dp))
+                            Text(
+                                text = String.format(Locale.ROOT, "%.1f", recipe.rating),
+                                style = MaterialTheme.typography.bodySmall,
+                                color = Color.White,
+                                fontWeight = FontWeight.SemiBold
+                            )
+                        }
+                    }
                 }
             }
-            // Each IndicatorDot is its own composable scope — Compose skips dots that didn’t change
-            IndicatorDot(
-                isSelected = pagerState.currentPage == index,
-                onClick = onClick
-            )
         }
     }
 }
 
-
-// Parses a hex color string (e.g. "#FF6B6B") into a Compose Color.
-// Plain fun — no @Composable overhead needed.
-private fun parseColor(colorString: String): Color = try {
-    Color(colorString.toColorInt())
-} catch (_: Exception) {
-    Color(0xFFFF6B6BL.toInt()) // safe fallback: opaque salmon-red
-}
+// Short diet labels derived from the recipe flags (max 2, matching the prototype).
+private fun Recipe.dietShorts(): List<String> = buildList {
+    when {
+        isVegan -> add("VGN")
+        isVegetarian -> add("VEG")
+    }
+    if (isGlutenFree) add("GF")
+    if (isDairyFree) add("DF")
+    if (isKeto) add("KETO")
+    if (isLowCarb) add("LC")
+}.take(2)

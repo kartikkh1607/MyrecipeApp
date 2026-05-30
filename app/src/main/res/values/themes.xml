@@ -9,17 +9,21 @@
     <style name="Theme.MyrecipeApp" parent="android:Theme.Material.Light.NoActionBar" />
 
     <!--
-        Splash screen theme — applied to the launcher Activity so cold-launch
-        shows our branded splash (forest-green background, cream utensil icon).
-        Auto-dismisses when the first Compose frame is drawn; transitions to
-        Theme.MyrecipeApp via postSplashScreenTheme.
+        Cold-launch splash theme — applied to the launcher Activity. The system
+        splash window (mandatory on Android 12+) is the FIRST half of a single
+        merged splash: it paints the forest-green background + the brand badge
+        (ic_splash_badge). The Compose BrandSplash then fades in over the exact
+        same green with the exact same badge at the same spot, and animates the
+        "MealTime" wordmark + tagline in beneath it — so the OS→Compose hand-off
+        is invisible (no flash, no icon pop, no jump). Auto-dismisses on the
+        first Compose frame; transitions to Theme.MyrecipeApp via postSplashScreenTheme.
 
         Android 12+ uses these attrs natively. Older versions get the same look
         via the AndroidX core-splashscreen back-compat shim.
     -->
     <style name="Theme.MealTime.Splash" parent="Theme.SplashScreen">
         <item name="windowSplashScreenBackground">@color/splash_background</item>
-        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_icon</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/ic_splash_badge</item>
         <item name="postSplashScreenTheme">@style/Theme.MyrecipeApp</item>
     </style>
 </resources>

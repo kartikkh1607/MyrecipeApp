@@ -61,61 +61,60 @@ import com.kartik.mealtime.data.preferences.UserPreferences
 
 @Composable
 internal fun SectionLabel(text: String) {
+    // Linen group header — muted uppercase, generous letter-spacing (matches Settings).
     Text(
         text = text.uppercase(),
-        style = MaterialTheme.typography.labelMedium,
+        style = MaterialTheme.typography.labelSmall,
         fontWeight = FontWeight.Bold,
-        color = MaterialTheme.colorScheme.primary,
-        letterSpacing = 1.sp
+        color = MaterialTheme.colorScheme.onSurfaceVariant,
+        letterSpacing = 1.2.sp,
+        modifier = Modifier.padding(start = 4.dp)
     )
 }
 
+/**
+ * Single bordered surface holding all profile stats as equal cells split by thin
+ * vertical rules — the Linen prototype's stats strip (serif numbers, muted labels).
+ */
 @Composable
-internal fun StatCard(
-    modifier: Modifier = Modifier,
-    icon: ImageVector,
-    iconTint: Color,
-    value: String,
-    label: String
+internal fun ProfileStatsCard(
+    stats: List<Pair<String, String>>,
+    modifier: Modifier = Modifier
 ) {
-    Card(
-        modifier = modifier,
-        shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = androidx.compose.foundation.BorderStroke(1.dp, MaterialTheme.colorScheme.outline),
+        shadowElevation = 2.dp
     ) {
-        Column(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(vertical = 16.dp, horizontal = 8.dp),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(36.dp)
-                    .clip(CircleShape)
-                    .background(iconTint.copy(alpha = 0.12f)),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    icon,
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(18.dp)
-                )
+        Row(modifier = Modifier.fillMaxWidth()) {
+            stats.forEachIndexed { index, (value, label) ->
+                if (index > 0) {
+                    androidx.compose.material3.VerticalDivider(
+                        modifier = Modifier.height(56.dp),
+                        color = MaterialTheme.colorScheme.outline
+                    )
+                }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 16.dp, horizontal = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(2.dp)
+                ) {
+                    Text(
+                        value,
+                        style = MaterialTheme.typography.headlineSmall,
+                        color = MaterialTheme.colorScheme.onSurface
+                    )
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
             }
-            Text(
-                value,
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.ExtraBold,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                label,
-                style = MaterialTheme.typography.labelSmall,
-                color = MaterialTheme.colorScheme.onSurfaceVariant
-            )
         }
     }
 }
@@ -257,7 +256,6 @@ internal fun EditProfileSheet(
             Text(
                 "Edit profile",
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface
             )
 

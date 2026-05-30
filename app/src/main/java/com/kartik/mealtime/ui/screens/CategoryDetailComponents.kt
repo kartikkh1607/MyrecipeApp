@@ -74,7 +74,7 @@ fun EnhancedRecipeCard(
     )
 
     val favoriteColor by animateColorAsState(
-        targetValue = if (isFavorite) Color(0xFFE91E63) else Color.White.copy(alpha = 0.9f),
+        targetValue = if (isFavorite) com.kartik.mealtime.ui.theme.Heart else Color.White.copy(alpha = 0.9f),
         label = "favorite_color"
     )
 
@@ -160,7 +160,7 @@ fun EnhancedRecipeCard(
                             Icon(
                                 imageVector = Icons.Default.Star,
                                 contentDescription = null,
-                                tint = Color(0xFFFFC107),
+                                tint = com.kartik.mealtime.ui.theme.StarGold,
                                 modifier = Modifier.size(13.dp)
                             )
                             Text(
@@ -251,8 +251,7 @@ fun EnhancedRecipeCard(
             ) {
                 Text(
                     text = recipe.name,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.headlineSmall,
                     maxLines = 2,
                     overflow = TextOverflow.Ellipsis
                 )
@@ -343,7 +342,7 @@ fun DietaryFilterBottomSheet(
         Text(
             text = "Filter by Dietary Preference",
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold
+            color = MaterialTheme.colorScheme.onSurface
         )
 
         // Hoist .distinct() out of the items() call so it runs once per filter-list

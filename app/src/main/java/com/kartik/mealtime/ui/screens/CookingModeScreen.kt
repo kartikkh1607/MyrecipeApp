@@ -178,7 +178,6 @@ fun CookingModeScreen(
                     Text(
                         text = "$headline.",
                         style = MaterialTheme.typography.headlineMedium,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground,
                         lineHeight = 34.sp
                     )
@@ -186,11 +185,14 @@ fun CookingModeScreen(
                     Spacer(Modifier.height(20.dp))
 
                     // Detail card
-                    Card(
+                    androidx.compose.material3.Surface(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(20.dp),
-                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                        color = MaterialTheme.colorScheme.surface,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+                        ),
+                        shadowElevation = 1.dp,
                     ) {
                         Column(modifier = Modifier.padding(20.dp)) {
                             Text(

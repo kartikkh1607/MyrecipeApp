@@ -7,6 +7,7 @@ import androidx.compose.animation.fadeIn
 import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -37,6 +38,7 @@ import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.LocalFireDepartment
 import androidx.compose.material.icons.filled.Person
 import androidx.compose.material.icons.filled.Restaurant
+import androidx.compose.material.icons.filled.Star
 import androidx.compose.material.icons.filled.Visibility
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
@@ -87,7 +89,6 @@ import com.google.android.libraries.identity.googleid.GoogleIdTokenCredential
 import com.google.android.libraries.identity.googleid.GoogleIdTokenParsingException
 import com.kartik.mealtime.R
 import com.kartik.mealtime.data.repository.SignInProvider
-import com.kartik.mealtime.ui.theme.ForestGreen
 import com.kartik.mealtime.ui.viewmodel.AuthViewModel
 import com.kartik.mealtime.ui.viewmodel.FavoritesViewModel
 import com.kartik.mealtime.ui.viewmodel.MainViewModel
@@ -107,6 +108,7 @@ fun ProfileScreen(
     val favoriteRecipes by favoritesViewModel.favoriteRecipes
     val currentUser by authViewModel.currentUser.collectAsStateWithLifecycle()
     val userPrefs by userViewModel.preferences.collectAsStateWithLifecycle()
+    val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
     var showSignOutDialog by remember { mutableStateOf(false) }
     var showEditSheet by remember { mutableStateOf(false) }
     var showDeleteDialog by remember { mutableStateOf(false) }
@@ -369,111 +371,101 @@ fun ProfileScreen(
             .background(MaterialTheme.colorScheme.background)
             .verticalScroll(rememberScrollState())
     ) {
-        // ── Hero Header ────────────────────────────────────────────────────────
-        Box(
+        // ── Top bar — paper, back + title + settings (Linen) ────────────────────
+        Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .height(220.dp)
-                .background(
-                    Brush.verticalGradient(
-                        colors = listOf(ForestGreen, Color(0xFF1F4040))
-                    )
-                )
+                .statusBarsPadding()
+                .padding(start = 6.dp, end = 6.dp, top = 6.dp, bottom = 4.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            // Decorative orbs
-            Box(
-                modifier = Modifier
-                    .size(200.dp)
-                    .align(Alignment.TopEnd)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.06f))
-            )
-            Box(
-                modifier = Modifier
-                    .size(130.dp)
-                    .align(Alignment.BottomStart)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.04f))
-            )
-
-            // Back button
-            IconButton(
-                onClick = { navController.popBackStack() },
-                modifier = Modifier
-                    .statusBarsPadding()
-                    .padding(8.dp)
-            ) {
+            IconButton(onClick = { navController.popBackStack() }) {
                 Icon(
                     Icons.AutoMirrored.Filled.ArrowBack,
                     contentDescription = "Back",
-                    tint = Color.White
+                    tint = MaterialTheme.colorScheme.onBackground
                 )
             }
+            Text(
+                text = "Profile",
+                style = MaterialTheme.typography.headlineSmall,
+                color = MaterialTheme.colorScheme.onBackground,
+                modifier = Modifier.weight(1f)
+            )
+        }
 
-            // Avatar + name centered
-            Column(
+        Spacer(modifier = Modifier.height(8.dp))
+
+        // ── Identity row — avatar + name + email + PREMIUM pill ─────────────────
+        AnimatedVisibility(
+            visible = visible,
+            enter = slideInVertically(
+                initialOffsetY = { 20 },
+                animationSpec = spring(stiffness = 300f)
+            ) + fadeIn()
+        ) {
+            Row(
                 modifier = Modifier
-                    .align(Alignment.Center)
-                    .statusBarsPadding()
-                    .padding(top = 16.dp),
-                horizontalAlignment = Alignment.CenterHorizontally
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                AnimatedVisibility(
-                    visible = visible,
-                    enter = scaleIn(
-                        initialScale = 0.6f,
-                        animationSpec = spring(Spring.DampingRatioLowBouncy, 280f)
-                    ) + fadeIn()
+                // Avatar circle — primary-tinted with a primary ring (matches prototype).
+                Box(
+                    modifier = Modifier
+                        .size(76.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer)
+                        .border(2.dp, MaterialTheme.colorScheme.primary, CircleShape),
+                    contentAlignment = Alignment.Center
                 ) {
-                    // Avatar circle — shows the user's chosen emoji.
-                    Box(
-                        modifier = Modifier
-                            .size(88.dp)
-                            .clip(CircleShape)
-                            .background(Color.White.copy(alpha = 0.2f)),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Text(
-                            text = userPrefs.avatarEmoji,
-                            fontSize = 44.sp
-                        )
-                    }
+                    Text(text = userPrefs.avatarEmoji, fontSize = 38.sp)
                 }
-
-                Spacer(modifier = Modifier.height(12.dp))
-
-                AnimatedVisibility(
-                    visible = visible,
-                    enter = slideInVertically(
-                        initialOffsetY = { 20 },
-                        animationSpec = spring(stiffness = 300f)
-                    ) + fadeIn()
-                ) {
-                    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                        // Display name — falls back to a friendly placeholder when blank.
-                        val displayName = userPrefs.displayName.ifBlank {
-                            if (currentUser != null) "Welcome back" else "Hello, Chef"
-                        }
-                        Text(
-                            text = displayName,
-                            style = MaterialTheme.typography.headlineSmall,
-                            fontWeight = FontWeight.ExtraBold,
-                            color = Color.White
-                        )
-                        Spacer(modifier = Modifier.height(4.dp))
-                        // Sub-label: email if signed in, prompt otherwise.
-                        if (currentUser != null) {
-                            Text(
-                                text = currentUser!!.email ?: "User",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.85f)
-                            )
-                        } else {
-                            Text(
-                                "Sign in to sync across devices",
-                                style = MaterialTheme.typography.bodySmall,
-                                color = Color.White.copy(alpha = 0.7f)
-                            )
+                Spacer(modifier = Modifier.width(16.dp))
+                Column(modifier = Modifier.weight(1f)) {
+                    val displayName = userPrefs.displayName.ifBlank {
+                        if (currentUser != null) "Welcome back" else "Hello, Chef"
+                    }
+                    Text(
+                        text = displayName,
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = MaterialTheme.colorScheme.onBackground,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(2.dp))
+                    Text(
+                        text = if (currentUser != null) currentUser!!.email ?: "User"
+                        else "Sign in to sync across devices",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                        maxLines = 1,
+                        overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis
+                    )
+                    if (isPremium) {
+                        Spacer(modifier = Modifier.height(7.dp))
+                        Surface(
+                            shape = RoundedCornerShape(50),
+                            color = MaterialTheme.colorScheme.tertiaryContainer
+                        ) {
+                            Row(
+                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 3.dp),
+                                verticalAlignment = Alignment.CenterVertically,
+                                horizontalArrangement = Arrangement.spacedBy(5.dp)
+                            ) {
+                                Icon(
+                                    Icons.Default.Star,
+                                    contentDescription = null,
+                                    tint = MaterialTheme.colorScheme.tertiary,
+                                    modifier = Modifier.size(12.dp)
+                                )
+                                Text(
+                                    "PREMIUM MEMBER",
+                                    style = MaterialTheme.typography.labelSmall,
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.tertiary
+                                )
+                            }
                         }
                     }
                 }
@@ -523,34 +515,14 @@ fun ProfileScreen(
                 animationSpec = spring(stiffness = 260f)
             ) + fadeIn()
         ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(horizontal = 20.dp),
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                StatCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Favorite,
-                    iconTint = Color(0xFFE91E63),
-                    value = favoriteRecipes.size.toString(),
-                    label = "Favorites"
+            ProfileStatsCard(
+                modifier = Modifier.padding(horizontal = 20.dp),
+                stats = listOf(
+                    favoriteRecipes.size.toString() to "Favorites",
+                    userPrefs.cookingStreakDays.toString() to "Day streak",
+                    userPrefs.totalRecipesViewed.toString() to "Viewed",
                 )
-                StatCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.LocalFireDepartment,
-                    iconTint = Color(0xFFFF6B35),
-                    value = userPrefs.cookingStreakDays.toString(),
-                    label = if (userPrefs.cookingStreakDays == 1) "Day streak" else "Day streak"
-                )
-                StatCard(
-                    modifier = Modifier.weight(1f),
-                    icon = Icons.Default.Visibility,
-                    iconTint = ForestGreen,
-                    value = userPrefs.totalRecipesViewed.toString(),
-                    label = "Viewed"
-                )
-            }
+            )
         }
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -591,11 +563,15 @@ fun ProfileScreen(
                     )
                 }
                 Spacer(modifier = Modifier.height(10.dp))
-                Card(
+                Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+                    ),
+                    shadowElevation = 1.dp
                 ) {
                     LazyRow(
                         contentPadding = PaddingValues(16.dp),
@@ -623,11 +599,15 @@ fun ProfileScreen(
                 SectionLabel("Account")
                 Spacer(modifier = Modifier.height(10.dp))
 
-                Card(
+                Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+                    ),
+                    shadowElevation = 1.dp
                 ) {
                     if (currentUser != null) {
                         // Signed in state
@@ -645,7 +625,7 @@ fun ProfileScreen(
                                 icon = Icons.Default.CheckCircle,
                                 label = "Sync",
                                 value = "Data synced to cloud",
-                                valueColor = ForestGreen
+                                valueColor = MaterialTheme.colorScheme.primary
                             )
                         }
                     } else {
@@ -719,11 +699,15 @@ fun ProfileScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
-                Card(
+                Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+                    ),
+                    shadowElevation = 1.dp
                 ) {
                     val servingsText =
                         if (userPrefs.defaultServings == 1) "1 serving"
@@ -784,11 +768,15 @@ fun ProfileScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
-                Card(
+                Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+                    ),
+                    shadowElevation = 1.dp
                 ) {
                     if (userPrefs.dietaryPrefs.isEmpty()) {
                         // Empty state — gentle prompt to set preferences.
@@ -881,11 +869,15 @@ fun ProfileScreen(
                     }
                 }
                 Spacer(modifier = Modifier.height(10.dp))
-                Card(
+                Surface(
                     modifier = Modifier.fillMaxWidth(),
-                    shape = RoundedCornerShape(16.dp),
-                    colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-                    elevation = CardDefaults.cardElevation(defaultElevation = 2.dp)
+                    shape = RoundedCornerShape(18.dp),
+                    color = MaterialTheme.colorScheme.surface,
+                    border = androidx.compose.foundation.BorderStroke(
+                        1.dp,
+                        MaterialTheme.colorScheme.outline.copy(alpha = 0.6f)
+                    ),
+                    shadowElevation = 1.dp
                 ) {
                     if (userPrefs.allergies.isEmpty()) {
                         Column(

@@ -157,7 +157,7 @@ internal fun CookingHeader(
     }
 }
 
-// ── Step progress dots ────────────────────────────────────────────────────────
+// ── Step progress segments (equal-width bars that fill as you advance) ────────
 @Composable
 internal fun StepProgressDots(
     totalSteps: Int,
@@ -165,46 +165,27 @@ internal fun StepProgressDots(
     completedSteps: Set<Int>,
     onStepClick: (Int) -> Unit
 ) {
-    val listState = rememberLazyListState()
-
-    LaunchedEffect(currentStep) {
-        listState.animateScrollToItem(currentStep.coerceAtMost((totalSteps - 1).coerceAtLeast(0)))
-    }
-
-    LazyRow(
-        state = listState,
-        contentPadding = PaddingValues(horizontal = 20.dp),
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
+    Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(vertical = 12.dp)
+            .padding(horizontal = 20.dp, vertical = 14.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp)
     ) {
-        items(count = totalSteps) { index ->
-            val isCompleted = index in completedSteps
-            val isCurrent = index == currentStep
-
-            val dotWidth by animateDpAsState(
-                targetValue = if (isCurrent) 24.dp else 8.dp,
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioMediumBouncy,
-                    stiffness = Spring.StiffnessMedium
-                ),
-                label = "dot_width_$index"
+        for (index in 0 until totalSteps) {
+            val filled = index <= currentStep
+            val segColor by animateColorAsState(
+                targetValue = if (filled)
+                    MaterialTheme.colorScheme.primary
+                else
+                    MaterialTheme.colorScheme.surfaceVariant,
+                label = "seg_color_$index"
             )
-            val dotColor by animateColorAsState(
-                targetValue = when {
-                    isCurrent -> MaterialTheme.colorScheme.primary
-                    isCompleted -> MaterialTheme.colorScheme.primary.copy(alpha = 0.55f)
-                    else -> MaterialTheme.colorScheme.outline.copy(alpha = 0.3f)
-                },
-                label = "dot_color_$index"
-            )
-
             Box(
                 modifier = Modifier
-                    .size(width = dotWidth, height = 8.dp)
-                    .clip(CircleShape)
-                    .background(dotColor)
+                    .weight(1f)
+                    .height(4.dp)
+                    .clip(RoundedCornerShape(2.dp))
+                    .background(segColor)
                     .clickable { onStepClick(index) }
             )
         }

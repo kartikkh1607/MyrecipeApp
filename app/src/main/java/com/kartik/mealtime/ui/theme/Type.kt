@@ -16,84 +16,87 @@ private val provider = GoogleFont.Provider(
     certificates     = R.array.com_google_android_gms_fonts_certs
 )
 
-// Playfair Display — elegant serif for screen titles (premium food-editorial feel)
-private val PlayfairDisplay = FontFamily(
-    Font(googleFont = GoogleFont("Playfair Display"), fontProvider = provider, weight = FontWeight.Normal),
-    Font(googleFont = GoogleFont("Playfair Display"), fontProvider = provider, weight = FontWeight.Medium),
-    Font(googleFont = GoogleFont("Playfair Display"), fontProvider = provider, weight = FontWeight.SemiBold),
-    Font(googleFont = GoogleFont("Playfair Display"), fontProvider = provider, weight = FontWeight.Bold),
-    Font(googleFont = GoogleFont("Playfair Display"), fontProvider = provider, weight = FontWeight.ExtraBold),
+// ── "Linen" type pairing ──────────────────────────────────────────────────────
+// Newsreader — editorial serif for display & headline (screen titles, hero copy).
+// Hanken Grotesk — clean humanist sans for titles, body, labels, and UI chrome.
+
+private val Newsreader = FontFamily(
+    Font(googleFont = GoogleFont("Newsreader"), fontProvider = provider, weight = FontWeight.Normal),
+    Font(googleFont = GoogleFont("Newsreader"), fontProvider = provider, weight = FontWeight.Medium),
+    Font(googleFont = GoogleFont("Newsreader"), fontProvider = provider, weight = FontWeight.SemiBold),
+    Font(googleFont = GoogleFont("Newsreader"), fontProvider = provider, weight = FontWeight.Bold),
 )
 
-// Inter — clean modern sans-serif for body, labels, and UI elements
-private val Inter = FontFamily(
-    Font(googleFont = GoogleFont("Inter"), fontProvider = provider, weight = FontWeight.Normal),
-    Font(googleFont = GoogleFont("Inter"), fontProvider = provider, weight = FontWeight.Medium),
-    Font(googleFont = GoogleFont("Inter"), fontProvider = provider, weight = FontWeight.SemiBold),
-    Font(googleFont = GoogleFont("Inter"), fontProvider = provider, weight = FontWeight.Bold),
+private val HankenGrotesk = FontFamily(
+    Font(googleFont = GoogleFont("Hanken Grotesk"), fontProvider = provider, weight = FontWeight.Normal),
+    Font(googleFont = GoogleFont("Hanken Grotesk"), fontProvider = provider, weight = FontWeight.Medium),
+    Font(googleFont = GoogleFont("Hanken Grotesk"), fontProvider = provider, weight = FontWeight.SemiBold),
+    Font(googleFont = GoogleFont("Hanken Grotesk"), fontProvider = provider, weight = FontWeight.Bold),
+    Font(googleFont = GoogleFont("Hanken Grotesk"), fontProvider = provider, weight = FontWeight.ExtraBold),
 )
 
 // ── Typography System ─────────────────────────────────────────────────────────
-// Playfair Display → Display, Headline styles  (screen titles, hero headings)
-// Inter            → Title, Body, Label styles  (UI chrome, body copy, chips)
+// Newsreader     → Display, Headline (screen titles, hero headings — editorial)
+// Hanken Grotesk → Title, Body, Label (UI chrome, body copy, chips)
+// Display tracking is gently negative (-0.01em ≈ subtle) per the Linen direction.
 val Typography = Typography(
 
     // Display — hero sections
     displayLarge = TextStyle(
-        fontFamily = PlayfairDisplay,
-        fontWeight = FontWeight.Bold,
-        fontSize = 32.sp,
-        lineHeight = 40.sp,
+        fontFamily = Newsreader,
+        fontWeight = FontWeight.Medium,
+        fontSize = 40.sp,
+        lineHeight = 44.sp,
         letterSpacing = (-0.5).sp
     ),
     displayMedium = TextStyle(
-        fontFamily = PlayfairDisplay,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 28.sp,
-        lineHeight = 36.sp,
-        letterSpacing = (-0.25).sp
+        fontFamily = Newsreader,
+        fontWeight = FontWeight.Medium,
+        fontSize = 30.sp,
+        lineHeight = 34.sp,
+        letterSpacing = (-0.3).sp
     ),
 
-    // Headlines — screen titles and section headers (Playfair gives editorial richness)
+    // Headlines — screen titles and section headers (Newsreader editorial richness)
     headlineLarge = TextStyle(
-        fontFamily = PlayfairDisplay,
-        fontWeight = FontWeight.Bold,
+        fontFamily = Newsreader,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 26.sp,
-        lineHeight = 34.sp,
-        letterSpacing = 0.sp
+        lineHeight = 32.sp,
+        letterSpacing = (-0.3).sp
     ),
     headlineMedium = TextStyle(
-        fontFamily = PlayfairDisplay,
-        fontWeight = FontWeight.Bold,
+        fontFamily = Newsreader,
+        fontWeight = FontWeight.Medium,
         fontSize = 22.sp,
-        lineHeight = 30.sp,
-        letterSpacing = 0.sp
+        lineHeight = 28.sp,
+        letterSpacing = (-0.2).sp
     ),
     headlineSmall = TextStyle(
-        fontFamily = PlayfairDisplay,
-        fontWeight = FontWeight.SemiBold,
-        fontSize = 18.sp,
-        lineHeight = 26.sp,
-        letterSpacing = 0.sp
+        fontFamily = Newsreader,
+        fontWeight = FontWeight.Medium,
+        fontSize = 19.sp,
+        lineHeight = 24.sp,
+        letterSpacing = (-0.1).sp
     ),
 
-    // Titles — card titles and component labels (Inter for readability at small sizes)
+    // Titles — card titles and component labels (Hanken Grotesk for readability)
     titleLarge = TextStyle(
-        fontFamily = Inter,
+        fontFamily = HankenGrotesk,
         fontWeight = FontWeight.SemiBold,
         fontSize = 16.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.15.sp
+        lineHeight = 22.sp,
+        letterSpacing = 0.sp
     ),
     titleMedium = TextStyle(
-        fontFamily = Inter,
-        fontWeight = FontWeight.Medium,
+        fontFamily = HankenGrotesk,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 14.sp,
         lineHeight = 20.sp,
         letterSpacing = 0.1.sp
     ),
     titleSmall = TextStyle(
-        fontFamily = Inter,
+        fontFamily = HankenGrotesk,
         fontWeight = FontWeight.Medium,
         fontSize = 12.sp,
         lineHeight = 16.sp,
@@ -102,44 +105,44 @@ val Typography = Typography(
 
     // Body — main content and descriptions
     bodyLarge = TextStyle(
-        fontFamily = Inter,
+        fontFamily = HankenGrotesk,
         fontWeight = FontWeight.Normal,
-        fontSize = 16.sp,
-        lineHeight = 28.sp,
-        letterSpacing = 0.15.sp
+        fontSize = 15.sp,
+        lineHeight = 24.sp,
+        letterSpacing = 0.1.sp
     ),
     bodyMedium = TextStyle(
-        fontFamily = Inter,
+        fontFamily = HankenGrotesk,
         fontWeight = FontWeight.Normal,
         fontSize = 14.sp,
-        lineHeight = 24.sp,
-        letterSpacing = 0.25.sp
+        lineHeight = 22.sp,
+        letterSpacing = 0.15.sp
     ),
     bodySmall = TextStyle(
-        fontFamily = Inter,
+        fontFamily = HankenGrotesk,
         fontWeight = FontWeight.Normal,
         fontSize = 12.sp,
-        lineHeight = 20.sp,
-        letterSpacing = 0.25.sp
+        lineHeight = 18.sp,
+        letterSpacing = 0.2.sp
     ),
 
     // Labels — buttons, tags, and UI elements
     labelLarge = TextStyle(
-        fontFamily = Inter,
+        fontFamily = HankenGrotesk,
         fontWeight = FontWeight.SemiBold,
         fontSize = 14.sp,
         lineHeight = 20.sp,
-        letterSpacing = 0.5.sp
+        letterSpacing = 0.1.sp
     ),
     labelMedium = TextStyle(
-        fontFamily = Inter,
-        fontWeight = FontWeight.Medium,
+        fontFamily = HankenGrotesk,
+        fontWeight = FontWeight.SemiBold,
         fontSize = 12.sp,
         lineHeight = 16.sp,
-        letterSpacing = 0.5.sp
+        letterSpacing = 0.4.sp
     ),
     labelSmall = TextStyle(
-        fontFamily = Inter,
+        fontFamily = HankenGrotesk,
         fontWeight = FontWeight.Medium,
         fontSize = 10.sp,
         lineHeight = 14.sp,

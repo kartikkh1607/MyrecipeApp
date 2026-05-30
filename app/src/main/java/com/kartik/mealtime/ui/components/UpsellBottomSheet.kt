@@ -156,7 +156,6 @@ private fun UpsellHero(title: String, description: String) {
             Text(
                 text = title,
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
                 color = Color.White,
             )
             Spacer(Modifier.height(6.dp))

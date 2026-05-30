@@ -74,10 +74,17 @@ import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.animation.core.tween
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.graphics.StrokeCap
+import androidx.compose.ui.graphics.drawscope.Stroke
 import com.kartik.mealtime.domain.model.ShoppingListItem
 import com.kartik.mealtime.ui.theme.ForestGreen
 import com.kartik.mealtime.ui.viewmodel.AiViewModel
 import kotlinx.coroutines.delay
+import kotlin.math.roundToInt
 
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -602,6 +609,93 @@ internal fun SlSwipeableItemRow(
     }
 }
 
+// ── Progress card with circular % ring ────────────────────────────────────────
+@Composable
+internal fun ShoppingProgressCard(done: Int, total: Int) {
+    val pct = if (total > 0) done.toFloat() / total else 0f
+    val animPct by animateFloatAsState(
+        targetValue = pct,
+        animationSpec = tween(500),
+        label = "sl_progress_ring"
+    )
+    val onPrimary = MaterialTheme.colorScheme.onPrimary
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 20.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.primary
+    ) {
+        Box {
+            // Subtle diagonal hatch overlay (matches the prototype's premium texture)
+            Canvas(modifier = Modifier.matchParentSize()) {
+                val gap = 13.dp.toPx()
+                val sw = 1.dp.toPx()
+                var x = 0f
+                while (x < size.width + size.height) {
+                    drawLine(
+                        color = Color.White.copy(alpha = 0.05f),
+                        start = Offset(x, 0f),
+                        end = Offset(x - size.height, size.height),
+                        strokeWidth = sw
+                    )
+                    x += gap
+                }
+            }
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(16.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Column {
+                    Text(
+                        "$done of $total",
+                        style = MaterialTheme.typography.headlineMedium,
+                        color = onPrimary
+                    )
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        "items checked off",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = onPrimary.copy(alpha = 0.8f)
+                    )
+                }
+                Box(
+                    modifier = Modifier.size(52.dp),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Canvas(modifier = Modifier.size(52.dp)) {
+                        val stroke = 5.dp.toPx()
+                        val d = size.minDimension - stroke
+                        val tl = Offset(stroke / 2f, stroke / 2f)
+                        val arcSize = Size(d, d)
+                        drawArc(
+                            color = onPrimary.copy(alpha = 0.25f),
+                            startAngle = 0f, sweepAngle = 360f, useCenter = false,
+                            topLeft = tl, size = arcSize,
+                            style = Stroke(width = stroke)
+                        )
+                        drawArc(
+                            color = onPrimary,
+                            startAngle = -90f, sweepAngle = animPct * 360f, useCenter = false,
+                            topLeft = tl, size = arcSize,
+                            style = Stroke(width = stroke, cap = StrokeCap.Round)
+                        )
+                    }
+                    Text(
+                        "${(animPct * 100).roundToInt()}%",
+                        style = MaterialTheme.typography.labelMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = onPrimary
+                    )
+                }
+            }
+        }
+    }
+}
+
 // ── Empty state ───────────────────────────────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -650,7 +744,6 @@ internal fun SlEmptyState(onBrowse: () -> Unit) {
                 Text(
                     "Your list is empty",
                     style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Spacer(Modifier.height(10.dp))

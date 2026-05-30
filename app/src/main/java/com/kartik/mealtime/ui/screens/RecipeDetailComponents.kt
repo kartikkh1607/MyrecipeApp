@@ -15,18 +15,23 @@ import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ExperimentalLayoutApi
 import androidx.compose.foundation.layout.FlowRow
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.statusBarsPadding
@@ -37,6 +42,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Add
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
@@ -106,6 +112,8 @@ fun RecipeHeroSection(
     recipe: Recipe,
     isFavorite: Boolean,
     parallaxOffsetPx: Float = 0f,
+    showInfo: Boolean = true,
+    heroHeight: androidx.compose.ui.unit.Dp = 380.dp,
     onBackClick: () -> Unit,
     onFavoriteClick: () -> Unit,
     onShareClick: () -> Unit = {}
@@ -119,7 +127,7 @@ fun RecipeHeroSection(
         label = "favorite_scale"
     )
     val favoriteColor by animateColorAsState(
-        targetValue = if (isFavorite) Color(0xFFFF4E6A) else Color.White,
+        targetValue = if (isFavorite) com.kartik.mealtime.ui.theme.Heart else Color.White,
         animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 400f),
         label = "favorite_color"
     )
@@ -131,7 +139,8 @@ fun RecipeHeroSection(
         wasFavorite.value = isFavorite
     }
 
-    val overlayBrush = remember {
+    val pageBg = MaterialTheme.colorScheme.background
+    val overlayBrush = if (showInfo) {
         Brush.verticalGradient(
             colorStops = arrayOf(
                 0.0f to Color.Black.copy(alpha = 0.40f),
@@ -140,12 +149,23 @@ fun RecipeHeroSection(
                 1.0f to Color.Black.copy(alpha = 0.90f)
             )
         )
+    } else {
+        // Lean hero: keep top contrast for the controls, then fade into the page so
+        // the editorial title block below blends onto the paper background.
+        Brush.verticalGradient(
+            colorStops = arrayOf(
+                0.0f to Color.Black.copy(alpha = 0.38f),
+                0.28f to Color.Transparent,
+                0.74f to Color.Transparent,
+                1.0f to pageBg
+            )
+        )
     }
 
     Box(
         modifier = Modifier
             .fillMaxWidth()
-            .height(380.dp)
+            .height(heroHeight)
     ) {
         AsyncImage(
             model = recipe.imageUrl,
@@ -215,6 +235,7 @@ fun RecipeHeroSection(
         )
 
         // Bottom info
+        if (showInfo) {
         Column(
             modifier = Modifier
                 .align(Alignment.BottomStart)
@@ -252,7 +273,7 @@ fun RecipeHeroSection(
                         Icon(
                             Icons.Default.Star,
                             null,
-                            tint = Color(0xFFF59E0B),
+                            tint = com.kartik.mealtime.ui.theme.StarGold,
                             modifier = Modifier.size(16.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -288,7 +309,7 @@ fun RecipeHeroSection(
                     Row(verticalAlignment = Alignment.CenterVertically) {
                         Icon(
                             Icons.Default.LocalFireDepartment, null,
-                            tint = Color(0xFFF59E0B),
+                            tint = com.kartik.mealtime.ui.theme.StarGold,
                             modifier = Modifier.size(15.dp)
                         )
                         Spacer(modifier = Modifier.width(4.dp))
@@ -300,6 +321,7 @@ fun RecipeHeroSection(
                     }
                 }
             }
+        }
         }
     }
 }
@@ -320,346 +342,6 @@ private fun HeroChip(text: String) {
     }
 }
 
-// ── Overview 2×2 stat grid ────────────────────────────────────────────────────
-@Composable
-fun RecipeOverviewSection(recipe: Recipe) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            StatTile(
-                icon = Icons.Default.Timer,
-                label = "Prep",
-                value = "${recipe.prepTime} min",
-                modifier = Modifier.weight(1f)
-            )
-            StatTile(
-                icon = Icons.Default.LocalFireDepartment,
-                label = "Cook",
-                value = "${recipe.cookTime} min",
-                modifier = Modifier.weight(1f)
-            )
-        }
-        Spacer(modifier = Modifier.height(12.dp))
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            StatTile(
-                icon = Icons.Default.Restaurant,
-                label = "Servings",
-                value = "${recipe.servings}",
-                modifier = Modifier.weight(1f)
-            )
-            StatTile(
-                icon = Icons.AutoMirrored.Filled.TrendingUp,
-                label = "Difficulty",
-                value = recipe.difficulty.displayName(),
-                modifier = Modifier.weight(1f)
-            )
-        }
-    }
-}
-
-@Composable
-private fun StatTile(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    value: String,
-    modifier: Modifier = Modifier
-) {
-    // In dark mode, primary-on-primaryContainer is only 1.4:1 (Teal on darker Teal).
-    // Flip to solid primary + onPrimary so the icon actually reads (7.5:1).
-    val isDarkScheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val tileBackground = if (isDarkScheme) MaterialTheme.colorScheme.primary
-    else MaterialTheme.colorScheme.primaryContainer
-    val iconTint = if (isDarkScheme) MaterialTheme.colorScheme.onPrimary
-    else MaterialTheme.colorScheme.primary
-
-    Card(
-        modifier = modifier,
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Box(
-                modifier = Modifier
-                    .size(38.dp)
-                    .background(
-                        tileBackground,
-                        RoundedCornerShape(10.dp)
-                    ),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = icon,
-                    contentDescription = null,
-                    tint = iconTint,
-                    modifier = Modifier.size(20.dp)
-                )
-            }
-            Column {
-                Text(
-                    text = value,
-                    style = MaterialTheme.typography.titleMedium,
-                    fontWeight = FontWeight.Bold,
-                    color = MaterialTheme.colorScheme.onSurface
-                )
-                Text(
-                    text = label,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant
-                )
-            }
-        }
-    }
-}
-
-// ── "About this recipe" tappable row — opens description bottom sheet ────────
-@Composable
-fun AboutRecipeRow(onClick: () -> Unit) {
-    // In dark mode, primary-on-primaryContainer is only 1.4:1 (Teal on darker Teal).
-    // Flip to solid primary + onPrimary so the icon actually reads (7.5:1).
-    val isDarkScheme = MaterialTheme.colorScheme.surface.luminance() < 0.5f
-    val tileBackground = if (isDarkScheme) MaterialTheme.colorScheme.primary
-    else MaterialTheme.colorScheme.primaryContainer
-    val iconTint = if (isDarkScheme) MaterialTheme.colorScheme.onPrimary
-    else MaterialTheme.colorScheme.primary
-
-    Surface(
-        onClick = onClick,
-        modifier = Modifier
-            .fillMaxWidth()
-            .padding(horizontal = 16.dp),
-        shape = RoundedCornerShape(16.dp),
-        color = MaterialTheme.colorScheme.surface,
-        tonalElevation = 2.dp,
-        shadowElevation = 2.dp
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(horizontal = 16.dp, vertical = 14.dp),
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(12.dp)
-            ) {
-                Box(
-                    modifier = Modifier
-                        .size(38.dp)
-                        .background(
-                            tileBackground,
-                            RoundedCornerShape(10.dp)
-                        ),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = Icons.Default.Restaurant,
-                        contentDescription = null,
-                        tint = iconTint,
-                        modifier = Modifier.size(20.dp)
-                    )
-                }
-                Column {
-                    Text(
-                        "About this recipe",
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.SemiBold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Text(
-                        "Tap to read more",
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-            Icon(
-                imageVector = Icons.AutoMirrored.Filled.ArrowBack,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.onSurfaceVariant,
-                modifier = Modifier
-                    .size(20.dp)
-                    .graphicsLayer { rotationZ = 180f }
-            )
-        }
-    }
-}
-
-// ── Action buttons ────────────────────────────────────────────────────────────
-@Composable
-fun CookingActionButtons(
-    recipeName: String,
-    onStartCooking: () -> Unit,
-    onAddToShoppingList: () -> Unit,
-    // Resolves a YouTube URL for the recipe (specific video if found, else search).
-    // Suspends because it may hit the network — see MainViewModel.resolveYoutubeUrl.
-    resolveVideoUrl: suspend (String) -> String
-) {
-    val haptic = LocalHapticFeedback.current
-    val context = LocalContext.current
-    val scope = rememberCoroutineScope()
-    var isFindingVideo by remember { mutableStateOf(false) }
-
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.spacedBy(12.dp)
-        ) {
-            Button(
-                onClick = onStartCooking,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp),
-                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(Icons.Default.PlayArrow, null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Start Cooking", fontWeight = FontWeight.Bold)
-            }
-
-            OutlinedButton(
-                onClick = onAddToShoppingList,
-                modifier = Modifier
-                    .weight(1f)
-                    .height(56.dp),
-                shape = RoundedCornerShape(16.dp)
-            ) {
-                Icon(Icons.Default.ShoppingCart, null, modifier = Modifier.size(20.dp))
-                Spacer(modifier = Modifier.width(8.dp))
-                Text("Shopping List", fontWeight = FontWeight.Medium)
-            }
-        }
-
-        Spacer(modifier = Modifier.height(12.dp))
-
-        Surface(
-            onClick = {
-                if (isFindingVideo) return@Surface
-                haptic.performHapticFeedback(HapticFeedbackType.LongPress)
-                isFindingVideo = true
-                scope.launch {
-                    // resolveVideoUrl never throws — it returns a search URL on miss/error.
-                    val url = resolveVideoUrl(recipeName)
-                    isFindingVideo = false
-                    val intent = Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url))
-                    context.startActivity(intent)
-                }
-            },
-            modifier = Modifier.fillMaxWidth(),
-            shape = RoundedCornerShape(16.dp),
-            color = Color(0xFFFF0000).copy(alpha = 0.08f),
-            border = androidx.compose.foundation.BorderStroke(
-                1.dp,
-                Color(0xFFFF0000).copy(alpha = 0.25f)
-            )
-        ) {
-            Row(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(vertical = 14.dp, horizontal = 16.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                if (isFindingVideo) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(16.dp),
-                        strokeWidth = 2.dp,
-                        color = Color(0xFFFF0000)
-                    )
-                } else {
-                    Text("▶", fontSize = 14.sp, color = Color(0xFFFF0000))
-                }
-                Spacer(modifier = Modifier.width(10.dp))
-                Text(
-                    if (isFindingVideo) "Finding video…" else "Watch Video on YouTube",
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.SemiBold,
-                    color = Color(0xFFFF0000)
-                )
-            }
-        }
-    }
-}
-
-// ── Ingredients section with check-off ───────────────────────────────────────
-@Composable
-fun IngredientsSection(
-    ingredients: List<Ingredient>,
-    scale: Float = 1f,
-    checkedSet: Set<Int> = emptySet(),
-    onToggleChecked: (Int) -> Unit = {}
-) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Ingredients",
-                style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
-            if (ingredients.isNotEmpty()) {
-                val checkedCount = checkedSet.size
-                AnimatedContent(
-                    targetState = checkedCount,
-                    transitionSpec = {
-                        slideInVertically { -it } + fadeIn() togetherWith
-                                slideOutVertically { it } + fadeOut()
-                    },
-                    label = "checked_count"
-                ) { count ->
-                    Text(
-                        text = "$count / ${ingredients.size}",
-                        style = MaterialTheme.typography.labelMedium,
-                        color = if (count == ingredients.size)
-                            MaterialTheme.colorScheme.primary
-                        else
-                            MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = FontWeight.SemiBold
-                    )
-                }
-            }
-        }
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)) {
-                ingredients.forEachIndexed { index, ingredient ->
-                    IngredientItem(
-                        ingredient = ingredient,
-                        scale = scale,
-                        isChecked = index in checkedSet,
-                        onToggle = { onToggleChecked(index) },
-                        isLast = index == ingredients.lastIndex
-                    )
-                }
-            }
-        }
-    }
-}
-
 /**
  * Scales a numeric amount string by [scale], preserving the original string for
  * non-numeric values (e.g. "a pinch"). Whole numbers render without decimals;
@@ -672,628 +354,481 @@ internal fun scaleAmount(original: String, scale: Float): String {
     return String.format(Locale.ROOT, "%.2f", scaled).trimEnd('0').trimEnd('.')
 }
 
+// ═══ Prototype-faithful detail pieces (editorial title, meta strip, tabs…) ════
+
+// ── Editorial title block — sits below the lean hero on the paper background ───
 @Composable
-fun IngredientItem(
-    ingredient: Ingredient,
-    scale: Float = 1f,
-    isChecked: Boolean = false,
-    onToggle: () -> Unit = {},
-    isLast: Boolean
-) {
-    val amount = remember(ingredient.amount, scale) { scaleAmount(ingredient.amount, scale) }
-    val amountLabel = if (ingredient.unit.isBlank()) amount else "$amount ${ingredient.unit}"
-
-    val alpha by animateFloatAsState(
-        targetValue = if (isChecked) 0.45f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "ingredient_alpha"
-    )
-    val checkScale by animateFloatAsState(
-        targetValue = if (isChecked) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "check_scale"
-    )
-
-    Row(
-        modifier = Modifier
-            .fillMaxWidth()
-            .clickable(onClick = onToggle)
-            .padding(vertical = 10.dp)
-            .alpha(alpha),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        // Checkmark / dot indicator
-        Box(
-            modifier = Modifier.size(22.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            // Unchecked dot
-            Box(
-                modifier = Modifier
-                    .size(8.dp)
-                    .graphicsLayer { this.alpha = 1f - checkScale }
-                    .background(MaterialTheme.colorScheme.primary, CircleShape)
-            )
-            // Checked icon
-            Icon(
-                imageVector = Icons.Default.CheckCircle,
-                contentDescription = null,
-                tint = MaterialTheme.colorScheme.primary,
-                modifier = Modifier
-                    .size(20.dp)
-                    .graphicsLayer {
-                        this.alpha = checkScale
-                        scaleX = checkScale
-                        scaleY = checkScale
-                    }
-            )
-        }
-
-        Spacer(modifier = Modifier.width(12.dp))
-
-        Text(
-            text = ingredient.name,
-            style = MaterialTheme.typography.bodyMedium,
-            fontWeight = FontWeight.Medium,
-            color = MaterialTheme.colorScheme.onSurface,
-            textDecoration = if (isChecked) TextDecoration.LineThrough else TextDecoration.None,
-            modifier = Modifier.weight(1f)
-        )
-
-        Spacer(modifier = Modifier.width(8.dp))
-
-        Surface(
-            shape = RoundedCornerShape(20.dp),
-            color = MaterialTheme.colorScheme.primaryContainer
-        ) {
+fun RecipeTitleBlock(recipe: Recipe) {
+    Column(modifier = Modifier.padding(horizontal = 22.dp)) {
+        val kicker = buildList {
+            if (recipe.cuisine.isNotBlank()) add(recipe.cuisine)
+            if (recipe.category.isNotBlank()) add(recipe.category)
+        }.joinToString(" · ").uppercase()
+        if (kicker.isNotBlank()) {
             Text(
-                text = amountLabel,
+                kicker,
                 style = MaterialTheme.typography.labelMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = MaterialTheme.colorScheme.onPrimaryContainer,
-                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-            )
-        }
-    }
-
-    if (!isLast) {
-        HorizontalDivider(
-            modifier = Modifier.padding(start = 34.dp),
-            color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f)
-        )
-    }
-}
-
-// ── Instructions header with progress ────────────────────────────────────────
-@Composable
-internal fun InstructionsHeader(totalSteps: Int, completedCount: Int) {
-    Column(modifier = Modifier.padding(start = 16.dp, end = 16.dp, bottom = 16.dp)) {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween,
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Text(
-                text = "Instructions",
-                style = MaterialTheme.typography.headlineSmall,
                 fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
+                color = MaterialTheme.colorScheme.tertiary,
+                letterSpacing = 1.sp
             )
-            AnimatedContent(
-                targetState = completedCount,
-                transitionSpec = {
-                    slideInVertically { -it } + fadeIn() togetherWith slideOutVertically { it } + fadeOut()
-                },
-                label = "steps_count"
-            ) { count ->
-                Text(
-                    text = "$count / $totalSteps",
-                    style = MaterialTheme.typography.labelMedium,
-                    color = if (count == totalSteps && totalSteps > 0)
-                        MaterialTheme.colorScheme.primary
-                    else
-                        MaterialTheme.colorScheme.onSurfaceVariant,
-                    fontWeight = FontWeight.SemiBold
-                )
-            }
+            Spacer(modifier = Modifier.height(7.dp))
         }
-
-        if (totalSteps > 0) {
-            Spacer(modifier = Modifier.height(10.dp))
-            val progress by animateFloatAsState(
-                targetValue = completedCount.toFloat() / totalSteps.toFloat(),
-                animationSpec = spring(
-                    dampingRatio = Spring.DampingRatioNoBouncy,
-                    stiffness = Spring.StiffnessMediumLow
-                ),
-                label = "steps_progress"
-            )
-            LinearProgressIndicator(
-                progress = { progress },
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .height(4.dp)
-                    .clip(RoundedCornerShape(2.dp)),
-                color = MaterialTheme.colorScheme.primary,
-                trackColor = MaterialTheme.colorScheme.outline.copy(alpha = 0.2f),
-                strokeCap = StrokeCap.Round
-            )
-        }
-    }
-}
-
-// ── Instruction step card with completion ────────────────────────────────────
-@Composable
-fun InstructionStepCard(
-    step: RecipeStep,
-    isCompleted: Boolean = false,
-    onToggle: () -> Unit = {},
-    modifier: Modifier = Modifier
-) {
-    val cardAlpha by animateFloatAsState(
-        targetValue = if (isCompleted) 0.6f else 1f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioNoBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "step_alpha"
-    )
-    val accentColor by animateColorAsState(
-        targetValue = if (isCompleted) MaterialTheme.colorScheme.primary else MaterialTheme.colorScheme.primary,
-        label = "step_accent"
-    )
-    val checkScale by animateFloatAsState(
-        targetValue = if (isCompleted) 1f else 0f,
-        animationSpec = spring(
-            dampingRatio = Spring.DampingRatioMediumBouncy,
-            stiffness = Spring.StiffnessMedium
-        ),
-        label = "step_check_scale"
-    )
-
-    Card(
-        modifier = modifier
-            .fillMaxWidth()
-            .alpha(cardAlpha)
-            .clickable(onClick = onToggle),
-        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-        elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-        shape = RoundedCornerShape(16.dp)
-    ) {
-        Row(
-            modifier = Modifier
-                .fillMaxWidth()
-                .padding(16.dp)
-        ) {
-            // Step number / check circle
-            Box(
-                modifier = Modifier.size(36.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                // Number circle (fades out when completed)
-                Surface(
-                    modifier = Modifier
-                        .size(36.dp)
-                        .graphicsLayer { this.alpha = 1f - checkScale },
-                    color = accentColor,
-                    shape = CircleShape
-                ) {
-                    Box(contentAlignment = Alignment.Center) {
-                        Text(
-                            text = step.stepNumber.toString(),
-                            style = MaterialTheme.typography.labelLarge,
-                            fontWeight = FontWeight.Bold,
-                            color = MaterialTheme.colorScheme.onPrimary
-                        )
-                    }
-                }
-                // Check icon (springs in when completed)
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = "Completed",
-                    tint = MaterialTheme.colorScheme.primary,
-                    modifier = Modifier
-                        .size(36.dp)
-                        .graphicsLayer {
-                            this.alpha = checkScale
-                            scaleX = checkScale
-                            scaleY = checkScale
-                        }
-                )
-            }
-
-            Spacer(modifier = Modifier.width(14.dp))
-
-            Column(modifier = Modifier.weight(1f)) {
-                Text(
-                    text = step.instruction,
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurface,
-                    textDecoration = if (isCompleted) TextDecoration.LineThrough else TextDecoration.None,
-                    lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.2f
-                )
-
-                if (step.duration != null && !isCompleted) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.Timer, null,
-                            tint = MaterialTheme.colorScheme.primary,
-                            modifier = Modifier.size(15.dp)
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text(
-                            text = "${step.duration} minutes",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.primary,
-                            fontWeight = FontWeight.Medium
-                        )
-                    }
-                }
-
-                if (step.tips != null && !isCompleted) {
-                    Spacer(modifier = Modifier.height(8.dp))
-                    Surface(
-                        color = MaterialTheme.colorScheme.secondaryContainer,
-                        shape = RoundedCornerShape(8.dp)
-                    ) {
-                        Text(
-                            text = "💡 ${step.tips}",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSecondaryContainer,
-                            fontWeight = FontWeight.Medium,
-                            modifier = Modifier.padding(horizontal = 10.dp, vertical = 6.dp)
-                        )
-                    }
-                }
-            }
-        }
-    }
-}
-
-// ── Nutrition section with macro bars ─────────────────────────────────────────
-@Composable
-fun NutritionSection(nutritionInfo: NutritionInfo) {
-    Column(modifier = Modifier.padding(horizontal = 16.dp)) {
         Text(
-            text = "Nutrition Facts",
-            style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
+            recipe.name,
+            style = MaterialTheme.typography.headlineLarge,
             color = MaterialTheme.colorScheme.onBackground
         )
-
-        Spacer(modifier = Modifier.height(16.dp))
-
-        Card(
-            modifier = Modifier.fillMaxWidth(),
-            colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-            elevation = CardDefaults.cardElevation(defaultElevation = 2.dp),
-            shape = RoundedCornerShape(16.dp)
-        ) {
-            Column(modifier = Modifier.padding(20.dp)) {
-                // Calories — prominent
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Row(verticalAlignment = Alignment.CenterVertically) {
-                        Icon(
-                            Icons.Default.LocalFireDepartment,
-                            null,
-                            tint = Color(0xFFF59E0B),
-                            modifier = Modifier.size(22.dp)
-                        )
-                        Spacer(modifier = Modifier.width(8.dp))
-                        Text(
-                            "Calories",
-                            style = MaterialTheme.typography.titleMedium,
-                            fontWeight = FontWeight.SemiBold,
-                            color = MaterialTheme.colorScheme.onSurface
-                        )
-                    }
+        if (recipe.rating > 0) {
+            Spacer(modifier = Modifier.height(11.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Icon(
+                    Icons.Default.Star, null,
+                    tint = com.kartik.mealtime.ui.theme.StarGold,
+                    modifier = Modifier.size(16.dp)
+                )
+                Spacer(modifier = Modifier.width(5.dp))
+                Text(
+                    String.format(Locale.ROOT, "%.1f", recipe.rating),
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
+                if (recipe.reviewCount > 0) {
                     Text(
-                        "${nutritionInfo.calories} kcal",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.primary
+                        "  ·  ${recipe.reviewCount} reviews",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
                     )
-                }
-
-                Spacer(modifier = Modifier.height(20.dp))
-                HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
-                Spacer(modifier = Modifier.height(20.dp))
-
-                // Macro bars
-                val totalMacroG = nutritionInfo.protein + nutritionInfo.carbs + nutritionInfo.fat
-                if (totalMacroG > 0) {
-                    MacroBar(
-                        label = "Protein",
-                        value = nutritionInfo.protein,
-                        total = totalMacroG,
-                        unit = "g",
-                        color = Color(0xFF4CAF50)
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    MacroBar(
-                        label = "Carbs",
-                        value = nutritionInfo.carbs,
-                        total = totalMacroG,
-                        unit = "g",
-                        color = Color(0xFF2196F3)
-                    )
-                    Spacer(modifier = Modifier.height(14.dp))
-                    MacroBar(
-                        label = "Fat",
-                        value = nutritionInfo.fat,
-                        total = totalMacroG,
-                        unit = "g",
-                        color = Color(0xFFFF9800)
-                    )
-                } else {
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.SpaceEvenly
-                    ) {
-                        NutritionItem("Protein", "${nutritionInfo.protein.toInt()}", "g")
-                        NutritionItem("Carbs", "${nutritionInfo.carbs.toInt()}", "g")
-                        NutritionItem("Fat", "${nutritionInfo.fat.toInt()}", "g")
-                    }
                 }
             }
         }
-    }
-}
-
-@Composable
-private fun MacroBar(label: String, value: Float, total: Float, unit: String, color: Color) {
-    val fraction = (value / total).coerceIn(0f, 1f)
-    val animatedFraction by animateFloatAsState(
-        targetValue = fraction,
-        animationSpec = tween(durationMillis = 700, easing = FastOutSlowInEasing),
-        label = "macro_bar_$label"
-    )
-    Column {
-        Row(
-            modifier = Modifier.fillMaxWidth(),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Text(
-                label,
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.Medium,
-                color = MaterialTheme.colorScheme.onSurface
-            )
-            Text(
-                "${value.toInt()} $unit",
-                style = MaterialTheme.typography.bodyMedium,
-                fontWeight = FontWeight.SemiBold,
-                color = color
-            )
-        }
-        Spacer(modifier = Modifier.height(6.dp))
-        LinearProgressIndicator(
-            progress = { animatedFraction },
-            modifier = Modifier
-                .fillMaxWidth()
-                .height(7.dp)
-                .clip(RoundedCornerShape(4.dp)),
-            color = color,
-            trackColor = color.copy(alpha = 0.15f),
-            strokeCap = StrokeCap.Round
-        )
-    }
-}
-
-@Composable
-fun NutritionItem(label: String, value: String, unit: String) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Text(
-            text = value,
-            style = MaterialTheme.typography.titleLarge,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.primary
-        )
-        Text(
-            text = unit,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-        Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
-        )
-    }
-}
-
-// ── Tags section — FlowRow ────────────────────────────────────────────────────
-@OptIn(ExperimentalLayoutApi::class)
-@Composable
-fun TagsSection(tags: List<String>) {
-    if (tags.isNotEmpty()) {
-        Column(modifier = Modifier.padding(horizontal = 16.dp)) {
-            Text(
-                text = "Tags",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-                color = MaterialTheme.colorScheme.onBackground
-            )
+        if (recipe.description.isNotBlank()) {
             Spacer(modifier = Modifier.height(12.dp))
-            FlowRow(
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                tags.forEach { tag ->
-                    Surface(
-                        color = MaterialTheme.colorScheme.primaryContainer,
-                        shape = RoundedCornerShape(20.dp)
-                    ) {
-                        Text(
-                            text = tag,
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onPrimaryContainer,
-                            modifier = Modifier.padding(horizontal = 12.dp, vertical = 6.dp)
-                        )
-                    }
-                }
-            }
+            Text(
+                recipe.description,
+                style = MaterialTheme.typography.bodyMedium,
+                color = MaterialTheme.colorScheme.onSurfaceVariant,
+                lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.3f
+            )
         }
     }
 }
 
-// ── Section jump nav ──────────────────────────────────────────────────────────
+// ── 4-cell meta strip (Total · Level · kcal · Serves) ─────────────────────────
 @Composable
-internal fun RecipeSectionNav(
-    hasNutrition: Boolean,
-    onIngredients: () -> Unit,
-    onInstructions: () -> Unit,
-    onNutrition: () -> Unit
-) {
+fun RecipeMetaStrip(recipe: Recipe, servings: Int) {
+    val total = recipe.prepTime + recipe.cookTime
+    val cells = listOf(
+        Triple(Icons.Default.Timer, "$total min", "Total"),
+        Triple(Icons.AutoMirrored.Filled.TrendingUp, recipe.difficulty.displayName(), "Level"),
+        Triple(Icons.Default.LocalFireDepartment, recipe.calories?.let { "$it" } ?: "—", "kcal"),
+        Triple(Icons.Default.Restaurant, "$servings", "Serves")
+    )
     Surface(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 20.dp, vertical = 8.dp),
-        shape = RoundedCornerShape(50.dp),
-        color = MaterialTheme.colorScheme.surface.copy(alpha = 0.96f),
-        shadowElevation = 8.dp,
-        tonalElevation = 4.dp
+            .padding(horizontal = 22.dp),
+        shape = RoundedCornerShape(18.dp),
+        color = MaterialTheme.colorScheme.surface,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+        shadowElevation = 1.dp
     ) {
         Row(
             modifier = Modifier
                 .fillMaxWidth()
-                .padding(horizontal = 6.dp, vertical = 6.dp),
-            horizontalArrangement = Arrangement.SpaceEvenly
+                .height(IntrinsicSize.Min)
         ) {
-            SectionNavPill(label = "Ingredients", onClick = onIngredients)
-            SectionNavPill(label = "Instructions", onClick = onInstructions)
-            if (hasNutrition) SectionNavPill(label = "Nutrition", onClick = onNutrition)
+            cells.forEachIndexed { i, (icon, value, label) ->
+                if (i > 0) {
+                    Box(
+                        modifier = Modifier
+                            .width(1.dp)
+                            .fillMaxHeight()
+                            .background(MaterialTheme.colorScheme.outlineVariant)
+                    )
+                }
+                Column(
+                    modifier = Modifier
+                        .weight(1f)
+                        .padding(vertical = 14.dp, horizontal = 4.dp),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(5.dp)
+                ) {
+                    Icon(icon, null, tint = MaterialTheme.colorScheme.primary, modifier = Modifier.size(19.dp))
+                    Text(
+                        value,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onSurface,
+                        maxLines = 1
+                    )
+                    Text(
+                        label,
+                        style = MaterialTheme.typography.labelSmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
         }
     }
 }
 
+// ── Nutrition macro grid (serif values) ───────────────────────────────────────
 @Composable
-private fun SectionNavPill(label: String, onClick: () -> Unit) {
-    var pressed by remember { mutableStateOf(false) }
-    val bgScale by animateFloatAsState(
-        targetValue = if (pressed) 0.92f else 1f,
-        animationSpec = spring(Spring.DampingRatioNoBouncy, Spring.StiffnessHigh),
-        label = "nav_pill_scale",
-        finishedListener = { pressed = false }
-    )
-    Surface(
-        onClick = { pressed = true; onClick() },
-        shape = RoundedCornerShape(40.dp),
-        color = MaterialTheme.colorScheme.primaryContainer,
-        modifier = Modifier.graphicsLayer { scaleX = bgScale; scaleY = bgScale }
-    ) {
+fun RecipeNutritionGrid(nutrition: NutritionInfo) {
+    Column(modifier = Modifier.padding(horizontal = 22.dp)) {
         Text(
-            label,
-            style = MaterialTheme.typography.labelMedium,
-            fontWeight = FontWeight.SemiBold,
-            color = MaterialTheme.colorScheme.onPrimaryContainer,
-            modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp)
+            "Nutrition",
+            style = MaterialTheme.typography.headlineSmall,
+            color = MaterialTheme.colorScheme.onBackground
         )
+        Spacer(modifier = Modifier.height(2.dp))
+        Text(
+            "per serving · ${nutrition.calories} kcal",
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+        Spacer(modifier = Modifier.height(14.dp))
+        Row(horizontalArrangement = Arrangement.spacedBy(9.dp)) {
+            listOf(
+                "Protein" to nutrition.protein,
+                "Carbs" to nutrition.carbs,
+                "Fat" to nutrition.fat
+            ).forEach { (label, value) ->
+                Surface(
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(13.dp),
+                    color = MaterialTheme.colorScheme.surfaceVariant,
+                    border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 13.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Text(
+                            "${value.toInt()}g",
+                            style = MaterialTheme.typography.headlineSmall,
+                            color = MaterialTheme.colorScheme.onSurface
+                        )
+                        Spacer(modifier = Modifier.height(2.dp))
+                        Text(
+                            label,
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
     }
 }
 
-// ── Servings stepper ──────────────────────────────────────────────────────────
+// ── Ingredients / Method segmented tab toggle ─────────────────────────────────
 @Composable
-internal fun ServingsStepper(servings: Int, onChange: (Int) -> Unit) {
+fun RecipeDetailTabs(selected: Int, onSelect: (Int) -> Unit) {
+    Surface(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 22.dp),
+        shape = RoundedCornerShape(50.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant,
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
+    ) {
+        Row(modifier = Modifier.padding(4.dp)) {
+            listOf("Ingredients", "Method").forEachIndexed { i, label ->
+                val on = i == selected
+                Surface(
+                    onClick = { onSelect(i) },
+                    modifier = Modifier.weight(1f),
+                    shape = RoundedCornerShape(50.dp),
+                    color = if (on) MaterialTheme.colorScheme.surface else Color.Transparent,
+                    shadowElevation = if (on) 2.dp else 0.dp
+                ) {
+                    Text(
+                        label,
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(vertical = 10.dp),
+                        textAlign = TextAlign.Center,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = if (on) MaterialTheme.colorScheme.onSurface else MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                }
+            }
+        }
+    }
+}
+
+// ── Ingredients tab header: count + compact servings stepper ──────────────────
+@Composable
+fun IngredientsTabHeader(count: Int, servings: Int, onChange: (Int) -> Unit) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .padding(horizontal = 16.dp),
+            .padding(horizontal = 22.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.SpaceBetween
     ) {
         Text(
-            text = "Servings",
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onBackground
+            "$count items",
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.onSurfaceVariant
         )
         Surface(
-            shape = RoundedCornerShape(24.dp),
-            color = MaterialTheme.colorScheme.surfaceVariant,
-            tonalElevation = 1.dp
+            shape = RoundedCornerShape(50.dp),
+            color = MaterialTheme.colorScheme.surface,
+            border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant)
         ) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                IconButton(
-                    onClick = { if (servings > 1) onChange(servings - 1) },
-                    enabled = servings > 1
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                modifier = Modifier.padding(3.dp)
+            ) {
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.surfaceVariant)
+                        .clickable { if (servings > 1) onChange(servings - 1) },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Default.Remove,
-                        "Decrease servings",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
+                    Icon(Icons.Default.Remove, "Decrease", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(15.dp))
                 }
-                AnimatedContent(
-                    targetState = servings,
-                    transitionSpec = {
-                        val up = targetState > initialState
-                        slideInVertically { if (up) -it else it } + fadeIn() togetherWith
-                                slideOutVertically { if (up) it else -it } + fadeOut()
-                    },
-                    label = "servings_number"
-                ) { count ->
-                    Text(
-                        text = count.toString(),
-                        style = MaterialTheme.typography.titleMedium,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface,
-                        textAlign = TextAlign.Center,
-                        modifier = Modifier.width(32.dp)
-                    )
-                }
-                IconButton(
-                    onClick = { if (servings < 20) onChange(servings + 1) },
-                    enabled = servings < 20
+                Text(
+                    "$servings serves",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onSurface,
+                    modifier = Modifier.padding(horizontal = 12.dp)
+                )
+                Box(
+                    modifier = Modifier
+                        .size(28.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primary)
+                        .clickable { if (servings < 20) onChange(servings + 1) },
+                    contentAlignment = Alignment.Center
                 ) {
-                    Icon(
-                        Icons.Default.Add,
-                        "Increase servings",
-                        tint = MaterialTheme.colorScheme.onSurface
-                    )
+                    Icon(Icons.Default.Add, "Increase", tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(15.dp))
                 }
             }
         }
     }
 }
 
-// ── Recipe overview helper (kept for external callers if any) ─────────────────
+// ── Ingredient check row (square checkbox · name · qty) ───────────────────────
 @Composable
-fun RecipeInfoItem(
-    icon: androidx.compose.ui.graphics.vector.ImageVector,
-    label: String,
-    value: String
+fun IngredientCheckRow(
+    ingredient: Ingredient,
+    scale: Float,
+    isChecked: Boolean,
+    onToggle: () -> Unit,
+    isLast: Boolean
 ) {
-    Column(horizontalAlignment = Alignment.CenterHorizontally) {
-        Icon(
-            imageVector = icon,
-            contentDescription = null,
-            tint = MaterialTheme.colorScheme.primary,
-            modifier = Modifier.size(24.dp)
-        )
-        Spacer(modifier = Modifier.height(8.dp))
+    val amount = remember(ingredient.amount, scale) { scaleAmount(ingredient.amount, scale) }
+    val qty = if (ingredient.unit.isBlank()) amount else "$amount ${ingredient.unit}"
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable(onClick = onToggle)
+            .padding(vertical = 13.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(23.dp)
+                .clip(RoundedCornerShape(7.dp))
+                .background(if (isChecked) MaterialTheme.colorScheme.primary else Color.Transparent)
+                .then(
+                    if (!isChecked)
+                        Modifier.border(1.8.dp, MaterialTheme.colorScheme.outline.copy(alpha = 0.5f), RoundedCornerShape(7.dp))
+                    else Modifier
+                ),
+            contentAlignment = Alignment.Center
+        ) {
+            if (isChecked) {
+                Icon(Icons.Default.Check, null, tint = MaterialTheme.colorScheme.onPrimary, modifier = Modifier.size(14.dp))
+            }
+        }
+        Spacer(modifier = Modifier.width(13.dp))
         Text(
-            text = value,
-            style = MaterialTheme.typography.titleMedium,
-            fontWeight = FontWeight.Bold,
-            color = MaterialTheme.colorScheme.onSurface
+            ingredient.name,
+            modifier = Modifier.weight(1f),
+            style = MaterialTheme.typography.bodyLarge,
+            color = if (isChecked) MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.5f) else MaterialTheme.colorScheme.onSurface,
+            textDecoration = if (isChecked) TextDecoration.LineThrough else TextDecoration.None
         )
+        Spacer(modifier = Modifier.width(8.dp))
         Text(
-            text = label,
-            style = MaterialTheme.typography.bodySmall,
-            color = MaterialTheme.colorScheme.onSurfaceVariant
+            qty,
+            style = MaterialTheme.typography.bodyMedium,
+            fontWeight = FontWeight.SemiBold,
+            color = MaterialTheme.colorScheme.primary,
+            maxLines = 1
         )
+    }
+    if (!isLast) {
+        HorizontalDivider(color = MaterialTheme.colorScheme.outline.copy(alpha = 0.12f))
+    }
+}
+
+// ── Method numbered step row ──────────────────────────────────────────────────
+@Composable
+fun MethodStepRow(step: RecipeStep) {
+    Row(modifier = Modifier.fillMaxWidth(), verticalAlignment = Alignment.Top) {
+        Box(
+            modifier = Modifier
+                .size(32.dp)
+                .clip(CircleShape)
+                .background(MaterialTheme.colorScheme.primaryContainer),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                "${step.stepNumber}",
+                style = MaterialTheme.typography.titleMedium,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.primary
+            )
+        }
+        Spacer(modifier = Modifier.width(14.dp))
+        Text(
+            step.instruction,
+            modifier = Modifier
+                .weight(1f)
+                .padding(top = 4.dp),
+            style = MaterialTheme.typography.bodyMedium,
+            color = MaterialTheme.colorScheme.onSurface,
+            lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.3f
+        )
+    }
+}
+
+// ── Ghost "Add all to shopping list" button ───────────────────────────────────
+@Composable
+fun AddAllToListButton(onClick: () -> Unit) {
+    Surface(
+        onClick = onClick,
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 22.dp),
+        shape = RoundedCornerShape(13.dp),
+        color = MaterialTheme.colorScheme.primaryContainer
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 13.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Icon(Icons.Default.ShoppingCart, null, tint = MaterialTheme.colorScheme.onPrimaryContainer, modifier = Modifier.size(18.dp))
+            Spacer(modifier = Modifier.width(8.dp))
+            Text(
+                "Add all to shopping list",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = MaterialTheme.colorScheme.onPrimaryContainer
+            )
+        }
+    }
+}
+
+// ── "Watch on YouTube" secondary button (keeps the app's video resolve) ───────
+@Composable
+fun WatchYoutubeButton(recipeName: String, resolveVideoUrl: suspend (String) -> String) {
+    val haptic = LocalHapticFeedback.current
+    val context = LocalContext.current
+    val scope = rememberCoroutineScope()
+    var finding by remember { mutableStateOf(false) }
+    Surface(
+        onClick = {
+            if (finding) return@Surface
+            haptic.performHapticFeedback(HapticFeedbackType.LongPress)
+            finding = true
+            scope.launch {
+                val url = resolveVideoUrl(recipeName)
+                finding = false
+                context.startActivity(Intent(Intent.ACTION_VIEW, android.net.Uri.parse(url)))
+            }
+        },
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 22.dp),
+        shape = RoundedCornerShape(13.dp),
+        color = Color(0xFFFF0000).copy(alpha = 0.08f),
+        border = BorderStroke(1.dp, Color(0xFFFF0000).copy(alpha = 0.25f))
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(vertical = 13.dp),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            if (finding) {
+                CircularProgressIndicator(modifier = Modifier.size(16.dp), strokeWidth = 2.dp, color = Color(0xFFFF0000))
+            } else {
+                Text("▶", fontSize = 14.sp, color = Color(0xFFFF0000))
+            }
+            Spacer(modifier = Modifier.width(10.dp))
+            Text(
+                if (finding) "Finding video…" else "Watch on YouTube",
+                style = MaterialTheme.typography.labelLarge,
+                fontWeight = FontWeight.SemiBold,
+                color = Color(0xFFFF0000)
+            )
+        }
+    }
+}
+
+// ── Sticky bottom CTA bar (shopping bag · Start cooking) ──────────────────────
+@Composable
+fun RecipeBottomBar(
+    modifier: Modifier = Modifier,
+    onAddToList: () -> Unit,
+    onStartCooking: () -> Unit
+) {
+    Surface(
+        modifier = modifier.fillMaxWidth(),
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 12.dp
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .navigationBarsPadding()
+                .padding(horizontal = 20.dp, vertical = 12.dp),
+            horizontalArrangement = Arrangement.spacedBy(11.dp),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Surface(
+                onClick = onAddToList,
+                shape = RoundedCornerShape(16.dp),
+                color = MaterialTheme.colorScheme.surfaceVariant,
+                border = BorderStroke(1.dp, MaterialTheme.colorScheme.outlineVariant),
+                modifier = Modifier.size(56.dp)
+            ) {
+                Box(contentAlignment = Alignment.Center) {
+                    Icon(Icons.Default.ShoppingCart, "Add to shopping list", tint = MaterialTheme.colorScheme.onSurface, modifier = Modifier.size(22.dp))
+                }
+            }
+            Button(
+                onClick = onStartCooking,
+                modifier = Modifier
+                    .weight(1f)
+                    .height(56.dp),
+                shape = RoundedCornerShape(16.dp),
+                colors = ButtonDefaults.buttonColors(containerColor = MaterialTheme.colorScheme.primary)
+            ) {
+                Icon(Icons.Default.Restaurant, null, modifier = Modifier.size(20.dp))
+                Spacer(modifier = Modifier.width(8.dp))
+                Text("Start cooking", fontWeight = FontWeight.Bold)
+            }
+        }
     }
 }
 
@@ -1332,7 +867,7 @@ private fun FloatingHeart(dx: Float, dy: Float, delayMs: Long) {
     Icon(
         imageVector = Icons.Default.Favorite,
         contentDescription = null,
-        tint = Color(0xFFFF4E6A),
+        tint = com.kartik.mealtime.ui.theme.Heart,
         modifier = Modifier
             .size(18.dp)
             .graphicsLayer {
@@ -1367,7 +902,7 @@ private fun FavoriteAddedLabel(trigger: Int, modifier: Modifier = Modifier) {
         )
     ) {
         Surface(
-            color = Color(0xFFFF4E6A),
+            color = com.kartik.mealtime.ui.theme.Heart,
             shape = RoundedCornerShape(24.dp),
             shadowElevation = 6.dp
         ) {

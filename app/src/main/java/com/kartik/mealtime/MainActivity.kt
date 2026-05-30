@@ -37,7 +37,9 @@ class MainActivity : ComponentActivity() {
     override fun onCreate(savedInstanceState: Bundle?) {
         // installSplashScreen() MUST be called before super.onCreate so the
         // SplashScreen API can intercept the activity lifecycle. The system
-        // splash (cream icon on forest-green) shows here during cold-launch.
+        // splash paints the first half of a single merged splash — forest-green
+        // + brand badge — which Compose's BrandSplash then continues seamlessly
+        // (same green, same badge) before revealing the wordmark + tagline.
         installSplashScreen()
         super.onCreate(savedInstanceState)
         enableEdgeToEdge()
@@ -57,8 +59,9 @@ class MainActivity : ComponentActivity() {
                 ThemeMode.SYSTEM -> systemDark
             }
 
-            // Brand splash extends the visual moment past the system splash —
-            // showing "MealTime" title + tagline before fading into the app.
+            // BrandSplash continues the system splash seamlessly — same green,
+            // same badge — then reveals the "MealTime" title + tagline before
+            // handing off to the app.
             // Once finished, [showBrandSplash] flips false and [authDestination]
             // decides: sign-in gate (mandatory), email-verification hold, or MainScreen.
             var showBrandSplash by remember { mutableStateOf(true) }

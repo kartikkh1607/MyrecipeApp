@@ -117,7 +117,6 @@ fun SearchScreen(
         Text(
             text = "Search Recipes",
             style = MaterialTheme.typography.headlineLarge,
-            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground,
             modifier = Modifier.padding(top = 8.dp, bottom = 20.dp)
         )

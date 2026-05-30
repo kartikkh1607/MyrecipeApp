@@ -110,7 +110,6 @@ fun VerifyEmailScreen(viewModel: AuthViewModel) {
             Text(
                 text = "Verify your email",
                 style = MaterialTheme.typography.headlineSmall,
-                fontWeight = FontWeight.Bold,
                 color = MaterialTheme.colorScheme.onSurface,
                 textAlign = TextAlign.Center
             )

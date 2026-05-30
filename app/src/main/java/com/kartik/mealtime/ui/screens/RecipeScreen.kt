@@ -108,8 +108,7 @@ fun RecipeScreen(
         ) {
             Text(
                 text = "Recipe Categories",
-                style = MaterialTheme.typography.headlineLarge.copy(fontSize = 32.sp),
-                fontWeight = FontWeight.ExtraBold,
+                style = MaterialTheme.typography.headlineLarge,
                 color = MaterialTheme.colorScheme.onBackground,
             )
             Text(
@@ -353,8 +352,7 @@ fun CategoryGridItem(
                 ) {
                     Text(
                         category.name,
-                        style = MaterialTheme.typography.titleLarge.copy(fontSize = 18.sp),
-                        fontWeight = FontWeight.Bold,
+                        style = MaterialTheme.typography.headlineSmall,
                         color = Color.White,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis
@@ -427,7 +425,6 @@ fun ErrorDisplay(message: String, onRetry: () -> Unit = {}, modifier: Modifier =
         Text(
             "You're offline",
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
             color = MaterialTheme.colorScheme.onBackground
         )
         Text(

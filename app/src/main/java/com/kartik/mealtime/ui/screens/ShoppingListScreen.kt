@@ -264,7 +264,6 @@ fun ShoppingListScreen(
                     Text(
                         "Shopping List",
                         style = MaterialTheme.typography.headlineSmall,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground,
                         modifier = Modifier.weight(1f)
                     )
@@ -284,40 +283,11 @@ fun ShoppingListScreen(
                 }
             }
 
-            // ── Summary strip ─────────────────────────────────────────────────
+            // ── Progress ring card ────────────────────────────────────────────
             item(key = "summary") {
-                Row(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(start = 20.dp, end = 20.dp, top = 2.dp, bottom = 20.dp),
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    val allDone = remainingCount == 0 && totalCount > 0
-                    Text(
-                        text = when {
-                            totalCount == 0 -> "No items yet"
-                            remainingCount == 0 -> "All items checked ✓"
-                            else -> "$remainingCount of $totalCount items remaining"
-                        },
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = if (allDone) SectionGreen else MaterialTheme.colorScheme.onSurfaceVariant,
-                        fontWeight = if (allDone) FontWeight.SemiBold else FontWeight.Normal
-                    )
-                    if (checkedCount > 0) {
-                        Surface(
-                            shape = RoundedCornerShape(20.dp),
-                            color = MaterialTheme.colorScheme.error.copy(alpha = 0.08f)
-                        ) {
-                            Text(
-                                "$checkedCount done",
-                                style = MaterialTheme.typography.labelSmall,
-                                color = MaterialTheme.colorScheme.error,
-                                fontWeight = FontWeight.Medium,
-                                modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
-                            )
-                        }
-                    }
+                if (totalCount > 0) {
+                    ShoppingProgressCard(done = checkedCount, total = totalCount)
+                    Spacer(Modifier.height(20.dp))
                 }
             }
 

@@ -19,6 +19,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
 import androidx.compose.ui.platform.LocalView
@@ -29,6 +30,8 @@ import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.kartik.mealtime.ui.components.BannerAd
 import com.kartik.mealtime.ui.components.FeaturedCarouselSkeleton
+import com.kartik.mealtime.ui.navigation.Categories
+import com.kartik.mealtime.ui.navigation.CategoryDetail
 import com.kartik.mealtime.ui.navigation.Chat
 import com.kartik.mealtime.ui.navigation.Home
 import com.kartik.mealtime.ui.navigation.LocalTabReselectEvents
@@ -53,13 +56,15 @@ fun HomeScreen(
     val userPrefs by userViewModel.preferences.collectAsStateWithLifecycle()
     val recentRecipes by userViewModel.recentRecipes.collectAsStateWithLifecycle()
 
-    // Hero is dark green → force light status-bar icons while Home is visible.
+    // Home now uses a "paper" header on the app background — match the status-bar
+    // icon contrast to the background luminance (dark icons on light, light on dark).
     val view = LocalView.current
-    DisposableEffect(Unit) {
+    val lightStatusBarIcons = MaterialTheme.colorScheme.background.luminance() > 0.5f
+    DisposableEffect(lightStatusBarIcons) {
         val window = (view.context as android.app.Activity).window
         val controller = WindowCompat.getInsetsController(window, view)
         val previous = controller.isAppearanceLightStatusBars
-        controller.isAppearanceLightStatusBars = false
+        controller.isAppearanceLightStatusBars = lightStatusBarIcons
         onDispose { controller.isAppearanceLightStatusBars = previous }
     }
 
@@ -110,6 +115,22 @@ fun HomeScreen(
                 }
             )
 
+            // ── Recipe of the week — editorial hero banner ───────────────────────────
+            if (homeRecipeState.featuredRecipes.isNotEmpty()) {
+                Spacer(modifier = Modifier.height(18.dp))
+                RecipeOfTheWeekHero(
+                    featured = homeRecipeState.featuredRecipes.first(),
+                    onClick = { recipeId ->
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        viewModel.setRecipeSwipeList(homeRecipeState.featuredRecipes.map { it.recipe.id })
+                        navController.navigate(RecipeDetail(recipeId = recipeId)) {
+                            launchSingleTop = true
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.height(28.dp))
+            }
+
             // ── Featured Carousel ───────────────────────────────────────────────────
             when {
                 homeRecipeState.loading -> {
@@ -157,6 +178,28 @@ fun HomeScreen(
             )
 
             Spacer(modifier = Modifier.height(28.dp))
+
+            // ── Browse by mood — category chip rail ─────────────────────────────────
+            if (categoriesState.categories.isNotEmpty()) {
+                BrowseByMoodRow(
+                    categories = categoriesState.categories,
+                    onCategoryClick = { category ->
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        navController.navigate(CategoryDetail(categoryId = category.id)) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onSeeAll = {
+                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                        navController.navigate(Categories) {
+                            popUpTo<Home> { saveState = true }
+                            launchSingleTop = true
+                            restoreState = true
+                        }
+                    }
+                )
+                Spacer(modifier = Modifier.height(28.dp))
+            }
 
             // ── Recently Viewed ────────────────────────────────────────────────────
             // Shown only after the user has opened at least one recipe.

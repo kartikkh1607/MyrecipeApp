@@ -199,9 +199,15 @@ fun CategoryDetailScreen(
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 Text(
+                    text = "CATEGORY",
+                    style = MaterialTheme.typography.labelMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = Color.White.copy(alpha = 0.82f)
+                )
+
+                Text(
                     text = category.name,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Bold,
+                    style = MaterialTheme.typography.headlineLarge,
                     color = Color.White
                 )
 

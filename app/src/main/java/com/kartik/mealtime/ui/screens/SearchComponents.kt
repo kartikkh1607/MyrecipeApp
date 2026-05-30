@@ -447,8 +447,7 @@ fun SearchResults(
 
                                 Text(
                                     text = "No recipes found",
-                                    style = MaterialTheme.typography.titleLarge,
-                                    fontWeight = FontWeight.ExtraBold,
+                                    style = MaterialTheme.typography.headlineSmall,
                                     color = MaterialTheme.colorScheme.onSurface
                                 )
                                 Text(

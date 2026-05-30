@@ -152,7 +152,6 @@ fun FavoritesScreen(
                     Text(
                         text = "Favorite Recipes",
                         style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.onBackground
                     )
                     if (favoriteRecipes.isNotEmpty()) {
@@ -542,7 +541,7 @@ private fun CompactFavoriteCard(
                     Icon(
                         Icons.Default.Star,
                         null,
-                        tint = Color(0xFFFFD700),
+                        tint = com.kartik.mealtime.ui.theme.StarGold,
                         modifier = Modifier.size(12.dp)
                     )
                     Text(
@@ -618,7 +617,6 @@ fun EmptyFavoritesState(onExploreClick: () -> Unit = {}) {
                 Text(
                     "No favorites yet",
                     style = MaterialTheme.typography.headlineSmall,
-                    fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.onBackground
                 )
                 Spacer(modifier = Modifier.height(8.dp))

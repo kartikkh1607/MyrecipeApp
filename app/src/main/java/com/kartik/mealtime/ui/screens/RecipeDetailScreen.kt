@@ -220,8 +220,7 @@ private fun RecipeDetailPage(
 
     // Per-session interaction state — resets when recipe changes
     var checkedIngredients by remember(recipe.id) { mutableStateOf(setOf<Int>()) }
-    var completedSteps by remember(recipe.id) { mutableStateOf(setOf<Int>()) }
-    var showDescriptionSheet by remember { mutableStateOf(false) }
+    var detailTab by remember(recipe.id) { mutableIntStateOf(0) }
 
     // ── AI Remix (premium) ────────────────────────────────────────────────────
     val isPremium by aiViewModel.isPremium.collectAsStateWithLifecycle()
@@ -282,35 +281,29 @@ private fun RecipeDetailPage(
 
     Box(modifier = Modifier.fillMaxSize()) {
         val listState = rememberLazyListState()
-        val scope = rememberCoroutineScope()
         val parallaxOffset by remember {
             derivedStateOf {
                 if (listState.firstVisibleItemIndex == 0)
                     listState.firstVisibleItemScrollOffset * 0.4f
-                else 380f
+                else 320f
             }
-        }
-        val showStickyNav by remember { derivedStateOf { listState.firstVisibleItemIndex > 0 } }
-
-        fun findSectionIndex(key: String): Int {
-            listState.layoutInfo.visibleItemsInfo.forEach { item ->
-                if (item.key == key) return item.index
-            }
-            return -1
         }
 
         LazyColumn(
             state = listState,
             modifier = Modifier
                 .fillMaxSize()
-                .background(MaterialTheme.colorScheme.background)
+                .background(MaterialTheme.colorScheme.background),
+            contentPadding = androidx.compose.foundation.layout.PaddingValues(bottom = 104.dp)
         ) {
-            // ── Hero ──────────────────────────────────────────────────────────
+            // ── Lean hero (image only — title moves below, per the prototype) ──
             item {
                 RecipeHeroSection(
                     recipe = recipe,
                     isFavorite = isFavorite,
                     parallaxOffsetPx = parallaxOffset,
+                    showInfo = false,
+                    heroHeight = 300.dp,
                     onBackClick = { navController.popBackStack() },
                     onFavoriteClick = {
                         hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
@@ -323,173 +316,131 @@ private fun RecipeDetailPage(
                 )
             }
 
-            // ── Stats grid ────────────────────────────────────────────────────
+            // ── Editorial title block ─────────────────────────────────────────
             item {
-                Spacer(modifier = Modifier.height(16.dp))
-                RecipeOverviewSection(recipe = recipe)
+                Spacer(modifier = Modifier.height(18.dp))
+                RecipeTitleBlock(recipe = recipe)
+            }
+
+            // ── 4-cell meta strip ─────────────────────────────────────────────
+            item {
                 Spacer(modifier = Modifier.height(20.dp))
+                RecipeMetaStrip(recipe = recipe, servings = currentServings)
             }
 
-            // ── "About" row — opens description bottom sheet ──────────────────
-            if (recipe.description.isNotBlank()) {
-                item {
-                    AboutRecipeRow(onClick = { showDescriptionSheet = true })
-                    Spacer(modifier = Modifier.height(20.dp))
-                }
-            }
-
-            // ── Action buttons ────────────────────────────────────────────────
+            // ── Secondary actions (Remix · YouTube) ───────────────────────────
             item {
-                CookingActionButtons(
-                    recipeName = recipe.name,
-                    onStartCooking = {
-                        isCookingMode = true
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                    },
-                    onAddToShoppingList = {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        val scaled = recipe.copy(
-                            servings = currentServings,
-                            ingredients = recipe.ingredients.map {
-                                it.copy(amount = scaleAmount(it.amount, servingScale))
-                            }
-                        )
-                        shoppingListViewModel.addToShoppingList(scaled)
-                        navController.navigate(ShoppingList) { launchSingleTop = true }
-                    },
-                    resolveVideoUrl = { name -> viewModel.resolveYoutubeUrl(name) }
-                )
-                Spacer(modifier = Modifier.height(16.dp))
+                Spacer(modifier = Modifier.height(18.dp))
                 RemixWithAiButton(
                     isPremium = isPremium,
                     onClick = { showRemixOptions = true }
                 )
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            // ── Ingredients ───────────────────────────────────────────────────
-            item(key = "ingredients_section") {
-                ServingsStepper(
-                    servings = currentServings,
-                    onChange = {
-                        currentServings = it
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                    }
-                )
-                Spacer(modifier = Modifier.height(16.dp))
-                IngredientsSection(
-                    ingredients = recipe.ingredients,
-                    scale = servingScale,
-                    checkedSet = checkedIngredients,
-                    onToggleChecked = { index ->
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        checkedIngredients = if (index in checkedIngredients)
-                            checkedIngredients - index else checkedIngredients + index
-                    }
-                )
-                Spacer(modifier = Modifier.height(24.dp))
-            }
-
-            // ── Instructions header ───────────────────────────────────────────
-            item(key = "instructions_header") {
-                InstructionsHeader(
-                    totalSteps = recipe.instructions.size,
-                    completedCount = completedSteps.size
+                Spacer(modifier = Modifier.height(12.dp))
+                WatchYoutubeButton(
+                    recipeName = recipe.name,
+                    resolveVideoUrl = { name -> viewModel.resolveYoutubeUrl(name) }
                 )
             }
 
-            // ── Instruction step cards ────────────────────────────────────────
-            itemsIndexed(
-                items = recipe.instructions,
-                key = { _, step -> "step_${step.stepNumber}" }
-            ) { stepIndex, step ->
-                InstructionStepCard(
-                    step = step,
-                    isCompleted = stepIndex in completedSteps,
-                    onToggle = {
-                        hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
-                        completedSteps = if (stepIndex in completedSteps)
-                            completedSteps - stepIndex else completedSteps + stepIndex
-                    },
-                    modifier = Modifier.padding(horizontal = 16.dp)
-                )
-                if (stepIndex < recipe.instructions.lastIndex) {
-                    Spacer(modifier = Modifier.height(10.dp))
+            // ── Nutrition macro grid ──────────────────────────────────────────
+            recipe.nutritionInfo?.let { nutrition ->
+                item {
+                    Spacer(modifier = Modifier.height(26.dp))
+                    RecipeNutritionGrid(nutrition = nutrition)
                 }
             }
 
-            item(key = "instructions_end") { Spacer(modifier = Modifier.height(24.dp)) }
-
-            // ── Nutrition ─────────────────────────────────────────────────────
-            item(key = "nutrition_section") {
-                recipe.nutritionInfo?.let { nutrition ->
-                    NutritionSection(nutritionInfo = nutrition)
-                    Spacer(modifier = Modifier.height(24.dp))
-                }
-            }
-
-            // ── Tags ──────────────────────────────────────────────────────────
+            // ── Ingredients / Method tabs ─────────────────────────────────────
             item {
-                TagsSection(tags = recipe.tags)
-                Spacer(modifier = Modifier.height(100.dp))
+                Spacer(modifier = Modifier.height(26.dp))
+                RecipeDetailTabs(selected = detailTab, onSelect = { detailTab = it })
+                Spacer(modifier = Modifier.height(18.dp))
             }
+
+            if (detailTab == 0) {
+                item {
+                    IngredientsTabHeader(
+                        count = recipe.ingredients.size,
+                        servings = currentServings,
+                        onChange = {
+                            currentServings = it
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                        }
+                    )
+                    Spacer(modifier = Modifier.height(6.dp))
+                    Column(modifier = Modifier.padding(horizontal = 22.dp)) {
+                        recipe.ingredients.forEachIndexed { index, ingredient ->
+                            IngredientCheckRow(
+                                ingredient = ingredient,
+                                scale = servingScale,
+                                isChecked = index in checkedIngredients,
+                                onToggle = {
+                                    hapticFeedback.performHapticFeedback(HapticFeedbackType.TextHandleMove)
+                                    checkedIngredients = if (index in checkedIngredients)
+                                        checkedIngredients - index else checkedIngredients + index
+                                },
+                                isLast = index == recipe.ingredients.lastIndex
+                            )
+                        }
+                    }
+                    Spacer(modifier = Modifier.height(16.dp))
+                    AddAllToListButton(
+                        onClick = {
+                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                            val scaled = recipe.copy(
+                                servings = currentServings,
+                                ingredients = recipe.ingredients.map {
+                                    it.copy(amount = scaleAmount(it.amount, servingScale))
+                                }
+                            )
+                            shoppingListViewModel.addToShoppingList(scaled)
+                            navController.navigate(ShoppingList) { launchSingleTop = true }
+                        }
+                    )
+                }
+            } else {
+                item {
+                    Column(
+                        modifier = Modifier.padding(horizontal = 22.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        recipe.instructions.forEach { step ->
+                            MethodStepRow(step = step)
+                        }
+                        if (recipe.instructions.isEmpty()) {
+                            Text(
+                                "No step-by-step instructions for this recipe.",
+                                style = MaterialTheme.typography.bodyMedium,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                        }
+                    }
+                }
+            }
+
+            item { Spacer(modifier = Modifier.height(24.dp)) }
         }
 
-        // ── Sticky section jump nav ───────────────────────────────────────────
-        AnimatedVisibility(
-            visible = showStickyNav && !isCookingMode,
-            enter = slideInVertically(initialOffsetY = { -it }, animationSpec = tween(280)) +
-                    fadeIn(tween(200)),
-            exit = slideOutVertically(targetOffsetY = { -it }, animationSpec = tween(240)) +
-                    fadeOut(tween(180)),
-            modifier = Modifier.align(Alignment.TopCenter)
-        ) {
-            RecipeSectionNav(
-                hasNutrition = recipe.nutritionInfo != null,
-                onIngredients = {
-                    val idx = findSectionIndex("ingredients_section")
-                    scope.launch { listState.animateScrollToItem(if (idx >= 0) idx else 5) }
+        // ── Sticky bottom CTA bar (shopping bag · Start cooking) ──────────────
+        if (!isCookingMode) {
+            RecipeBottomBar(
+                modifier = Modifier.align(Alignment.BottomCenter),
+                onAddToList = {
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                    val scaled = recipe.copy(
+                        servings = currentServings,
+                        ingredients = recipe.ingredients.map {
+                            it.copy(amount = scaleAmount(it.amount, servingScale))
+                        }
+                    )
+                    shoppingListViewModel.addToShoppingList(scaled)
+                    navController.navigate(ShoppingList) { launchSingleTop = true }
                 },
-                onInstructions = {
-                    val idx = findSectionIndex("instructions_header")
-                    scope.launch { listState.animateScrollToItem(if (idx >= 0) idx else 6) }
-                },
-                onNutrition = {
-                    val idx = findSectionIndex("nutrition_section")
-                    if (idx >= 0) scope.launch { listState.animateScrollToItem(idx) }
+                onStartCooking = {
+                    isCookingMode = true
+                    hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
                 }
             )
-        }
-
-        // ── Description bottom sheet ─────────────────────────────────────────
-        if (showDescriptionSheet) {
-            ModalBottomSheet(
-                onDismissRequest = { showDescriptionSheet = false },
-                sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true),
-                containerColor = MaterialTheme.colorScheme.surface,
-                shape = RoundedCornerShape(topStart = 28.dp, topEnd = 28.dp)
-            ) {
-                Column(
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .padding(horizontal = 24.dp)
-                        .padding(bottom = 32.dp)
-                ) {
-                    Text(
-                        text = "About this recipe",
-                        style = MaterialTheme.typography.titleLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = MaterialTheme.colorScheme.onSurface
-                    )
-                    Spacer(modifier = Modifier.height(16.dp))
-                    Text(
-                        text = recipe.description,
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant,
-                        lineHeight = MaterialTheme.typography.bodyMedium.lineHeight * 1.4f
-                    )
-                }
-            }
         }
 
         // ── Cooking mode overlay ──────────────────────────────────────────────

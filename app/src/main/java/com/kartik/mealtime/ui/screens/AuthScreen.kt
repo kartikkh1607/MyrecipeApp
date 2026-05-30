@@ -46,6 +46,7 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
@@ -66,6 +67,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.focus.FocusDirection
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.platform.LocalFocusManager
 import androidx.compose.ui.platform.LocalView
@@ -278,102 +280,54 @@ fun AuthScreen(
                 .verticalScroll(rememberScrollState())
         ) {
 
-            // ── Hero Section ──────────────────────────────────────────────────
+            // ── Photo hero ────────────────────────────────────────────────────
             Box(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .height(288.dp)
-                    .clipToBounds()
-                    .background(
-                        Brush.verticalGradient(
-                            colors = listOf(
-                                Color(0xFF20403F),   // deep top
-                                ForestGreen,          // brand mid
-                                Color(0xFF3C6E6B)     // lighter base
+                    .height(230.dp)
+            ) {
+                Image(
+                    painter = painterResource(id = R.drawable.cat_dinner),
+                    contentDescription = null,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                // Soft top scrim + fade into the paper background at the bottom.
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(
+                            Brush.verticalGradient(
+                                colors = listOf(
+                                    Color.Black.copy(alpha = 0.12f),
+                                    Color.Transparent,
+                                    MaterialTheme.colorScheme.background
+                                )
                             )
                         )
-                    )
-                    .statusBarsPadding(),
-                contentAlignment = Alignment.Center
-            ) {
-                // Soft decorative orbs for depth — clipped to the hero bounds.
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopStart)
-                        .offset(x = (-90).dp, y = (-70).dp)
-                        .size(220.dp)
-                        .background(Color.White.copy(alpha = 0.06f), CircleShape)
                 )
-                Box(
-                    modifier = Modifier
-                        .align(Alignment.TopEnd)
-                        .offset(x = 80.dp, y = (-40).dp)
-                        .size(170.dp)
-                        .background(Color.White.copy(alpha = 0.05f), CircleShape)
-                )
-
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
-                    // Brand mark — the app's cream knife+fork glyph, inverted onto a
-                    // floating white badge so it reads cleanly over the green hero.
-                    Box(
-                        modifier = Modifier
-                            .size(88.dp)
-                            .shadow(18.dp, CircleShape)
-                            .background(Color.White, CircleShape),
-                        contentAlignment = Alignment.Center
-                    ) {
-                        Icon(
-                            imageVector = Icons.Filled.Restaurant,
-                            contentDescription = null,
-                            tint = ForestGreen,
-                            modifier = Modifier.size(42.dp)
-                        )
-                    }
-
-                    Spacer(Modifier.height(18.dp))
-
-                    Text(
-                        text = "MealTime",
-                        style = MaterialTheme.typography.headlineLarge,
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        letterSpacing = 0.5.sp
-                    )
-                    Spacer(Modifier.height(6.dp))
-                    Text(
-                        text = "Your personal recipe companion",
-                        style = MaterialTheme.typography.bodyMedium,
-                        color = Color.White.copy(alpha = 0.85f)
-                    )
-                }
             }
 
-            // ── Form Card ─────────────────────────────────────────────────────
-            Box(
+            // ── Form card (overlaps the photo hero) ───────────────────────────
+            Column(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .offset(y = (-28).dp)
-                    .shadow(
-                        elevation = 16.dp,
-                        shape = RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp),
-                        clip = false
-                    )
-                    .clip(RoundedCornerShape(topStart = 32.dp, topEnd = 32.dp))
-                    .background(MaterialTheme.colorScheme.background)
+                    .offset(y = (-42).dp)
                     .padding(horizontal = 24.dp)
-                    .padding(top = 32.dp, bottom = 24.dp)
             ) {
-                Column(horizontalAlignment = Alignment.CenterHorizontally) {
+              Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(26.dp),
+                color = MaterialTheme.colorScheme.surface,
+                border = androidx.compose.foundation.BorderStroke(
+                    1.dp,
+                    MaterialTheme.colorScheme.outlineVariant
+                ),
+                shadowElevation = 12.dp
+              ) {
+                Column(modifier = Modifier.padding(horizontal = 22.dp, vertical = 26.dp)) {
 
-                    // ── Pill tab switcher ─────────────────────────────────────
-                    PillTabSwitcher(
-                        selectedTab = selectedTab,
-                        onTabSelected = { tab -> switchTab(tab) }
-                    )
-
-                    Spacer(Modifier.height(20.dp))
-
-                    // ── Welcome subtitle ──────────────────────────────────────
+                    // ── Kicker + serif title + description ─────────────────────
                     AnimatedContent(
                         targetState = selectedTab,
                         transitionSpec = {
@@ -382,11 +336,18 @@ fun AuthScreen(
                         },
                         label = "auth_welcome"
                     ) { tab ->
-                        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+                        Column {
                             Text(
-                                text = if (tab == 0) "Welcome back!" else "Create your account",
-                                style = MaterialTheme.typography.titleLarge,
+                                text = if (tab == 0) "WELCOME BACK" else "GET STARTED",
+                                style = MaterialTheme.typography.labelMedium,
                                 fontWeight = FontWeight.Bold,
+                                letterSpacing = 1.5.sp,
+                                color = MaterialTheme.colorScheme.tertiary
+                            )
+                            Spacer(Modifier.height(6.dp))
+                            Text(
+                                text = if (tab == 0) "Sign in to MealTime" else "Create your account",
+                                style = MaterialTheme.typography.headlineMedium,
                                 color = MaterialTheme.colorScheme.onSurface
                             )
                             Spacer(Modifier.height(4.dp))
@@ -401,7 +362,76 @@ fun AuthScreen(
                         }
                     }
 
-                    Spacer(Modifier.height(20.dp))
+                    Spacer(Modifier.height(22.dp))
+
+                    // ── Continue with Google (neutral surface) ────────────────
+                    Surface(
+                        onClick = { if (!isLoading) launchGoogleSignIn() },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(52.dp),
+                        shape = RoundedCornerShape(14.dp),
+                        color = MaterialTheme.colorScheme.surfaceVariant,
+                        border = androidx.compose.foundation.BorderStroke(
+                            1.dp,
+                            MaterialTheme.colorScheme.outlineVariant
+                        )
+                    ) {
+                        Row(
+                            modifier = Modifier.fillMaxSize(),
+                            horizontalArrangement = Arrangement.Center,
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            if (googleLoading) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(22.dp),
+                                    color = MaterialTheme.colorScheme.primary,
+                                    strokeWidth = 2.5.dp
+                                )
+                            } else {
+                                Image(
+                                    painter = painterResource(id = R.drawable.ic_google_logo),
+                                    contentDescription = null,
+                                    modifier = Modifier.size(19.dp)
+                                )
+                                Spacer(Modifier.width(11.dp))
+                                Text(
+                                    text = "Continue with Google",
+                                    style = MaterialTheme.typography.titleSmall,
+                                    fontWeight = FontWeight.SemiBold,
+                                    color = MaterialTheme.colorScheme.onSurface
+                                )
+                            }
+                        }
+                    }
+
+                    Spacer(Modifier.height(18.dp))
+
+                    // ── OR divider ────────────────────────────────────────────
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(1.dp)
+                                .background(MaterialTheme.colorScheme.outlineVariant)
+                        )
+                        Text(
+                            "  OR  ",
+                            style = MaterialTheme.typography.labelSmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Box(
+                            Modifier
+                                .weight(1f)
+                                .height(1.dp)
+                                .background(MaterialTheme.colorScheme.outlineVariant)
+                        )
+                    }
+
+                    Spacer(Modifier.height(18.dp))
 
                     // ── Fields (animated between sign-in and register) ────────
                     AnimatedContent(
@@ -570,93 +600,29 @@ fun AuthScreen(
                         }
                     }
 
-                    Spacer(Modifier.height(20.dp))
-
-                    // ── Divider ───────────────────────────────────────────────
-                    Row(
-                        modifier = Modifier.fillMaxWidth(),
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Box(
-                            Modifier
-                                .weight(1f)
-                                .height(1.dp)
-                                .background(MaterialTheme.colorScheme.outlineVariant)
-                        )
-                        Text(
-                            "  or  ",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                        Box(
-                            Modifier
-                                .weight(1f)
-                                .height(1.dp)
-                                .background(MaterialTheme.colorScheme.outlineVariant)
-                        )
                     }
+                }
 
-                    Spacer(Modifier.height(16.dp))
+                Spacer(Modifier.height(20.dp))
 
-                    // ── Google Sign-In button ─────────────────────────────────
-                    OutlinedButton(
-                        onClick = { launchGoogleSignIn() },
-                        enabled = !isLoading,
-                        modifier = Modifier
-                            .fillMaxWidth()
-                            .height(54.dp),
-                        shape = RoundedCornerShape(16.dp),
-                        border = androidx.compose.foundation.BorderStroke(
-                            1.5.dp,
-                            MaterialTheme.colorScheme.outline
-                        ),
-                        colors = ButtonDefaults.outlinedButtonColors(
-                            contentColor = MaterialTheme.colorScheme.onSurface
-                        )
-                    ) {
-                        if (googleLoading) {
-                            CircularProgressIndicator(
-                                modifier = Modifier.size(22.dp),
-                                color = MaterialTheme.colorScheme.primary,
-                                strokeWidth = 2.5.dp
-                            )
-                        } else {
-                            Image(
-                                painter = painterResource(id = R.drawable.ic_google_logo),
-                                contentDescription = null,
-                                modifier = Modifier.size(20.dp)
-                            )
-                            Spacer(Modifier.width(12.dp))
-                            Text(
-                                text = "Continue with Google",
-                                style = MaterialTheme.typography.titleSmall,
-                                fontWeight = FontWeight.Medium,
-                                color = MaterialTheme.colorScheme.onSurface
-                            )
-                        }
-                    }
-
-                    // ── Tab switch hint ───────────────────────────────────────
-                    Row(
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically,
-                        modifier = Modifier.fillMaxWidth()
-                    ) {
+                // ── Sign in / Register toggle ─────────────────────────────────
+                Row(
+                    horizontalArrangement = Arrangement.Center,
+                    verticalAlignment = Alignment.CenterVertically,
+                    modifier = Modifier.fillMaxWidth()
+                ) {
+                    Text(
+                        text = if (selectedTab == 0) "New here? " else "Already have an account? ",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
+                    TextButton(onClick = { switchTab(if (selectedTab == 0) 1 else 0) }) {
                         Text(
-                            text = if (selectedTab == 0) "Don't have an account?" else "Already have an account?",
-                            style = MaterialTheme.typography.bodySmall,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                            text = if (selectedTab == 0) "Create an account" else "Sign in",
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Bold,
+                            color = MaterialTheme.colorScheme.primary
                         )
-                        TextButton(
-                            onClick = { switchTab(if (selectedTab == 0) 1 else 0) }
-                        ) {
-                            Text(
-                                text = if (selectedTab == 0) "Register" else "Sign In",
-                                style = MaterialTheme.typography.bodySmall,
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.primary
-                            )
-                        }
                     }
                 }
             }

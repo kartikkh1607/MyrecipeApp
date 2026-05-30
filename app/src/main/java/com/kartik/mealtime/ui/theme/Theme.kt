@@ -1,7 +1,9 @@
 package com.kartik.mealtime.ui.theme
 
 import android.os.Build
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Shapes
 import androidx.compose.material3.darkColorScheme
 import androidx.compose.material3.dynamicDarkColorScheme
 import androidx.compose.material3.dynamicLightColorScheme
@@ -9,85 +11,101 @@ import androidx.compose.material3.lightColorScheme
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 
-// PREMIUM BRAND DARK THEME - Sophisticated Midnight Palette
+// ─────────────────────────────────────────────────────────────────────────────
+// "Linen" DARK — deep warm, soft sage primary, amber-terracotta accent
+// ─────────────────────────────────────────────────────────────────────────────
 private val PremiumDarkColorScheme = darkColorScheme(
-    // Primary - Teal accent for interactive elements
+    // Primary — soft sage for interactive elements
     primary = Teal,
-    onPrimary = Midnight,
-    primaryContainer = Color(0xFF4A9999),     // Darker teal for containers
-    onPrimaryContainer = Cream,
-    
-    // Secondary - Forest green for secondary actions
-    secondary = ForestGreen,
-    onSecondary = Cream,
-    secondaryContainer = Color(0xFF234848),   // Darker forest green
+    onPrimary = OnSageDark,
+    primaryContainer = SageQuietDark,
+    onPrimaryContainer = SageDeepDark,
+
+    // Secondary — deeper sage for secondary actions
+    secondary = SageDeepDark,
+    onSecondary = OnSageDark,
+    secondaryContainer = SageQuietDark,
     onSecondaryContainer = Cream,
-    
-    // Tertiary — Warm Amber for ratings, calories, and food highlights
-    tertiary = Amber,
-    onTertiary = Midnight,
-    tertiaryContainer = AmberContainer,
-    onTertiaryContainer = Amber,
-    
+
+    // Tertiary — warm terracotta accent (kickers, badges, food highlights)
+    tertiary = TerracottaDark,
+    onTertiary = OnTerracottaDark,
+    tertiaryContainer = TerracottaQuietDark,
+    onTertiaryContainer = TerracottaDark,
+
     // Backgrounds and surfaces
     background = Midnight,
     onBackground = Cream,
-    
+
     surface = DarkSurface,
     onSurface = Cream,
-    surfaceVariant = Color(0xFF2A2C31),       // Slightly lighter than surface
+    surfaceVariant = DarkSurface2,
     onSurfaceVariant = MutedGray,
-    
-    // Borders and outlines - minimal and refined
-    outline = Color(0xFF3A3C41),              // Subtle borders
-    outlineVariant = Color(0xFF2F3135),       // Even more subtle
-    
+
+    // Borders and outlines — thin, subtle
+    outline = LineDark,
+    outlineVariant = Color(0x12_F4E9D2),
+
     // Error states
-    error = Color(0xFFFF6B6B),                // Softer red for dark theme
+    error = HeartDark,
     onError = Midnight,
-    errorContainer = Color(0xFF4A1A1A),
-    onErrorContainer = Color(0xFFFFCDD2)
+    errorContainer = Color(0xFF4A1F18),
+    onErrorContainer = Color(0xFFF6C9BD)
 )
 
-// PREMIUM BRAND LIGHT THEME - Elegant Linen Palette  
+// ─────────────────────────────────────────────────────────────────────────────
+// "Linen" LIGHT — warm paper, forest-green primary, terracotta accent
+// ─────────────────────────────────────────────────────────────────────────────
 private val PremiumLightColorScheme = lightColorScheme(
-    // Primary - Forest green for main actions
+    // Primary — forest green for main actions
     primary = ForestGreen,
-    onPrimary = White,
-    primaryContainer = Color(0xFFE8F5F5),     // Very light green container
-    onPrimaryContainer = ForestGreen,
-    
-    // Secondary - Softer green for secondary actions
-    secondary = Color(0xFF4A7C7C),            // Lighter forest green
-    onSecondary = White,
-    secondaryContainer = Color(0xFFF0F8F8),   // Very light secondary container
-    onSecondaryContainer = ForestGreen,
-    
-    // Tertiary — Warm Amber for ratings, calories, and food highlights
-    tertiary = Amber,
-    onTertiary = Graphite,                    // White-on-Amber was 2:1 (fail); Graphite is 6.2:1
-    tertiaryContainer = AmberLight,
+    onPrimary = OnForest,
+    primaryContainer = ForestQuiet,
+    onPrimaryContainer = ForestDeep,
+
+    // Secondary — deep forest for secondary actions
+    secondary = ForestDeep,
+    onSecondary = OnForest,
+    secondaryContainer = ForestQuiet,
+    onSecondaryContainer = ForestDeep,
+
+    // Tertiary — warm terracotta accent (kickers, badges, food highlights)
+    tertiary = Terracotta,
+    onTertiary = OnTerracotta,
+    tertiaryContainer = TerracottaQuiet,
     onTertiaryContainer = AmberDark,
-    
+
     // Backgrounds and surfaces
     background = Linen,
     onBackground = Graphite,
-    
+
     surface = White,
     onSurface = Graphite,
-    surfaceVariant = Color(0xFFF8F5F3),       // Slightly warmer than white
+    surfaceVariant = LinenSurface2,
     onSurfaceVariant = Stone,
-    
-    // Borders and outlines - clean and minimal
+
+    // Borders and outlines — clean, minimal, warm
     outline = LightGray,
-    outlineVariant = Color(0xFFF0F0F0),       // Very subtle borders
-    
+    outlineVariant = Color(0xFFF0E9DC),
+
     // Error states
     error = Error,
     onError = White,
-    errorContainer = Color(0xFFFFEBEE),
-    onErrorContainer = Color(0xFFB71C1C)
+    errorContainer = Color(0xFFF7E2DC),
+    onErrorContainer = Color(0xFF7A2A1B)
+)
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Shape scale — Linen radii (sm 9 / md 13 / lg 18 / xl 26)
+// ─────────────────────────────────────────────────────────────────────────────
+private val LinenShapes = Shapes(
+    extraSmall = RoundedCornerShape(6.dp),
+    small = RoundedCornerShape(9.dp),
+    medium = RoundedCornerShape(13.dp),
+    large = RoundedCornerShape(18.dp),
+    extraLarge = RoundedCornerShape(26.dp)
 )
 
 @Composable
@@ -110,6 +128,7 @@ fun MyrecipeAppTheme(
     MaterialTheme(
         colorScheme = colorScheme,
         typography = Typography,
+        shapes = LinenShapes,
         content = content
     )
 }

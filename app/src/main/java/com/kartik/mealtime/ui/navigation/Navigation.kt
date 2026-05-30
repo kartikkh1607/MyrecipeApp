@@ -246,7 +246,9 @@ fun Navigation(
                 onBack = { navController.popBackStack() },
                 onOpenRecipe = { recipeId ->
                     navController.navigate(RecipeDetail(recipeId = recipeId)) { launchSingleTop = true }
-                }
+                },
+                onOpenChat = { navController.navigate(Chat) { launchSingleTop = true } },
+                onOpenMealPlanner = { navController.navigate(MealPlanner) { launchSingleTop = true } },
             )
         }
     }

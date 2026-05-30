@@ -137,7 +137,6 @@ private fun ReadyBody(
         Text(
             recipe.name,
             style = MaterialTheme.typography.headlineSmall,
-            fontWeight = FontWeight.Bold,
         )
         if (recipe.description.isNotBlank()) {
             Spacer(Modifier.height(6.dp))

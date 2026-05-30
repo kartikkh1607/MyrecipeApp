@@ -39,7 +39,7 @@ fun BrandedSnackbarHost(hostState: SnackbarHostState) {
     ) { data ->
         val shape = RoundedCornerShape(18.dp)
         val gradient = Brush.horizontalGradient(
-            colors = listOf(Color(0xFF1C1C2E), Color(0xFF142418))
+            colors = listOf(Color(0xFF201E18), Color(0xFF15140F))
         )
 
         Box(
@@ -56,7 +56,7 @@ fun BrandedSnackbarHost(hostState: SnackbarHostState) {
                     .size(width = 4.dp, height = 64.dp)
                     .background(
                         Brush.verticalGradient(
-                            colors = listOf(Color(0xFFE91E63), Color(0xFFE91E63).copy(alpha = 0.3f))
+                            colors = listOf(com.kartik.mealtime.ui.theme.Heart, com.kartik.mealtime.ui.theme.Heart.copy(alpha = 0.3f))
                         )
                     )
                     .align(Alignment.CenterStart)
@@ -73,13 +73,13 @@ fun BrandedSnackbarHost(hostState: SnackbarHostState) {
                 Box(
                     modifier = Modifier
                         .size(38.dp)
-                        .background(Color(0xFFE91E63).copy(alpha = 0.18f), CircleShape),
+                        .background(com.kartik.mealtime.ui.theme.Heart.copy(alpha = 0.18f), CircleShape),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         imageVector = Icons.Default.Favorite,
                         contentDescription = null,
-                        tint = Color(0xFFE91E63),
+                        tint = com.kartik.mealtime.ui.theme.Heart,
                         modifier = Modifier.size(18.dp)
                     )
                 }

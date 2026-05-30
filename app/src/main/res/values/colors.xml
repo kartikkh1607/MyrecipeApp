@@ -4,12 +4,14 @@
     Compose colors live in ui/theme/Color.kt and must be kept in sync with these.
 -->
 <resources>
-    <!-- Primary brand color — used for splash background and adaptive icon background -->
-    <color name="forest_green">#2D5A5A</color>
+    <!-- Primary brand color — used for splash background and adaptive icon background.
+         Kept in exact sync with Compose ForestGreen (ui/theme/Color.kt) so the system
+         splash and the Compose BrandSplash share one identical green (no flash/shift). -->
+    <color name="forest_green">#2D5A4E</color>
     <!-- Cream — used for the adaptive icon foreground and splash icon -->
     <color name="linen">#FAF7F5</color>
     <!-- Status bar tint used during splash so the bar matches the brand background -->
-    <color name="splash_status_bar">#2D5A5A</color>
+    <color name="splash_status_bar">#2D5A4E</color>
     <!-- Dark-theme background — mirrors Compose's Midnight (Color.kt) so the system
          splash matches the dark UI that loads right after it. -->
     <color name="midnight">#1B1D21</color>
