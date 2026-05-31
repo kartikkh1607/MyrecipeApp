@@ -19,6 +19,7 @@ import androidx.compose.ui.unit.IntOffset
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.navDeepLink
 import androidx.navigation.toRoute
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.kartik.mealtime.data.source.CategoryDataSource
@@ -168,6 +169,24 @@ fun Navigation(
         }
 
         composable<RecipeDetail>(
+            // Deep links into a recipe detail. Two schemes are wired:
+            //   1. Custom: mealtime://recipe/{recipeId} — always works, no domain
+            //      ownership needed. Useful for in-app share sheets.
+            //   2. HTTPS: https://mealtime.app/recipe/{recipeId} — currently
+            //      registered as an unverified browsable filter (chooser dialog).
+            //      Flip `android:autoVerify="true"` on the matching intent-filter
+            //      and host /.well-known/assetlinks.json on the domain to make
+            //      Android resolve these straight into the app.
+            //
+            // NOTE: this auto-resolves only when the user is past the AuthScreen
+            // gate (MainActivity decides based on authDestination). If they're
+            // signed out, the deep link is dropped at the gate — wiring it to
+            // survive auth needs a SavedStateHandle / pendingDeepLink replay,
+            // out of scope here.
+            deepLinks = listOf(
+                navDeepLink<RecipeDetail>(basePath = "mealtime://recipe"),
+                navDeepLink<RecipeDetail>(basePath = "https://mealtime.app/recipe"),
+            ),
             // Recipe detail slides up from bottom (iOS sheet-style)
             enterTransition = {
                 slideInVertically(

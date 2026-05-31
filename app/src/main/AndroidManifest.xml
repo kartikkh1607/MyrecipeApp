@@ -45,6 +45,37 @@
 
                 <category android:name="android.intent.category.LAUNCHER" />
             </intent-filter>
+
+            <!-- Deep link: custom scheme. Works without domain ownership; suitable
+                 for the in-app share sheet ("Share this recipe → mealtime://recipe/123"). -->
+            <intent-filter>
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data android:scheme="mealtime" android:host="recipe" />
+            </intent-filter>
+
+            <!-- Deep link: HTTPS. Currently UNVERIFIED — Android shows a chooser
+                 dialog. To make Android open these URLs in the app automatically:
+                   1. Buy/control mealtime.app (or change the host below to a domain
+                      you own).
+                   2. Generate the assetlinks.json fingerprint:
+                        https://developers.google.com/digital-asset-links/tools/generator
+                      using the upload + Play App Signing SHA-256 from
+                      project_signing_certs.
+                   3. Host it at https://<domain>/.well-known/assetlinks.json
+                   4. Flip android:autoVerify below to "true".
+                 Until then, leave autoVerify off — turning it on without a hosted
+                 assetlinks file will silently strip the filter on install. -->
+            <intent-filter android:autoVerify="false">
+                <action android:name="android.intent.action.VIEW" />
+                <category android:name="android.intent.category.DEFAULT" />
+                <category android:name="android.intent.category.BROWSABLE" />
+                <data
+                    android:scheme="https"
+                    android:host="mealtime.app"
+                    android:pathPrefix="/recipe/" />
+            </intent-filter>
         </activity>
     </application>
 
