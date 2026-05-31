@@ -33,7 +33,10 @@ android {
     defaultConfig {
         applicationId = "com.kartik.mealtime"
         minSdk = 26
-        targetSdk = 36
+        // Target the latest STABLE SDK (Android 15 / API 35). compileSdk can lead;
+        // targetSdk opts the app into new behavioral changes and should stay on a
+        // release that's been in the wild long enough for ecosystem fixes to land.
+        targetSdk = 35
         versionCode = 2
         versionName = "1.0.1"
 

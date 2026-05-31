@@ -219,8 +219,13 @@ class BillingManager @Inject constructor(
      * POSTs the purchase to the proxy's /billing/verify endpoint, which validates it with
      * the Play Developer API and sets the `premium` custom claim. The Firebase ID token is
      * attached by the "ai" client's FirebaseAuthInterceptor. Returns true on HTTP 200.
+     *
+     * Retries with exponential backoff. Critical because if verification never succeeds we
+     * skip [BillingClient.acknowledgePurchase] and Google auto-refunds the user after
+     * 3 days, even though the purchase went through — a transient network blip during
+     * checkout would silently cost us the sale and leave the user without premium.
      */
-    private fun verifyOnServer(purchase: Purchase): Boolean {
+    private suspend fun verifyOnServer(purchase: Purchase): Boolean {
         val payload = gson.toJson(
             mapOf(
                 "productId" to (purchase.products.firstOrNull() ?: SUBSCRIPTION_PRODUCT_ID),
@@ -231,9 +236,19 @@ class BillingManager @Inject constructor(
             .url("${BuildConfig.PROXY_BASE_URL}/billing/verify")
             .post(payload.toRequestBody("application/json".toMediaType()))
             .build()
-        return runCatching {
-            httpClient.newCall(request).execute().use { it.isSuccessful }
-        }.getOrDefault(false)
+
+        var delayMs = VERIFY_INITIAL_DELAY_MS
+        repeat(VERIFY_MAX_ATTEMPTS) { attempt ->
+            val ok = runCatching {
+                httpClient.newCall(request).execute().use { it.isSuccessful }
+            }.getOrDefault(false)
+            if (ok) return true
+            if (attempt < VERIFY_MAX_ATTEMPTS - 1) {
+                delay(delayMs)
+                delayMs = (delayMs * 2).coerceAtMost(VERIFY_MAX_DELAY_MS)
+            }
+        }
+        return false
     }
 
     /**
@@ -260,5 +275,13 @@ class BillingManager @Inject constructor(
 
         private const val INITIAL_RECONNECT_DELAY_MS = 1_000L
         private const val MAX_RECONNECT_DELAY_MS = 30_000L
+
+        // 5 attempts with 2s → 4s → 8s → 16s (~30s total) gives the proxy ample
+        // headroom to ride out a transient blip without keeping the user staring
+        // at a spinner. Tuned against the 3-day acknowledgement deadline: any
+        // outage longer than this is operational and needs human attention.
+        private const val VERIFY_MAX_ATTEMPTS = 5
+        private const val VERIFY_INITIAL_DELAY_MS = 2_000L
+        private const val VERIFY_MAX_DELAY_MS = 16_000L
     }
 }

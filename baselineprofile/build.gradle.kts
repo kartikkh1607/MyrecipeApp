@@ -18,7 +18,9 @@ android {
         // API 28 is the minimum the macrobenchmark runner supports for profile
         // generation; profiles produced here still install on the app's minSdk 26.
         minSdk = 28
-        targetSdk = 36
+        // Match :app's targetSdk so the macrobenchmark exercises the same
+        // platform behaviour the shipped app will see.
+        targetSdk = 35
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
