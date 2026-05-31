@@ -1,74 +1,87 @@
 package com.kartik.mealtime.data.remote.dto
 
-import com.google.gson.annotations.SerializedName
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
 
 /**
  * Data Transfer Objects (DTOs) that map directly to the Spoonacular API JSON responses.
  * These are strictly data-layer constructs — they never leak into the domain or UI layer.
+ *
+ * Deserialised by kotlinx.serialization through Retrofit's converter (see
+ * [com.kartik.mealtime.di.NetworkModule]). `@SerialName` is only needed where the
+ * Kotlin field name diverges from the wire key.
  */
 
 // Response for GET /recipes/random
+@Serializable
 data class SpoonacularGetRecipesResponse(
-    @SerializedName("recipes") val recipes: List<SpoonacularRecipeDto>
+    val recipes: List<SpoonacularRecipeDto>
 )
 
 // Response for GET /recipes/complexSearch
+@Serializable
 data class SpoonacularSearchResponse(
-    @SerializedName("results") val results: List<SpoonacularRecipeDto>,
-    @SerializedName("totalResults") val totalResults: Int
+    val results: List<SpoonacularRecipeDto>,
+    val totalResults: Int
 )
 
 // Response for GET /food/videos/search — recipe videos sourced from YouTube
+@Serializable
 data class SpoonacularVideoSearchResponse(
-    @SerializedName("videos") val videos: List<SpoonacularVideoDto>? = emptyList()
+    val videos: List<SpoonacularVideoDto>? = emptyList()
 )
 
+@Serializable
 data class SpoonacularVideoDto(
-    @SerializedName("title") val title: String?,
+    val title: String? = null,
     // YouTube video id — build a watch URL as https://www.youtube.com/watch?v=<id>
-    @SerializedName("youTubeId") val youTubeId: String?
+    val youTubeId: String? = null
 )
 
 // The main recipe DTO — used in both list and detail responses
+@Serializable
 data class SpoonacularRecipeDto(
-    @SerializedName("id") val id: Int,
-    @SerializedName("title") val title: String,
-    @SerializedName("image") val image: String?,
-    @SerializedName("servings") val servings: Int,
-    @SerializedName("readyInMinutes") val readyInMinutes: Int,
-    @SerializedName("healthScore") val healthScore: Float,
-    @SerializedName("spoonacularScore") val spoonacularScore: Float,
-    @SerializedName("summary") val summary: String?,   // nullable — not guaranteed by API
-    @SerializedName("dishTypes") val dishTypes: List<String>?,
-    @SerializedName("cuisines") val cuisines: List<String>?,
-    @SerializedName("vegetarian") val isVegetarian: Boolean,
-    @SerializedName("vegan") val isVegan: Boolean,
-    @SerializedName("glutenFree") val isGlutenFree: Boolean,
-    @SerializedName("dairyFree") val isDairyFree: Boolean,
-    @SerializedName("extendedIngredients") val ingredients: List<SpoonacularIngredientDto>? = emptyList(),
-    @SerializedName("analyzedInstructions") val instructions: List<SpoonacularInstructionDto>? = emptyList(),
+    val id: Int,
+    val title: String,
+    val image: String? = null,
+    val servings: Int = 0,
+    val readyInMinutes: Int = 0,
+    val healthScore: Float = 0f,
+    val spoonacularScore: Float = 0f,
+    val summary: String? = null,   // nullable — not guaranteed by API
+    val dishTypes: List<String>? = null,
+    val cuisines: List<String>? = null,
+    @SerialName("vegetarian") val isVegetarian: Boolean = false,
+    @SerialName("vegan") val isVegan: Boolean = false,
+    @SerialName("glutenFree") val isGlutenFree: Boolean = false,
+    @SerialName("dairyFree") val isDairyFree: Boolean = false,
+    @SerialName("extendedIngredients") val ingredients: List<SpoonacularIngredientDto>? = emptyList(),
+    @SerialName("analyzedInstructions") val instructions: List<SpoonacularInstructionDto>? = emptyList(),
     // Nutrition data — populated when includeNutrition=true is passed to getRecipeDetails
-    @SerializedName("nutrition") val nutrition: SpoonacularNutritionDto? = null,
+    val nutrition: SpoonacularNutritionDto? = null,
     // YouTube video URL if Spoonacular has an associated video for this recipe
-    @SerializedName("videoUrl") val videoUrl: String? = null
+    val videoUrl: String? = null
 )
 
+@Serializable
 data class SpoonacularIngredientDto(
-    @SerializedName("id") val id: Int,
-    @SerializedName("nameClean") val name: String?,
-    @SerializedName("amount") val amount: Float,
-    @SerializedName("unit") val unit: String,
-    @SerializedName("original") val original: String
+    val id: Int = 0,
+    @SerialName("nameClean") val name: String? = null,
+    val amount: Float = 0f,
+    val unit: String = "",
+    val original: String = ""
 )
 
+@Serializable
 data class SpoonacularInstructionDto(
-    @SerializedName("name") val name: String,
-    @SerializedName("steps") val steps: List<SpoonacularStepDto>?
+    val name: String = "",
+    val steps: List<SpoonacularStepDto>? = null
 )
 
+@Serializable
 data class SpoonacularStepDto(
-    @SerializedName("number") val number: Int,
-    @SerializedName("step") val step: String
+    val number: Int = 0,
+    val step: String = ""
 )
 
 // ── Nutrition DTOs ────────────────────────────────────────────────────────────
@@ -77,12 +90,14 @@ data class SpoonacularStepDto(
  * Top-level nutrition object returned by Spoonacular when includeNutrition=true.
  * The API returns a flat list of named nutrients rather than named fields.
  */
+@Serializable
 data class SpoonacularNutritionDto(
-    @SerializedName("nutrients") val nutrients: List<SpoonacularNutrientDto>?
+    val nutrients: List<SpoonacularNutrientDto>? = null
 )
 
+@Serializable
 data class SpoonacularNutrientDto(
-    @SerializedName("name") val name: String,
-    @SerializedName("amount") val amount: Float,
-    @SerializedName("unit") val unit: String
+    val name: String = "",
+    val amount: Float = 0f,
+    val unit: String = ""
 )

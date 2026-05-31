@@ -1,34 +1,28 @@
 package com.kartik.mealtime.data.remote
 
-import com.kartik.mealtime.BuildConfig
 import com.kartik.mealtime.domain.model.MealPlan
 import com.kartik.mealtime.domain.model.Recipe
-import com.google.gson.Gson
-import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import retrofit2.HttpException
 import javax.inject.Inject
-import javax.inject.Named
 
 /**
  * Gemini AI API client for recipe chat and recommendations.
- * Uses the Gemini 2.0 Flash model via the REST API.
+ *
+ * Wraps [AiApi.generateContent] with prompt building, JSON-mode toggling, and
+ * Gemini-specific error mapping. The transport, JSON (de)serialisation, and
+ * Authorization header are all delegated — see [com.kartik.mealtime.di.NetworkModule]
+ * for the Retrofit + kotlinx.serialization wiring.
  */
 class GeminiAiService @Inject constructor(
-    @Named("ai") private val client: OkHttpClient
+    private val api: AiApi,
+    private val json: Json,
 ) : AiService {
 
-    private val gson = Gson()
-
-    companion object {
-        // Routed through the Cloudflare Worker proxy, which injects the Gemini API
-        // key and forwards to the real :generateContent endpoint. The model is
-        // chosen server-side in the Worker (server/cloudflare-worker/src/index.js).
-        private val BASE_URL = "${BuildConfig.PROXY_BASE_URL}/gemini"
+    private companion object {
         private const val SAFETY_BLOCKED = " SAFETY_BLOCKED"
     }
 
@@ -40,7 +34,7 @@ class GeminiAiService @Inject constructor(
         // upstream "Gemini quota exceeded" message.
         if (code == 429) {
             val proxy = runCatching {
-                gson.fromJson(body, ProxyErrorEnvelope::class.java)
+                body?.let { json.decodeFromString(ProxyErrorEnvelope.serializer(), it) }
             }.getOrNull()
             if (proxy?.error == "user_quota_exceeded") {
                 val limit = proxy.limit
@@ -60,7 +54,7 @@ class GeminiAiService @Inject constructor(
         }
         // Gemini error JSON shape: { "error": { "code": ..., "message": "...", "status": "..." } }
         val geminiMsg = runCatching {
-            gson.fromJson(body, GeminiErrorEnvelope::class.java)?.error?.message
+            body?.let { json.decodeFromString(GeminiErrorEnvelope.serializer(), it).error?.message }
         }.getOrNull()
         val suffix = if (!geminiMsg.isNullOrBlank()) " ($geminiMsg)" else ""
         return Exception(
@@ -74,6 +68,30 @@ class GeminiAiService @Inject constructor(
                 else -> "AI assistant error ($code).$suffix"
             }
         )
+    }
+
+    /** Maps an HttpException to the right typed exception for the caller. */
+    private fun mapHttpException(e: HttpException, mapPremium: Boolean): Throwable {
+        if (mapPremium && e.code() == 402) return PremiumRequiredException()
+        return friendlyError(e.code(), runCatching { e.response()?.errorBody()?.string() }.getOrNull())
+    }
+
+    /** Reads `candidates[0].content.parts[0].text` and validates it. */
+    private fun extractText(response: GenerateContentResponse): Result<String> {
+        val text = response.candidates
+            ?.firstOrNull()
+            ?.content
+            ?.parts
+            ?.firstOrNull()
+            ?.text
+            ?.trim()
+            ?: return Result.failure(Exception("No content in response"))
+        if (text.endsWith(SAFETY_BLOCKED)) {
+            return Result.failure(
+                Exception("Response blocked by safety filters. Please rephrase your question.")
+            )
+        }
+        return Result.success(text)
     }
 
     /**
@@ -90,57 +108,18 @@ class GeminiAiService @Inject constructor(
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val prompt = AiPrompts.buildChatPrompt(conversationHistory, message, dietaryPreferences)
-            val requestBody = GenerateContentRequest(
-                contents = listOf(
-                    Content(
-                        parts = listOf(Part(text = prompt))
-                    )
-                ),
+            val request = GenerateContentRequest(
+                contents = listOf(Content(parts = listOf(Part(text = prompt)))),
                 generationConfig = GenerationConfig(
                     temperature = 0.85f,
                     maxOutputTokens = 2048
                 )
             )
-
-            val url = BASE_URL
-            val mediaType = "application/json".toMediaType()
-            val body = gson.toJson(requestBody).toRequestBody(mediaType)
-
-            val request = Request.Builder()
-                .url(url)
-                .post(body)
-                .addHeader("Content-Type", "application/json")
-                .build()
-
-            val response = client.await(request)
-            val responseBody = response.body?.string() ?: return@withContext Result.failure(
-                Exception("Empty response from Gemini API")
-            )
-
-            if (!response.isSuccessful) {
-                return@withContext Result.failure(friendlyError(response.code, responseBody))
-            }
-
-            val parseResponse = gson.fromJson(responseBody, GenerateContentResponse::class.java)
-
-            val text = parseResponse.candidates
-                ?.firstOrNull()
-                ?.content
-                ?.parts
-                ?.firstOrNull()
-                ?.text
-                ?.trim()
-                ?: return@withContext Result.failure(Exception("No content in response"))
-
-            // Check if response was blocked
-            if (text.endsWith(SAFETY_BLOCKED)) {
-                return@withContext Result.failure(
-                    Exception("Response blocked by safety filters. Please rephrase your question.")
-                )
-            }
-
-            Result.success(text)
-
+            extractText(api.generateContent(request))
+        } catch (e: HttpException) {
+            // Chat is free-tier eligible, so don't map 402 to PremiumRequired here —
+            // a 402 would be a server bug for chat and should surface as a clear error.
+            Result.failure(mapHttpException(e, mapPremium = false))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -150,54 +129,21 @@ class GeminiAiService @Inject constructor(
      * Generate smart recipe recommendations based on user preferences.
      */
     override suspend fun getRecipeRecommendations(
-        favoriteRecipes: List<String>,  // List of recipe names user has liked
+        favoriteRecipes: List<String>,
         dietaryPreferences: String
     ): Result<String> = withContext(Dispatchers.IO) {
         try {
             val prompt = AiPrompts.buildRecommendationPrompt(favoriteRecipes, dietaryPreferences)
-            val requestBody = GenerateContentRequest(
-                contents = listOf(
-                    Content(
-                        parts = listOf(Part(text = prompt))
-                    )
-                ),
+            val request = GenerateContentRequest(
+                contents = listOf(Content(parts = listOf(Part(text = prompt)))),
                 generationConfig = GenerationConfig(
                     temperature = 0.7f,
                     maxOutputTokens = 1024
                 )
             )
-
-            val url = BASE_URL
-            val mediaType = "application/json".toMediaType()
-            val body = gson.toJson(requestBody).toRequestBody(mediaType)
-
-            val request = Request.Builder()
-                .url(url)
-                .post(body)
-                .addHeader("Content-Type", "application/json")
-                .build()
-
-            val response = client.await(request)
-            val responseBody = response.body?.string() ?: return@withContext Result.failure(
-                Exception("Empty response")
-            )
-
-            if (!response.isSuccessful) {
-                return@withContext Result.failure(friendlyError(response.code, responseBody))
-            }
-
-            val parseResponse = gson.fromJson(responseBody, GenerateContentResponse::class.java)
-            val text = parseResponse.candidates
-                ?.firstOrNull()
-                ?.content
-                ?.parts
-                ?.firstOrNull()
-                ?.text
-                ?.trim()
-                ?: return@withContext Result.failure(Exception("No content in response"))
-
-            Result.success(text)
-
+            extractText(api.generateContent(request))
+        } catch (e: HttpException) {
+            Result.failure(mapHttpException(e, mapPremium = false))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -246,6 +192,9 @@ class GeminiAiService @Inject constructor(
     /**
      * Posts [prompt] with JSON response mode and returns the raw model text.
      * Shared by the structured-output features (recipe generation, transform, etc.).
+     *
+     * Maps 402 to [PremiumRequiredException] so the UI shows the upsell sheet
+     * instead of a generic failure — structured generation is premium-only.
      */
     private suspend fun postForJson(
         prompt: String,
@@ -253,7 +202,7 @@ class GeminiAiService @Inject constructor(
         maxTokens: Int
     ): Result<String> {
         return try {
-            val requestBody = GenerateContentRequest(
+            val request = GenerateContentRequest(
                 contents = listOf(Content(parts = listOf(Part(text = prompt)))),
                 generationConfig = GenerationConfig(
                     temperature = temperature,
@@ -261,41 +210,9 @@ class GeminiAiService @Inject constructor(
                     responseMimeType = "application/json"
                 )
             )
-
-            val url = BASE_URL
-            val mediaType = "application/json".toMediaType()
-            val body = gson.toJson(requestBody).toRequestBody(mediaType)
-
-            val request = Request.Builder()
-                .url(url)
-                .post(body)
-                .addHeader("Content-Type", "application/json")
-                .build()
-
-            val response = client.await(request)
-            val responseBody = response.body?.string()
-                ?: return Result.failure(Exception("Empty response from Gemini API"))
-
-            // 402 = the proxy's premium gate (structured generation is premium-only).
-            // Surface a typed error so the UI shows the upsell, not a generic failure.
-            if (response.code == 402) {
-                return Result.failure(PremiumRequiredException())
-            }
-            if (!response.isSuccessful) {
-                return Result.failure(friendlyError(response.code, responseBody))
-            }
-
-            val parsed = gson.fromJson(responseBody, GenerateContentResponse::class.java)
-            val text = parsed.candidates
-                ?.firstOrNull()
-                ?.content
-                ?.parts
-                ?.firstOrNull()
-                ?.text
-                ?.trim()
-                ?: return Result.failure(Exception("No content in response"))
-
-            Result.success(text)
+            extractText(api.generateContent(request))
+        } catch (e: HttpException) {
+            Result.failure(mapHttpException(e, mapPremium = true))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -304,41 +221,54 @@ class GeminiAiService @Inject constructor(
 
 // ── Data classes for Gemini API ────────────────────────────────────────────────
 
+@Serializable
 data class GenerateContentRequest(
     val contents: List<Content>,
     val generationConfig: GenerationConfig? = null
 )
 
+@Serializable
 data class Content(
     val parts: List<Part>
 )
 
+@Serializable
 data class Part(
     val text: String
 )
 
+@Serializable
 data class GenerationConfig(
     val temperature: Float? = null,
-    @SerializedName("maxOutputTokens")
     val maxOutputTokens: Int? = null,
     // Set to "application/json" to make Gemini return parseable JSON (structured output).
-    @SerializedName("responseMimeType")
     val responseMimeType: String? = null
 )
 
+@Serializable
 data class GenerateContentResponse(
-    val candidates: List<Candidate>?
+    val candidates: List<Candidate>? = null
 )
 
+@Serializable
 data class Candidate(
-    val content: Content?,
-    val finishReason: String?
+    val content: Content? = null,
+    val finishReason: String? = null
 )
 
 // Gemini error response shape — used to surface the underlying reason in the chat.
-data class GeminiErrorEnvelope(val error: GeminiErrorBody?)
-data class GeminiErrorBody(val code: Int?, val message: String?, val status: String?)
+@Serializable
+data class GeminiErrorEnvelope(val error: GeminiErrorBody? = null)
+
+@Serializable
+data class GeminiErrorBody(val code: Int? = null, val message: String? = null, val status: String? = null)
 
 // Our Worker's typed error shape (e.g. {"error":"user_quota_exceeded","limit":25,"tier":"free"}).
 // Distinguished from Gemini errors by `error` being a string, not an object.
-data class ProxyErrorEnvelope(val error: String?, val limit: Int?, val used: Int?, val tier: String?)
+@Serializable
+data class ProxyErrorEnvelope(
+    val error: String? = null,
+    val limit: Int? = null,
+    val used: Int? = null,
+    val tier: String? = null,
+)

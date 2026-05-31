@@ -7,11 +7,12 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.stringPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.kartik.mealtime.domain.model.Recipe
-import com.google.gson.Gson
-import com.google.gson.reflect.TypeToken
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.builtins.ListSerializer
+import kotlinx.serialization.json.Json
 import javax.inject.Inject
 import javax.inject.Singleton
 
@@ -20,6 +21,7 @@ import javax.inject.Singleton
  * Keep small — image URL is needed for the card thumbnail; everything else
  * is fetched fresh from the cache or API when the user opens the recipe.
  */
+@Serializable
 data class RecentRecipe(
     val id: String,
     val name: String,
@@ -42,19 +44,16 @@ private val Context.recentRecipesDataStore: DataStore<Preferences>
 class RecentRecipesRepository @Inject constructor(
     @ApplicationContext private val context: Context
 ) {
-    private val gson = Gson()
-    private val listType = object : TypeToken<List<RecentRecipe>>() {}.type
-
     val recents: Flow<List<RecentRecipe>> = context.recentRecipesDataStore.data.map { prefs ->
-        val json = prefs[KEY_RECENTS] ?: return@map emptyList()
-        runCatching { gson.fromJson<List<RecentRecipe>>(json, listType) }.getOrNull().orEmpty()
+        val payload = prefs[KEY_RECENTS] ?: return@map emptyList()
+        runCatching { json.decodeFromString(listSerializer, payload) }.getOrNull().orEmpty()
     }
 
     /** Pushes [recipe] to the front; dedupes by id; caps at [MAX_RECENTS]. */
     suspend fun add(recipe: Recipe) {
         context.recentRecipesDataStore.edit { prefs ->
             val current = prefs[KEY_RECENTS]
-                ?.let { runCatching { gson.fromJson<List<RecentRecipe>>(it, listType) }.getOrNull() }
+                ?.let { runCatching { json.decodeFromString(listSerializer, it) }.getOrNull() }
                 .orEmpty()
 
             val newEntry = RecentRecipe(
@@ -68,7 +67,7 @@ class RecentRecipesRepository @Inject constructor(
             val updated = (listOf(newEntry) + current.filter { it.id != recipe.id })
                 .take(MAX_RECENTS)
 
-            prefs[KEY_RECENTS] = gson.toJson(updated)
+            prefs[KEY_RECENTS] = json.encodeToString(listSerializer, updated)
         }
     }
 
@@ -79,5 +78,12 @@ class RecentRecipesRepository @Inject constructor(
     private companion object {
         const val MAX_RECENTS = 8
         val KEY_RECENTS = stringPreferencesKey("recent_recipes_json")
+
+        val json = Json {
+            ignoreUnknownKeys = true
+            coerceInputValues = true
+            encodeDefaults = true
+        }
+        val listSerializer = ListSerializer(RecentRecipe.serializer())
     }
 }

@@ -17,7 +17,6 @@ import com.android.billingclient.api.acknowledgePurchase
 import com.android.billingclient.api.queryProductDetails
 import com.android.billingclient.api.queryPurchasesAsync
 import com.google.firebase.auth.FirebaseAuth
-import com.google.gson.Gson
 import com.kartik.mealtime.BuildConfig
 import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
@@ -33,6 +32,9 @@ import kotlinx.coroutines.flow.asSharedFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.tasks.await
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.JsonObject
+import kotlinx.serialization.json.JsonPrimitive
 import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -65,9 +67,8 @@ class BillingManager @Inject constructor(
     // /billing/verify endpoint already include the user's Firebase ID token.
     @Named("ai") private val httpClient: OkHttpClient,
     private val auth: FirebaseAuth,
+    private val json: Json,
 ) : PurchasesUpdatedListener, BillingClientStateListener {
-
-    private val gson = Gson()
 
     /** Outcome of a user-initiated purchase, surfaced to the UI for feedback. */
     sealed interface PurchaseResult {
@@ -226,10 +227,15 @@ class BillingManager @Inject constructor(
      * checkout would silently cost us the sale and leave the user without premium.
      */
     private suspend fun verifyOnServer(purchase: Purchase): Boolean {
-        val payload = gson.toJson(
-            mapOf(
-                "productId" to (purchase.products.firstOrNull() ?: SUBSCRIPTION_PRODUCT_ID),
-                "purchaseToken" to purchase.purchaseToken,
+        val payload = json.encodeToString(
+            JsonObject.serializer(),
+            JsonObject(
+                mapOf(
+                    "productId" to JsonPrimitive(
+                        purchase.products.firstOrNull() ?: SUBSCRIPTION_PRODUCT_ID
+                    ),
+                    "purchaseToken" to JsonPrimitive(purchase.purchaseToken),
+                )
             )
         )
         val request = Request.Builder()

@@ -11,6 +11,7 @@ import com.kartik.mealtime.data.local.toCachedEntity
 import com.kartik.mealtime.data.local.toRecipe
 import com.kartik.mealtime.data.remote.SpoonacularApiService
 import com.kartik.mealtime.data.remote.dto.toDomain
+import com.kartik.mealtime.data.remote.withApiRetry
 import com.kartik.mealtime.data.source.CategoryDataSource
 import com.kartik.mealtime.data.source.SampleDataSource
 import com.kartik.mealtime.domain.model.CategoryKind
@@ -89,7 +90,7 @@ class RecipeRepositoryImpl(
 
         return try {
             Log.d(TAG, "Fetching featured recipes from Spoonacular")
-            val response = apiService.getRandomRecipes(number = 5)  // 5 pts vs 10 pts per open
+            val response = withApiRetry { apiService.getRandomRecipes(number = 5) }  // 5 pts vs 10 pts per open
             val featured = response.recipes.mapIndexed { index, dto ->
                 val recipe = dto.toDomain()
                 FeaturedRecipe(
@@ -133,11 +134,13 @@ class RecipeRepositoryImpl(
             return SearchResult(filtered, filtered.size)
         }
         return try {
-            val response = apiService.searchRecipes(
-                query = query,
-                number = limit,
-                offset = offset
-            )
+            val response = withApiRetry {
+                apiService.searchRecipes(
+                    query = query,
+                    number = limit,
+                    offset = offset
+                )
+            }
             SearchResult(
                 recipes = response.results.map { it.toDomain() },
                 totalResults = response.totalResults
@@ -172,7 +175,9 @@ class RecipeRepositoryImpl(
         }
 
         return try {
-            val dto = apiService.getRecipeDetails(recipeId = numericId, includeNutrition = true)
+            val dto = withApiRetry {
+                apiService.getRecipeDetails(recipeId = numericId, includeNutrition = true)
+            }
             val recipe = dto.toDomain()
             cachedRecipeDao.upsert(recipe.toCachedEntity())
             Log.d(TAG, "Cached recipe detail for id=$recipeId")
@@ -204,7 +209,7 @@ class RecipeRepositoryImpl(
         // No key → no video; caller falls back to a plain YouTube search.
         if (!apiConfigured) return null
         return try {
-            val response = apiService.searchFoodVideos(query = recipeName, number = 1)
+            val response = withApiRetry { apiService.searchFoodVideos(query = recipeName, number = 1) }
             response.videos?.firstOrNull()?.youTubeId?.takeIf { it.isNotBlank() }
         } catch (e: Exception) {
             // Soft-fail: a missing video should never surface an error to the user.
@@ -252,30 +257,32 @@ class RecipeRepositoryImpl(
         }
 
         return try {
-            val resp = when (category.kind) {
-                CategoryKind.CUISINE -> apiService.searchRecipes(
-                    query = category.apiQuery,
-                    cuisine = category.spoonacularTag,
-                    number = limit,
-                    offset = offset,
-                    addRecipeNutrition = true
-                )
+            val resp = withApiRetry {
+                when (category.kind) {
+                    CategoryKind.CUISINE -> apiService.searchRecipes(
+                        query = category.apiQuery,
+                        cuisine = category.spoonacularTag,
+                        number = limit,
+                        offset = offset,
+                        addRecipeNutrition = true
+                    )
 
-                CategoryKind.DISH_TYPE -> apiService.searchRecipes(
-                    query = category.apiQuery,
-                    type = category.spoonacularTag,
-                    number = limit,
-                    offset = offset,
-                    addRecipeNutrition = true
-                )
+                    CategoryKind.DISH_TYPE -> apiService.searchRecipes(
+                        query = category.apiQuery,
+                        type = category.spoonacularTag,
+                        number = limit,
+                        offset = offset,
+                        addRecipeNutrition = true
+                    )
 
-                CategoryKind.DIETARY -> apiService.searchRecipes(
-                    query = category.apiQuery,
-                    diet = category.spoonacularTag,
-                    number = limit,
-                    offset = offset,
-                    addRecipeNutrition = true
-                )
+                    CategoryKind.DIETARY -> apiService.searchRecipes(
+                        query = category.apiQuery,
+                        diet = category.spoonacularTag,
+                        number = limit,
+                        offset = offset,
+                        addRecipeNutrition = true
+                    )
+                }
             }
 
             val recipes = resp.results.map { it.toDomain() }

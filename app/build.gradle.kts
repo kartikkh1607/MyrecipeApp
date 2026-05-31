@@ -222,8 +222,10 @@ dependencies {
     // Network Calls
     implementation(libs.retrofit)
 
-    // json to kotlin object mapping
-    implementation(libs.converter.gson)
+    // JSON ↔ Kotlin via kotlinx.serialization (replaces Gson app-wide as of
+    // 2026-05-31). Retrofit body conversion goes through this converter; raw
+    // OkHttp calls (Billing verify) use the Json instance from NetworkModule.
+    implementation(libs.retrofit.kotlinx.serialization.converter)
 
     // HTTP logging interceptor for debugging
     implementation(libs.logging.interceptor)
@@ -235,9 +237,6 @@ dependencies {
     implementation(libs.androidx.room.runtime)
     implementation(libs.androidx.room.ktx)   // coroutines + Flow support
     ksp(libs.androidx.room.compiler)
-
-    // Gson for TypeConverters
-    implementation(libs.gson)
 
 
     // Baseline Profile

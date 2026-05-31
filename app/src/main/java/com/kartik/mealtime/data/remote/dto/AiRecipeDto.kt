@@ -1,11 +1,11 @@
 package com.kartik.mealtime.data.remote.dto
 
-import com.google.gson.annotations.SerializedName
 import com.kartik.mealtime.domain.model.Ingredient
 import com.kartik.mealtime.domain.model.NutritionInfo
 import com.kartik.mealtime.domain.model.Recipe
 import com.kartik.mealtime.domain.model.RecipeDifficulty
 import com.kartik.mealtime.domain.model.RecipeStep
+import kotlinx.serialization.Serializable
 import java.util.UUID
 
 /**
@@ -19,14 +19,15 @@ import java.util.UUID
  * touching the domain model. The shape mirrors what [com.kartik.mealtime.data.remote.AiPrompts]
  * asks the model to produce.
  */
+@Serializable
 data class AiRecipeDto(
     val name: String? = null,
     val description: String? = null,
     val category: String? = null,
     val cuisine: String? = null,
     val difficulty: String? = null,                    // EASY | MEDIUM | HARD
-    @SerializedName("prepTimeMinutes") val prepTimeMinutes: Int? = null,
-    @SerializedName("cookTimeMinutes") val cookTimeMinutes: Int? = null,
+    val prepTimeMinutes: Int? = null,
+    val cookTimeMinutes: Int? = null,
     val servings: Int? = null,
     val calories: Int? = null,
     val ingredients: List<AiIngredientDto>? = null,
@@ -41,18 +42,21 @@ data class AiRecipeDto(
     val isLowCarb: Boolean? = null,
 )
 
+@Serializable
 data class AiIngredientDto(
     val name: String? = null,
     val amount: String? = null,
     val unit: String? = null,
 )
 
+@Serializable
 data class AiStepDto(
     val step: Int? = null,
     val instruction: String? = null,
     val tip: String? = null,
 )
 
+@Serializable
 data class AiNutritionDto(
     val calories: Int? = null,
     val protein: Float? = null,

@@ -3,9 +3,15 @@ package com.kartik.mealtime.domain.model
 import android.os.Parcelable
 import androidx.compose.runtime.Immutable
 import kotlinx.parcelize.Parcelize
+import kotlinx.serialization.Serializable
+
+// @Serializable annotations let the Room TypeConverters (and DataStore-backed
+// caches) round-trip these models through kotlinx.serialization JSON. They're
+// data-model annotations only — domain logic is unaffected.
 
 @Immutable
 @Parcelize
+@Serializable
 data class Recipe(
     val id: String,
     val name: String,
@@ -35,6 +41,7 @@ data class Recipe(
 
 @Immutable
 @Parcelize
+@Serializable
 data class Ingredient(
     val id: String = "",
     val name: String,
@@ -45,6 +52,7 @@ data class Ingredient(
 
 @Immutable
 @Parcelize
+@Serializable
 data class RecipeStep(
     val stepNumber: Int,
     val instruction: String,
@@ -54,6 +62,7 @@ data class RecipeStep(
 
 @Immutable
 @Parcelize
+@Serializable
 data class NutritionInfo(
     val calories: Int,
     val protein: Float,
@@ -64,6 +73,7 @@ data class NutritionInfo(
     val sodium: Float
 ) : Parcelable
 
+@Serializable
 enum class RecipeDifficulty {
     EASY, MEDIUM, HARD;
 
@@ -81,6 +91,7 @@ enum class RecipeDifficulty {
 }
 
 // Featured recipe types for carousel
+@Serializable
 enum class FeaturedType {
     RECIPE_OF_THE_DAY,
     POPULAR_THIS_WEEK,
@@ -89,6 +100,7 @@ enum class FeaturedType {
 
 @Immutable
 @Parcelize
+@Serializable
 data class FeaturedRecipe(
     val recipe: Recipe,
     val type: FeaturedType,

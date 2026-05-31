@@ -2,24 +2,29 @@ package com.kartik.mealtime.data.local
 
 import androidx.room.TypeConverter
 import com.kartik.mealtime.domain.model.Recipe
-import com.google.gson.Gson
+import kotlinx.serialization.json.Json
 
 /**
  * Room TypeConverters that serialise a full [Recipe] object to/from a JSON string.
  * Used exclusively by [CachedRecipeEntity] to store the complete recipe in one column.
  *
- * [gson] is a companion-object singleton — avoids creating a new Gson per converter
- * instance (Room may instantiate converters more than once across threads).
+ * The [Json] instance is lenient so a future field addition on [Recipe] doesn't
+ * break reads of older cached entries (entries written before the field existed
+ * just fall back to the field's default).
  */
 class RecipeTypeConverters {
 
     @TypeConverter
-    fun recipeToJson(recipe: Recipe): String = gson.toJson(recipe)
+    fun recipeToJson(recipe: Recipe): String = json.encodeToString(Recipe.serializer(), recipe)
 
     @TypeConverter
-    fun jsonToRecipe(json: String): Recipe = gson.fromJson(json, Recipe::class.java)
+    fun jsonToRecipe(string: String): Recipe = json.decodeFromString(Recipe.serializer(), string)
 
     companion object {
-        private val gson = Gson()
+        private val json = Json {
+            ignoreUnknownKeys = true
+            coerceInputValues = true
+            encodeDefaults = true
+        }
     }
 }

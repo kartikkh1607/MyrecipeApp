@@ -18,30 +18,27 @@
 -dontwarn org.bouncycastle.**
 -dontwarn org.openjsse.**
 
-# ── Gson / JSON serialisation ─────────────────────────────────────────────────
-# Gson uses field names (via reflection) to map JSON ↔ data classes.
-# Without these rules all DTO fields will be stripped/renamed and
-# the app will silently receive null/empty data for every API response.
--keepattributes *Annotation*
--dontwarn sun.misc.**
--keep class com.google.gson.** { *; }
--keep class * implements com.google.gson.TypeAdapterFactory
--keep class * implements com.google.gson.JsonSerializer
--keep class * implements com.google.gson.JsonDeserializer
-
-# Keep all DTO classes (Spoonacular response models)
--keep class com.kartik.mealtime.data.remote.dto.** { *; }
-
 # ── Kotlinx Serialisation ─────────────────────────────────────────────────────
-# Required for type-safe navigation routes serialised with @Serializable.
+# Used for: Spoonacular DTOs, AI DTOs, Gemini/Groq request+response, Room
+# TypeConverter for Recipe, DataStore-backed caches, type-safe nav routes.
+# Rules from the kotlinx.serialization manual; kept on top of the consumer-rules
+# already shipped by the lib so R8's `-allowaccessmodification` doesn't strip
+# the generated `$serializer` companion or rename it past lookup.
 -keepattributes *Annotation*, InnerClasses
 -dontnote kotlinx.serialization.AnnotationsKt
 -keepclassmembers class kotlinx.serialization.json.** { *** Companion; }
 -keepclasseswithmembers class kotlinx.serialization.json.** {
     kotlinx.serialization.KSerializer serializer(...);
 }
-# Keep all navigation route data classes
--keep @kotlinx.serialization.Serializable class com.kartik.mealtime.ui.navigation.** { *; }
+# Keep every @Serializable class along with its generated $serializer object.
+-keep,includedescriptorclasses @kotlinx.serialization.Serializable class com.kartik.mealtime.** {
+    *** Companion;
+    *** INSTANCE;
+    kotlinx.serialization.KSerializer serializer(...);
+}
+-keepclassmembers class com.kartik.mealtime.** {
+    @kotlinx.serialization.Serializable <fields>;
+}
 
 # ── Room (local database) ─────────────────────────────────────────────────────
 # Room generates *_Impl classes at compile time via KSP. R8 must not strip them.
@@ -60,16 +57,9 @@
 # Suppress warnings about Kotlin coroutines internals (safe to ignore).
 -dontwarn kotlinx.coroutines.**
 
-# ── Gemini AI (request / response DTOs serialised with Gson) ─────────────────
-# These data classes live directly in the .remote package and use @SerializedName.
-# Without this rule R8 strips their fields and AI features return null responses.
--keep class com.kartik.mealtime.data.remote.GenerateContentRequest { *; }
--keep class com.kartik.mealtime.data.remote.GenerateContentResponse { *; }
--keep class com.kartik.mealtime.data.remote.Content { *; }
--keep class com.kartik.mealtime.data.remote.Part { *; }
--keep class com.kartik.mealtime.data.remote.GenerationConfig { *; }
--keep class com.kartik.mealtime.data.remote.Candidate { *; }
--keep class com.kartik.mealtime.data.remote.ChatMessage { *; }
+# ── Gemini / Groq AI DTOs ─────────────────────────────────────────────────────
+# Covered by the generic @Serializable rule above — no per-class keeps needed
+# now that Gemini/Groq request+response DTOs are kotlinx.serialization classes.
 
 # ── Hilt ──────────────────────────────────────────────────────────────────────
 # Hilt bundles its own rules via the AAR, but these guard against edge cases

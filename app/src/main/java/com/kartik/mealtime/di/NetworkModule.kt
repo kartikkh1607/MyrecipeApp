@@ -2,6 +2,7 @@ package com.kartik.mealtime.di
 
 import android.content.Context
 import com.kartik.mealtime.BuildConfig
+import com.kartik.mealtime.data.remote.AiApi
 import com.kartik.mealtime.data.remote.FirebaseAuthInterceptor
 import com.kartik.mealtime.data.remote.SpoonacularApiService
 import dagger.Module
@@ -9,13 +10,14 @@ import dagger.Provides
 import dagger.hilt.InstallIn
 import dagger.hilt.android.qualifiers.ApplicationContext
 import dagger.hilt.components.SingletonComponent
+import kotlinx.serialization.json.Json
 import okhttp3.Cache
 import okhttp3.Interceptor
+import okhttp3.MediaType.Companion.toMediaType
 import okhttp3.OkHttpClient
-import okhttp3.Response
 import okhttp3.logging.HttpLoggingInterceptor
 import retrofit2.Retrofit
-import retrofit2.converter.gson.GsonConverterFactory
+import retrofit2.converter.kotlinx.serialization.asConverterFactory
 import java.io.File
 import java.util.concurrent.TimeUnit
 import javax.inject.Named
@@ -30,8 +32,18 @@ object NetworkModule {
     // "/spoonacular/" + relative endpoint paths resolve to /spoonacular/<path>,
     // which the Worker forwards to api.spoonacular.com/<path>.
     private val BASE_URL = "${BuildConfig.PROXY_BASE_URL}/spoonacular/"
+
+    // AI providers (Gemini, Groq) share a base URL — the path differentiates them.
+    // Trailing slash is required for Retrofit to resolve the relative "gemini" / "groq" paths.
+    private val AI_BASE_URL = "${BuildConfig.PROXY_BASE_URL}/"
+
     private const val CACHE_SIZE_BYTES = 10L * 1024 * 1024
 
+    // On network failure, fall back to the OkHttp disk cache (up to 24 h stale) so
+    // the user sees something instead of an empty error state. Retries for transient
+    // failures (IOException / 503) now live in the repository layer — see
+    // data/remote/NetworkRetry.kt — so they suspend via `delay` instead of blocking
+    // an OkHttp dispatcher thread with `Thread.sleep`.
     private val offlineFallbackInterceptor = Interceptor { chain ->
         val request = chain.request()
         try {
@@ -45,64 +57,27 @@ object NetworkModule {
     }
 
     /**
-     * Linear-backoff retry for transient failures (IOException or 503). Backoff is
-     * 1s / 2s / 3s — so the worst-case extra wall time is 6s across three attempts.
+     * App-wide kotlinx.serialization Json instance.
      *
-     * `Thread.sleep` blocks the dispatcher thread holding this interceptor — fine in
-     * practice for a single-user mobile client (OkHttp's default dispatcher has 64
-     * slots, of which we use ≤2 concurrently), but we honour [Call.isCanceled] before
-     * and after each sleep so a coroutine cancellation during backoff aborts the
-     * request promptly instead of waiting out the timer. [InterruptedException] is
-     * also surfaced as an IOException so it doesn't disappear into a "Request failed"
-     * generic at the end of the loop.
+     * - `ignoreUnknownKeys = true` — Spoonacular + Gemini return many fields we
+     *   don't model; without this, deserialization throws on every new field
+     *   they add.
+     * - `explicitNulls = false` — `null` values in serialised output are dropped,
+     *   matching Gson's default and keeping cache JSON / API request bodies
+     *   compact.
+     * - `coerceInputValues = true` — when a non-null Kotlin field receives a
+     *   wire null, fall back to the declared default instead of throwing
+     *   (matches Gson's lenient behaviour we relied on).
      */
-    private class RetryInterceptor(
-        private val maxRetries: Int = 3,
-        private val initialBackoffMs: Long = 1_000L
-    ) : Interceptor {
-        override fun intercept(chain: Interceptor.Chain): Response {
-            val request = chain.request()
-            var lastException: java.io.IOException? = null
-            repeat(maxRetries) { attempt ->
-                if (chain.call().isCanceled()) throw java.io.IOException("Canceled")
-                try {
-                    val response = chain.proceed(request)
-                    if (response.code == 503 && attempt < maxRetries - 1) {
-                        response.close()
-                        if (!backoff(chain, initialBackoffMs * (attempt + 1))) {
-                            throw java.io.IOException("Canceled")
-                        }
-                        return@repeat
-                    }
-                    return response
-                } catch (e: java.io.IOException) {
-                    lastException = e
-                    if (attempt < maxRetries - 1 &&
-                        !backoff(chain, initialBackoffMs * (attempt + 1))
-                    ) {
-                        throw java.io.IOException("Canceled", e)
-                    }
-                }
-            }
-            throw lastException ?: java.io.IOException("Request failed after $maxRetries retries")
-        }
-
-        /** Sleeps in 100 ms chunks so a Call.cancel during backoff is observed within
-         *  ~100 ms rather than waiting out the full backoff. Returns false if the call
-         *  was cancelled or the thread was interrupted, true otherwise. */
-        private fun backoff(chain: Interceptor.Chain, totalMs: Long): Boolean {
-            val deadline = System.currentTimeMillis() + totalMs
-            while (System.currentTimeMillis() < deadline) {
-                if (chain.call().isCanceled()) return false
-                try {
-                    Thread.sleep(minOf(100L, deadline - System.currentTimeMillis()).coerceAtLeast(0))
-                } catch (_: InterruptedException) {
-                    Thread.currentThread().interrupt()
-                    return false
-                }
-            }
-            return true
-        }
+    @Provides
+    @Singleton
+    fun provideJson(): Json = Json {
+        ignoreUnknownKeys = true
+        explicitNulls = false
+        coerceInputValues = true
+        // The AI sometimes wraps content fields in single-element lists; allow Retrofit
+        // converter + manual parsers to keep flowing rather than crash on shape drift.
+        isLenient = true
     }
 
     @Provides
@@ -116,7 +91,6 @@ object NetworkModule {
         return OkHttpClient.Builder()
             .cache(cache)
             .addInterceptor(FirebaseAuthInterceptor())
-            .addInterceptor(RetryInterceptor())
             .addInterceptor(offlineFallbackInterceptor)
             .addInterceptor(loggingInterceptor)
             .connectTimeout(10, TimeUnit.SECONDS)
@@ -144,15 +118,42 @@ object NetworkModule {
 
     @Provides
     @Singleton
-    fun provideRetrofit(okHttpClient: OkHttpClient): Retrofit =
-        Retrofit.Builder()
+    fun provideRetrofit(okHttpClient: OkHttpClient, json: Json): Retrofit {
+        val contentType = "application/json".toMediaType()
+        return Retrofit.Builder()
             .baseUrl(BASE_URL)
             .client(okHttpClient)
-            .addConverterFactory(GsonConverterFactory.create())
+            .addConverterFactory(json.asConverterFactory(contentType))
             .build()
+    }
 
     @Provides
     @Singleton
     fun provideApiService(retrofit: Retrofit): SpoonacularApiService =
         retrofit.create(SpoonacularApiService::class.java)
+
+    /**
+     * Retrofit instance for the AI endpoints. Separate from the Spoonacular Retrofit
+     * because they need a different OkHttp client (longer timeouts, no disk cache)
+     * and a different base URL.
+     */
+    @Provides
+    @Singleton
+    @Named("ai")
+    fun provideAiRetrofit(
+        @Named("ai") okHttpClient: OkHttpClient,
+        json: Json,
+    ): Retrofit {
+        val contentType = "application/json".toMediaType()
+        return Retrofit.Builder()
+            .baseUrl(AI_BASE_URL)
+            .client(okHttpClient)
+            .addConverterFactory(json.asConverterFactory(contentType))
+            .build()
+    }
+
+    @Provides
+    @Singleton
+    fun provideAiApi(@Named("ai") retrofit: Retrofit): AiApi =
+        retrofit.create(AiApi::class.java)
 }

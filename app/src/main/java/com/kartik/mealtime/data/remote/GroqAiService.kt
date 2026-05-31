@@ -3,16 +3,13 @@ package com.kartik.mealtime.data.remote
 import com.kartik.mealtime.BuildConfig
 import com.kartik.mealtime.domain.model.MealPlan
 import com.kartik.mealtime.domain.model.Recipe
-import com.google.gson.Gson
-import com.google.gson.annotations.SerializedName
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
-import okhttp3.MediaType.Companion.toMediaType
-import okhttp3.OkHttpClient
-import okhttp3.Request
-import okhttp3.RequestBody.Companion.toRequestBody
+import kotlinx.serialization.SerialName
+import kotlinx.serialization.Serializable
+import kotlinx.serialization.json.Json
+import retrofit2.HttpException
 import javax.inject.Inject
-import javax.inject.Named
 
 /**
  * Groq (groq.com) client used as a fallback when Gemini is unavailable.
@@ -22,22 +19,17 @@ import javax.inject.Named
  * API, so the request / response shapes here mirror that schema. Reuses
  * [AiPrompts] so responses are formatted identically to Gemini's.
  *
- * Only invoked by [AiServiceRouter] when [isConfigured] is true (i.e. a key is
- * present in local.properties).
+ * Only invoked by [AiServiceRouter] when [isConfigured] is true.
  */
 class GroqAiService @Inject constructor(
-    @Named("ai") private val client: OkHttpClient
+    private val api: AiApi,
+    private val json: Json,
 ) : AiService {
 
-    private val gson = Gson()
-
-    companion object {
-        // Routed through the Cloudflare Worker proxy, which injects the Groq API key
-        // (and the model) and forwards to Groq's chat/completions endpoint.
-        private val BASE_URL = "${BuildConfig.PROXY_BASE_URL}/groq"
+    private companion object {
         // Change this to whichever model your Groq account has access to
         // (e.g. "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it").
-        private const val MODEL = "llama-3.3-70b-versatile"
+        const val MODEL = "llama-3.3-70b-versatile"
     }
 
     /**
@@ -116,7 +108,7 @@ class GroqAiService @Inject constructor(
             return Result.failure(Exception("Groq API key is not configured."))
         }
         return try {
-            val requestBody = ChatCompletionRequest(
+            val request = ChatCompletionRequest(
                 model = MODEL,
                 messages = listOf(ChatCompletionMessage(role = "user", content = prompt)),
                 temperature = temperature,
@@ -125,45 +117,22 @@ class GroqAiService @Inject constructor(
                 // "JSON", which Groq requires when this is set.
                 responseFormat = if (jsonMode) ResponseFormat(type = "json_object") else null
             )
-
-            val mediaType = "application/json".toMediaType()
-            val body = gson.toJson(requestBody).toRequestBody(mediaType)
-
-            val request = Request.Builder()
-                .url(BASE_URL)
-                .post(body)
-                .addHeader("Content-Type", "application/json")
-                // No Authorization here: the FirebaseAuthInterceptor on the shared
-                // "ai" OkHttpClient attaches the Firebase ID token, and the proxy
-                // supplies the real Groq key server-side.
-                .build()
-
-            // OkHttpClient.await is the shared suspendCancellableCoroutine wrapper —
-            // see OkHttpExt.kt. Coroutine cancellation cancels the in-flight Groq call.
-            val response = client.await(request)
-            val responseBody = response.body?.string()
-                ?: return Result.failure(Exception("Empty response from Groq API"))
-
-            if (!response.isSuccessful) {
-                // 402 = proxy's premium gate (structured generation is premium-only).
-                // Surface as PremiumRequiredException so the UI opens the upsell sheet
-                // instead of showing a generic Groq error in the rare case the router
-                // falls back to Groq on a non-quota Gemini failure for a structured call.
-                if (response.code == 402) {
-                    return Result.failure(PremiumRequiredException())
-                }
-                return Result.failure(friendlyError(response.code, responseBody))
-            }
-
-            val parsed = gson.fromJson(responseBody, ChatCompletionResponse::class.java)
-            val text = parsed.choices
+            val response = api.chatCompletion(request)
+            val text = response.choices
                 ?.firstOrNull()
                 ?.message
                 ?.content
                 ?.trim()
                 ?: return Result.failure(Exception("No content in Groq response"))
-
             Result.success(text)
+        } catch (e: HttpException) {
+            // 402 = proxy's premium gate (structured generation is premium-only).
+            // Surface as PremiumRequiredException so the UI opens the upsell sheet
+            // instead of showing a generic Groq error in the rare case the router
+            // falls back to Groq on a non-quota Gemini failure for a structured call.
+            if (e.code() == 402) return Result.failure(PremiumRequiredException())
+            val body = runCatching { e.response()?.errorBody()?.string() }.getOrNull()
+            Result.failure(friendlyError(e.code(), body))
         } catch (e: Exception) {
             Result.failure(e)
         }
@@ -173,7 +142,7 @@ class GroqAiService @Inject constructor(
     // { "error": { "message": "...", "type": "...", "code": "..." } }
     private fun friendlyError(code: Int, body: String?): Exception {
         val apiMsg = runCatching {
-            gson.fromJson(body, ChatCompletionErrorEnvelope::class.java)?.error?.message
+            body?.let { json.decodeFromString(ChatCompletionErrorEnvelope.serializer(), it).error?.message }
         }.getOrNull()
         val suffix = if (!apiMsg.isNullOrBlank()) " ($apiMsg)" else ""
         return Exception(
@@ -192,33 +161,42 @@ class GroqAiService @Inject constructor(
 
 // ── OpenAI-compatible DTOs for the Groq Chat Completions API ────────────────────
 
+@Serializable
 data class ChatCompletionRequest(
     val model: String,
     val messages: List<ChatCompletionMessage>,
     val temperature: Float? = null,
-    @SerializedName("max_tokens")
-    val maxTokens: Int? = null,
-    @SerializedName("response_format")
-    val responseFormat: ResponseFormat? = null
+    @SerialName("max_tokens") val maxTokens: Int? = null,
+    @SerialName("response_format") val responseFormat: ResponseFormat? = null,
 )
 
 /** OpenAI-compatible structured-output selector; type = "json_object" enables JSON mode. */
+@Serializable
 data class ResponseFormat(val type: String)
 
+@Serializable
 data class ChatCompletionMessage(
     val role: String,
-    val content: String
+    val content: String,
 )
 
+@Serializable
 data class ChatCompletionResponse(
-    val choices: List<ChatCompletionChoice>?
+    val choices: List<ChatCompletionChoice>? = null,
 )
 
+@Serializable
 data class ChatCompletionChoice(
-    val message: ChatCompletionMessage?,
-    @SerializedName("finish_reason")
-    val finishReason: String?
+    val message: ChatCompletionMessage? = null,
+    @SerialName("finish_reason") val finishReason: String? = null,
 )
 
-data class ChatCompletionErrorEnvelope(val error: ChatCompletionErrorBody?)
-data class ChatCompletionErrorBody(val message: String?, val type: String?, val code: String?)
+@Serializable
+data class ChatCompletionErrorEnvelope(val error: ChatCompletionErrorBody? = null)
+
+@Serializable
+data class ChatCompletionErrorBody(
+    val message: String? = null,
+    val type: String? = null,
+    val code: String? = null,
+)

@@ -1,9 +1,9 @@
 package com.kartik.mealtime.data.remote
 
-import com.google.gson.Gson
 import com.kartik.mealtime.data.remote.dto.MealPlanDto
 import com.kartik.mealtime.data.remote.dto.toMealPlanOrNull
 import com.kartik.mealtime.domain.model.MealPlan
+import kotlinx.serialization.json.Json
 
 /**
  * Turns a model's raw text response into a domain [MealPlan]. Mirrors
@@ -12,13 +12,19 @@ import com.kartik.mealtime.domain.model.MealPlan
  */
 internal object MealPlanParser {
 
-    private val gson = Gson()
+    private val json = Json {
+        ignoreUnknownKeys = true
+        coerceInputValues = true
+        isLenient = true
+    }
 
     fun parse(raw: String): Result<MealPlan> {
-        val json = extractJsonObject(raw)
+        val payload = extractJsonObject(raw)
             ?: return Result.failure(Exception("The AI didn't return a meal plan. Please try again."))
 
-        val dto = runCatching { gson.fromJson(json, MealPlanDto::class.java) }.getOrNull()
+        val dto = runCatching {
+            json.decodeFromString(MealPlanDto.serializer(), payload)
+        }.getOrNull()
             ?: return Result.failure(Exception("Couldn't read the AI's meal plan. Please try again."))
 
         val plan = dto.toMealPlanOrNull()
