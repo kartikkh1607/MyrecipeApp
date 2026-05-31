@@ -22,9 +22,8 @@ and the source — and is consistent with `docs/privacy-policy.md`.
 | `firebase-firestore` | Cloud Firestore | Favorites, AI recipes, shopping list, preferences |
 | Spoonacular API | Retrofit call | Search query text (transient) |
 | Gemini API + Groq (fallback) | OkHttp call | AI prompt text (transient) |
-| `android.speech.SpeechRecognizer` | OS speech (Cooking Mode) | Microphone audio — **not collected/stored by the app** |
 
-Manifest permissions: `INTERNET`, `RECORD_AUDIO`, `com.google.android.gms.permission.AD_ID`.
+Manifest permissions: `INTERNET`, `com.google.android.gms.permission.AD_ID`.
 
 ---
 
@@ -81,13 +80,6 @@ service provider to fulfil the request*, Google's policy may let you omit them.
 Conservative path: declare AI prompt text under **Other user-generated
 content** with purpose **App functionality** and tick **Processed ephemerally**.
 Decide based on whether you consider Spoonacular/Gemini/Groq service providers.
-
-**Audio files → Voice or sound recordings** — recommended answer: **NOT
-collected.** Mic audio is handled by the OS `SpeechRecognizer`; the app never
-records to disk, never uploads audio to your servers, and the mic is active
-only while the user is on Cooking Mode and has tapped the mic. (You still
-disclose `RECORD_AUDIO` use in the listing / Privacy Policy §1.3 — but the
-Data Safety form is about data *your app* collects.)
 
 ### ❌ Do NOT declare (the app does not collect these)
 Name (real), phone, address, location (approximate/precise), financial/payment

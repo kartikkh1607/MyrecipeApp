@@ -43,20 +43,7 @@ you can access it on other devices:
 This content is associated with your account and is not shared with
 other users.
 
-### 1.3 Microphone / voice input
-With your explicit permission, the App uses your device's microphone in
-**Cooking Mode** so you can advance recipe steps hands-free with voice
-commands (e.g. "next", "back", "repeat").
-- Audio is processed by **Android's built-in speech recognizer**
-  (`android.speech.SpeechRecognizer`). On most devices this is provided
-  by Google and audio may be transmitted to Google for transcription
-  per Google's own privacy policy.
-- The App itself does **not** record audio to disk and does **not** send
-  audio to our servers.
-- The microphone is only active while you are on the Cooking Mode screen
-  and have explicitly tapped the mic button.
-
-### 1.4 Recipe / AI query data
+### 1.3 Recipe / AI query data
 All recipe and AI traffic is routed through our **Cloudflare Worker
 proxy**, which forwards requests to the upstream providers. The Worker
 sees the bearer Firebase ID token (used only to authenticate the request
@@ -74,7 +61,7 @@ store request content.
   account information is attached to these requests by the App. Do not
   enter personal information into AI prompts.
 
-### 1.5 Advertising
+### 1.4 Advertising
 The free version of the App displays ads served by **Google AdMob**.
 - To request and measure ads, the Google Mobile Ads SDK collects your
   device's **Advertising ID** (a resettable identifier), along with
@@ -89,7 +76,7 @@ The free version of the App displays ads served by **Google AdMob**.
   https://support.google.com/admob/answer/6128543 and
   https://policies.google.com/technologies/partner-sites.
 
-### 1.6 Diagnostics and analytics
+### 1.5 Diagnostics and analytics
 The App uses the following Google services:
 - **Firebase Analytics** — anonymous usage events (screen views,
   feature usage) used to improve the App. No personally identifying
@@ -101,7 +88,7 @@ The App uses the following Google services:
 Both services may collect a Firebase installation identifier and basic
 device information per Google's policies.
 
-### 1.7 Network requests
+### 1.6 Network requests
 All network traffic uses **HTTPS**. The App does not allow cleartext
 HTTP traffic.
 
@@ -116,7 +103,7 @@ HTTP traffic.
   and ad-interaction data with Google; under some privacy laws (e.g. the
   California CCPA) this may be considered a "sale" or "sharing" of
   personal information. You can opt out of ad personalization as
-  described in Section 1.5.
+  described in Section 1.4.
 
 ---
 
@@ -131,7 +118,6 @@ privacy policy:
 | Google Gemini API | AI recipe generation and chat (primary) | https://policies.google.com/privacy |
 | Groq | AI recipe generation and chat (fallback) | https://groq.com/privacy-policy/ |
 | Spoonacular | Recipe search and detail data | https://spoonacular.com/food-api/terms |
-| Android Speech Recognizer (Google) | Voice command transcription | https://policies.google.com/privacy |
 
 ---
 
@@ -158,10 +144,8 @@ provided us information, please contact us and we will delete it.
 
 ## 6. Permissions used
 - `INTERNET` — required to load recipes, sign in, and sync data.
-- `RECORD_AUDIO` — used only when you activate voice commands in
-  Cooking Mode; can be denied without affecting the rest of the App.
 - `AD_ID` (Advertising ID) — used by the Google Mobile Ads SDK to
-  request and measure ads (see Section 1.5).
+  request and measure ads (see Section 1.4).
 
 ---
 
