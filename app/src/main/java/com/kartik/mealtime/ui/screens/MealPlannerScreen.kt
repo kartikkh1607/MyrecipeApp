@@ -144,16 +144,11 @@ fun MealPlannerScreen(
             is MealPlannerViewModel.MealPlanState.Ready -> PlanReady(
                 plan = state.plan,
                 onAddAll = {
-                    var count = 0
-                    state.plan.days.forEach { day ->
-                        day.meals.forEach { meal ->
-                            shoppingListViewModel.addToShoppingList(meal.recipe)
-                            count++
-                        }
-                    }
+                    val recipes = state.plan.days.flatMap { day -> day.meals.map { it.recipe } }
+                    shoppingListViewModel.replaceShoppingListWith(recipes)
                     Toast.makeText(
                         context,
-                        "Added $count meals to your shopping list",
+                        "Added ${recipes.size} meals to your shopping list",
                         Toast.LENGTH_SHORT,
                     ).show()
                 },

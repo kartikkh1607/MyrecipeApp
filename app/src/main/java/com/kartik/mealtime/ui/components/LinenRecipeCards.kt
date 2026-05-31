@@ -1,5 +1,9 @@
 package com.kartik.mealtime.ui.components
 
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
@@ -18,6 +22,7 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AccessTime
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
 import androidx.compose.material.icons.filled.GridView
@@ -29,13 +34,18 @@ import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
@@ -75,6 +85,7 @@ fun RecipeCardV(
     onClick: () -> Unit,
     onFavoriteToggle: () -> Unit,
     modifier: Modifier = Modifier,
+    onDelete: (() -> Unit)? = null,
 ) {
     val scheme = MaterialTheme.colorScheme
     val ratingText = remember(recipe.rating) { String.format(Locale.ROOT, "%.1f", recipe.rating) }
@@ -102,32 +113,32 @@ fun RecipeCardV(
                     contentScale = ContentScale.Crop
                 )
 
-                if (diet != null) {
-                    DietBadgeSolid(
-                        text = diet.short,
-                        modifier = Modifier
-                            .align(Alignment.TopStart)
-                            .padding(9.dp)
-                    )
+                Row(
+                    modifier = Modifier
+                        .align(Alignment.TopStart)
+                        .padding(9.dp),
+                    horizontalArrangement = Arrangement.spacedBy(6.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    if (onDelete != null) {
+                        DeleteCircleButton(onClick = onDelete)
+                    }
+                    if (diet != null) {
+                        DietBadgeSolid(text = diet.short)
+                    }
                 }
 
-                Box(
+                FavoriteHeartButton(
+                    isFavorite = isFavorite,
+                    onToggle = onFavoriteToggle,
+                    background = Color(0x57141210),
+                    unselectedTint = Color.White,
+                    buttonSize = 32.dp,
+                    iconSize = 16.dp,
                     modifier = Modifier
                         .align(Alignment.TopEnd)
                         .padding(9.dp)
-                        .size(32.dp)
-                        .clip(CircleShape)
-                        .background(Color(0x57141210))
-                        .clickable(onClick = onFavoriteToggle),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Icon(
-                        imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                        contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                        tint = if (isFavorite) Heart else Color.White,
-                        modifier = Modifier.size(16.dp)
-                    )
-                }
+                )
             }
 
             Column(
@@ -248,25 +259,98 @@ fun RecipeCardH(
                     if (recipe.rating > 0f) RatingMini(ratingText)
                 }
             }
-            Box(
-                modifier = Modifier
-                    .size(28.dp)
-                    .clip(CircleShape)
-                    .clickable(onClick = onFavoriteToggle),
-                contentAlignment = Alignment.Center
-            ) {
-                Icon(
-                    imageVector = if (isFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
-                    contentDescription = if (isFavorite) "Remove from favorites" else "Add to favorites",
-                    tint = if (isFavorite) Heart else scheme.onSurface.copy(alpha = 0.45f),
-                    modifier = Modifier.size(20.dp)
-                )
-            }
+            FavoriteHeartButton(
+                isFavorite = isFavorite,
+                onToggle = onFavoriteToggle,
+                background = Color.Transparent,
+                unselectedTint = scheme.onSurface.copy(alpha = 0.45f),
+                buttonSize = 32.dp,
+                iconSize = 20.dp
+            )
         }
     }
 }
 
 // ── Pieces ───────────────────────────────────────────────────────────────────
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun FavoriteHeartButton(
+    isFavorite: Boolean,
+    onToggle: () -> Unit,
+    background: Color,
+    unselectedTint: Color,
+    buttonSize: androidx.compose.ui.unit.Dp,
+    iconSize: androidx.compose.ui.unit.Dp,
+    modifier: Modifier = Modifier,
+) {
+    // Optimistic local state — the StateFlow from FavoritesViewModel can take a
+    // moment to round-trip through Room, and the LazyGrid item's snapshot read
+    // doesn't always invalidate fast enough to feel instant. Mirror the upstream
+    // value but flip immediately on tap so the heart fills the moment the user
+    // taps it. LaunchedEffect re-syncs whenever the source of truth catches up.
+    var optimisticFavorite by remember { mutableStateOf(isFavorite) }
+    androidx.compose.runtime.LaunchedEffect(isFavorite) { optimisticFavorite = isFavorite }
+
+    var bounce by remember { mutableStateOf(false) }
+    val scale by animateFloatAsState(
+        targetValue = if (bounce) 1.4f else 1f,
+        animationSpec = spring(
+            dampingRatio = Spring.DampingRatioLowBouncy,
+            stiffness = Spring.StiffnessHigh
+        ),
+        label = "heart_scale",
+        finishedListener = { bounce = false }
+    )
+    val tint by animateColorAsState(
+        targetValue = if (optimisticFavorite) Heart else unselectedTint,
+        label = "heart_tint"
+    )
+    Surface(
+        modifier = modifier.size(buttonSize),
+        shape = CircleShape,
+        color = background,
+        onClick = {
+            optimisticFavorite = !optimisticFavorite
+            bounce = true
+            onToggle()
+        }
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = if (optimisticFavorite) Icons.Default.Favorite else Icons.Default.FavoriteBorder,
+                contentDescription = if (optimisticFavorite) "Remove from favorites" else "Add to favorites",
+                tint = tint,
+                modifier = Modifier
+                    .size(iconSize)
+                    .graphicsLayer { scaleX = scale; scaleY = scale }
+            )
+        }
+    }
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
+@Composable
+private fun DeleteCircleButton(
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Surface(
+        modifier = modifier.size(32.dp),
+        shape = CircleShape,
+        color = Color(0x57141210),
+        onClick = onClick
+    ) {
+        Box(contentAlignment = Alignment.Center) {
+            Icon(
+                imageVector = Icons.Default.Close,
+                contentDescription = "Remove from favorites",
+                tint = Color.White,
+                modifier = Modifier.size(16.dp)
+            )
+        }
+    }
+}
 
 @Composable
 private fun DietBadgeSolid(text: String, modifier: Modifier = Modifier) {

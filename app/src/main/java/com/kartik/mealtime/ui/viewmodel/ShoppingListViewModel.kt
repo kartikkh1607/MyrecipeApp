@@ -50,15 +50,34 @@ class ShoppingListViewModel @Inject constructor(
     val lastAddedRecipeName: StateFlow<String?> = _lastAddedRecipeName.asStateFlow()
 
     /**
-     * Appends [recipe]'s ingredients to the shopping list, preserving items already
-     * added from other recipes. Duplicates (same recipe + ingredient, keyed below) are
-     * de-duplicated by the DAO's IGNORE-on-conflict insert, so re-adding is a no-op.
+     * Replaces the shopping list with [recipe]'s ingredients. Tapping "Add to
+     * shopping list" on a recipe is treated as starting a fresh list, so anything
+     * previously there (other recipes' items and custom additions) is cleared
+     * first — both locally and remotely when signed in.
      */
     fun addToShoppingList(recipe: Recipe) {
         _lastAddedRecipeName.value = recipe.name
         analytics.logShoppingListUpdated("add_recipe", recipe.name)
-        viewModelScope.launch {
-            val uid = userRepository.currentUser?.uid
+        viewModelScope.launch { replaceShoppingListInternal(listOf(recipe)) }
+    }
+
+    /**
+     * Replaces the shopping list with the ingredients from every recipe in
+     * [recipes]. Used when adding a whole meal plan in one tap — clears the
+     * list once, then inserts every meal's ingredients.
+     */
+    fun replaceShoppingListWith(recipes: List<Recipe>) {
+        if (recipes.isEmpty()) return
+        _lastAddedRecipeName.value = null
+        analytics.logShoppingListUpdated("add_recipes")
+        viewModelScope.launch { replaceShoppingListInternal(recipes) }
+    }
+
+    private suspend fun replaceShoppingListInternal(recipes: List<Recipe>) {
+        val uid = userRepository.currentUser?.uid
+        shoppingDao.deleteAll()
+        uid?.let { syncBestEffort("clearShoppingList") { syncRepository.clearShoppingList(it) } }
+        recipes.forEach { recipe ->
             recipe.ingredients.forEach { ing ->
                 val key = "${recipe.id}_${ing.id.ifEmpty { ing.name }}"
                 val entity = ShoppingItemEntity(

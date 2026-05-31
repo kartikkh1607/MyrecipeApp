@@ -30,7 +30,6 @@ import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
-import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.AutoAwesome
@@ -58,7 +57,6 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalContext
@@ -100,24 +98,15 @@ fun RecipeDetailScreen(
             swipeIds.indexOf(recipeId).coerceAtLeast(0)
         }
         val pagerState = rememberPagerState(initialPage = initialPage) { swipeIds.size }
-        Box(modifier = Modifier.fillMaxSize()) {
-            HorizontalPager(
-                state = pagerState,
-                modifier = Modifier.fillMaxSize()
-            ) { page ->
-                RecipeDetailPage(
-                    recipeId = swipeIds[page],
-                    navController = navController,
-                    viewModel = viewModel,
-                    shoppingListViewModel = shoppingListViewModel
-                )
-            }
-            SwipePageIndicator(
-                count = swipeIds.size,
-                current = pagerState.currentPage,
-                modifier = Modifier
-                    .align(Alignment.BottomCenter)
-                    .padding(bottom = 28.dp)
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier.fillMaxSize()
+        ) { page ->
+            RecipeDetailPage(
+                recipeId = swipeIds[page],
+                navController = navController,
+                viewModel = viewModel,
+                shoppingListViewModel = shoppingListViewModel
             )
         }
     } else {
@@ -127,27 +116,6 @@ fun RecipeDetailScreen(
             viewModel = viewModel,
             shoppingListViewModel = shoppingListViewModel
         )
-    }
-}
-
-@Composable
-private fun SwipePageIndicator(count: Int, current: Int, modifier: Modifier = Modifier) {
-    Row(
-        modifier = modifier,
-        horizontalArrangement = Arrangement.spacedBy(6.dp),
-        verticalAlignment = Alignment.CenterVertically
-    ) {
-        repeat(count.coerceAtMost(10)) { i ->
-            Box(
-                modifier = Modifier
-                    .size(if (i == current) 8.dp else 6.dp)
-                    .clip(CircleShape)
-                    .background(
-                        if (i == current) Color.White
-                        else Color.White.copy(alpha = 0.4f)
-                    )
-            )
-        }
     }
 }
 
@@ -202,9 +170,8 @@ private fun RecipeDetailPage(
 
     var isCookingMode by remember { mutableStateOf(false) }
     val hapticFeedback = LocalHapticFeedback.current
-    val isFavorite by remember(recipe.id) {
-        derivedStateOf { favoritesViewModel.favoriteIds.value.contains(recipe.id) }
-    }
+    val favoriteIds by favoritesViewModel.favoriteIds.collectAsStateWithLifecycle()
+    val isFavorite = favoriteIds.contains(recipe.id)
 
     // Personalization: record this view exactly once per unique recipe.id.
     // Fires for cached recipes too (cache short-circuits fetch, but we still

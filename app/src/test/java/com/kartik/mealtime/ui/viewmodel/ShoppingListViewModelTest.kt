@@ -113,13 +113,52 @@ class ShoppingListViewModelTest {
     }
 
     @Test
-    fun `addToShoppingList de-duplicates ingredients already present`() {
+    fun `addToShoppingList replaces the prior list with the new recipe`() {
+        val vm = buildVm()
+        vm.addCustomShoppingItem("Milk")
+        assertEquals(1, vm.shoppingList.value.size)
+
+        vm.addToShoppingList(recipeWithIngredients())
+
+        assertEquals(setOf("r1_i1", "r1_i2"), vm.shoppingList.value.map { it.key }.toSet())
+    }
+
+    @Test
+    fun `addToShoppingList clears remote when signed in`() = runTest(dispatcher.scheduler) {
+        signInAs("uid1")
         val vm = buildVm()
 
         vm.addToShoppingList(recipeWithIngredients())
-        vm.addToShoppingList(recipeWithIngredients())
 
-        assertEquals(2, vm.shoppingList.value.size)
+        verify(syncRepository).clearShoppingList("uid1")
+    }
+
+    @Test
+    fun `replaceShoppingListWith inserts every recipe's ingredients in one batch`() {
+        val vm = buildVm()
+        val second = Recipe(
+            id = "r2", name = "Salad", description = "", imageUrl = "", category = "",
+            ingredients = listOf(Ingredient(id = "i3", name = "Lettuce", amount = "1", unit = "head"))
+        )
+
+        vm.replaceShoppingListWith(listOf(recipeWithIngredients(), second))
+
+        assertEquals(
+            setOf("r1_i1", "r1_i2", "r2_i3"),
+            vm.shoppingList.value.map { it.key }.toSet()
+        )
+        // No single recipe focused — meal plans show every section expanded.
+        assertEquals(null, vm.lastAddedRecipeName.value)
+    }
+
+    @Test
+    fun `replaceShoppingListWith is a no-op for an empty list`() {
+        val vm = buildVm()
+        vm.addCustomShoppingItem("Milk")
+
+        vm.replaceShoppingListWith(emptyList())
+
+        assertEquals(1, vm.shoppingList.value.size)
     }
 
     @Test

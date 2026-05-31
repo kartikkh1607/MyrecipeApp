@@ -12,7 +12,6 @@ import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
-import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -260,22 +259,13 @@ fun FavoritesScreen(
                                             )
                                         ) + fadeIn(tween(200))
                                     ) {
-                                        // Long-press on the card removes (matches list-mode swipe);
-                                        // the heart in the corner also toggles.
-                                        Box(
-                                            modifier = Modifier.combinedClickable(
-                                                onClick = onGridClick,
-                                                onLongClick = onRemove,
-                                                onLongClickLabel = "Remove from favorites"
-                                            )
-                                        ) {
-                                            RecipeCardV(
-                                                recipe = recipe,
-                                                isFavorite = favoriteIds.contains(recipe.id),
-                                                onClick = onGridClick,
-                                                onFavoriteToggle = { onToggleFavorite(recipe) }
-                                            )
-                                        }
+                                        RecipeCardV(
+                                            recipe = recipe,
+                                            isFavorite = favoriteIds.contains(recipe.id),
+                                            onClick = onGridClick,
+                                            onFavoriteToggle = { onToggleFavorite(recipe) },
+                                            onDelete = onRemove
+                                        )
                                     }
                                 }
                             }
