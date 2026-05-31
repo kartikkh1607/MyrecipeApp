@@ -64,9 +64,13 @@ the app can be pointed at it.
     bypass the paywall via a crafted direct call.
 - **Per-user daily quota (Gemini):** `POST /gemini` is capped per uid per UTC-day to
   protect the paid upstream from a runaway user. Defaults (set in `wrangler.toml
-  [vars]`): **25/day free, 200/day premium**. When exceeded the Worker returns `429
-  {"error": "user_quota_exceeded", "limit": N, "tier": "free|premium"}`. Counters live
-  in `BILLING_KV` (`quota:gemini:<uid>:<YYYY-MM-DD>`) and auto-expire 60 h after write.
+  [vars]`): **10/day free, 30/day premium** — worst-case cost ≈ $1.50/mo (free) and
+  $4.50/mo (premium) per maxed user, comfortably under the ~$4.24 net monthly sub.
+  When exceeded the Worker returns `429 {"error": "user_quota_exceeded", "limit": N,
+  "tier": "free|premium"}`. Counters live in **Upstash Redis** (atomic INCR) when the
+  Upstash secrets are set — see *Strict quota enforcement* below — otherwise they fall
+  back to `BILLING_KV` (`quota:gemini:<uid>:<YYYY-MM-DD>`, race-prone) and auto-expire
+  60 h after write.
 - **Per-uid rate limit (all routes):** Every authenticated route is rate-limited per uid
   per UTC-minute. Default **60/min** (set `RATE_LIMIT_PER_MINUTE` in `wrangler.toml`).
   Exceeded → `429 {"error":"rate_limit_exceeded","limit":N,"used":M}` with a
@@ -84,6 +88,34 @@ the app can be pointed at it.
     carry `X-Cache: HIT | MISS | SKIP` so you can grep the worker tail for hit rate.
   Change any of the limits/TTLs in `wrangler.toml` (vars) or `src/index.js` (TTL consts)
   and `wrangler deploy` — no app update needed.
+
+## Strict quota enforcement (Upstash Redis)
+
+The Gemini daily quota is your only real budget protection — every call to the paid
+Gemini upstream costs ~$0.005, and the cap is per uid per UTC-day. KV's read-modify-
+write path is **eventually consistent**, so a scripted abuser firing concurrent
+requests can burst past the cap before the next KV read catches up. Upstash Redis
+exposes an atomic `INCR` over HTTPS, fixing the race.
+
+Free tier: 10k commands/day, **no credit card**. At 30/day premium × 50 active premium
+users that's ≤3k commands/day — well inside the budget.
+
+1. Sign up at <https://upstash.com> (Google sign-in works). Create a Redis database
+   (Global, eviction = `noeviction`).
+2. From the database page copy *UPSTASH_REDIS_REST_URL* and *UPSTASH_REDIS_REST_TOKEN*.
+3. Set as Worker secrets:
+   ```powershell
+   wrangler secret put UPSTASH_REDIS_REST_URL
+   wrangler secret put UPSTASH_REDIS_REST_TOKEN
+   ```
+4. `wrangler deploy`. On the next `/gemini` call, the Worker pipelines `INCR` + `EXPIRE`
+   to Upstash. If Upstash errors transiently the Worker fails *open* (allows the call,
+   logs to `wrangler tail`) so a Redis blip doesn't lock everyone out. If the secrets
+   are unset the Worker silently falls back to the legacy KV path.
+
+The per-minute rate limit (60/min) is intentionally **not** migrated — it runs on
+every request and would burn the Upstash free tier fast, and a burst of 60→120 doesn't
+touch the AI budget. KV's best-effort behaviour is fine there.
 
 ## Cost guardrails
 

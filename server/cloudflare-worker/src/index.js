@@ -29,14 +29,21 @@ const GROQ_MODEL = "llama-3.3-70b-versatile";
 // ── Play Billing entitlement ───────────────────────────────────────────────
 const ANDROID_PACKAGE_NAME = "com.kartik.mealtime";
 
-// ── Per-user Gemini quota (KV-backed) ──────────────────────────────────────
+// ── Per-user Gemini quota (Upstash Redis when configured, KV fallback) ────
 // Caps the *paid* upstream (Gemini) per uid per UTC-day so a runaway user can't
 // drain the AI budget below the subscription's net revenue. Tunable via wrangler
 // vars (GEMINI_FREE_DAILY_QUOTA / GEMINI_PREMIUM_DAILY_QUOTA) so the limits can
 // be changed without a code deploy. Defaults are the safety floor if vars are
 // unset. Counter expires 60h after write so it dies on its own next day.
-const GEMINI_FREE_DAILY_QUOTA_DEFAULT = 25;
-const GEMINI_PREMIUM_DAILY_QUOTA_DEFAULT = 200;
+//
+// Strict enforcement uses Upstash Redis atomic INCR (set UPSTASH_REDIS_REST_URL
+// + UPSTASH_REDIS_REST_TOKEN as secrets). Without those secrets the worker falls
+// back to KV read-modify-write, which is race-prone under concurrent fire — a
+// scripted abuser can burst past the cap before the next KV read catches up.
+// The cap is THE budget-protection mechanism (worst-case cost per user maxing
+// every day = cap × 30 × $0.005), so strict enforcement is recommended here.
+const GEMINI_FREE_DAILY_QUOTA_DEFAULT = 10;
+const GEMINI_PREMIUM_DAILY_QUOTA_DEFAULT = 30;
 const QUOTA_KV_TTL_SECONDS = 60 * 60 * 60;
 
 // ── Per-uid request rate limit (KV-backed, fixed window) ───────────────────
@@ -238,10 +245,11 @@ async function handleGemini(request, env, ctx, claims) {
 }
 
 /**
- * Reads today's Gemini call count for [uid], rejects if over the tier limit, otherwise
- * writes count+1. KV writes are eventually consistent — under heavy concurrent fire a
- * couple of calls may slip past, but that's acceptable for an abuse cap. Per-day key
- * rotates at UTC midnight (one fixed clock; users in any TZ get a predictable window).
+ * Atomically increments today's Gemini call count for [uid] and rejects if it crosses
+ * the tier limit. When UPSTASH_REDIS_REST_URL / _TOKEN are set, uses Redis INCR + EXPIRE
+ * (strictly consistent — no race even under heavy concurrent fire). Otherwise falls
+ * back to the KV read-modify-write path, which is race-prone but keeps the worker
+ * functional pre-migration. Per-day key rotates at UTC midnight.
  */
 async function checkAndIncrementGeminiQuota(env, uid, isPremium) {
   if (!uid) return { allowed: true, used: 0, limit: 0 }; // shouldn't happen post-auth
@@ -250,11 +258,55 @@ async function checkAndIncrementGeminiQuota(env, uid, isPremium) {
     : parseInt(env.GEMINI_FREE_DAILY_QUOTA, 10) || GEMINI_FREE_DAILY_QUOTA_DEFAULT;
   const day = new Date().toISOString().slice(0, 10); // YYYY-MM-DD (UTC)
   const key = `quota:gemini:${uid}:${day}`;
+
+  if (env.UPSTASH_REDIS_REST_URL && env.UPSTASH_REDIS_REST_TOKEN) {
+    try {
+      const used = await upstashIncrWithExpiry(env, key, QUOTA_KV_TTL_SECONDS);
+      // INCR runs unconditionally — over-cap requests still bump the counter, which is
+      // fine: once you're over, you're over for the day. The counter expires at TTL.
+      if (used > limit) return { allowed: false, used, limit };
+      return { allowed: true, used, limit };
+    } catch (e) {
+      // Fail-open during an Upstash outage so a Redis blip doesn't lock everyone out.
+      // The KV race-path is intentionally NOT a fallback: an attacker who saturated
+      // Upstash would re-enable the very race we deployed Upstash to close.
+      console.error("Upstash quota incr failed, allowing:", String(e));
+      return { allowed: true, used: 0, limit };
+    }
+  }
+
+  // Legacy KV path — race-prone, kept so the worker still functions if Upstash secrets
+  // aren't set. Under heavy concurrent fire a few calls may slip past the cap.
   const raw = await env.BILLING_KV.get(key);
   const used = raw ? parseInt(raw, 10) || 0 : 0;
   if (used >= limit) return { allowed: false, used, limit };
   await env.BILLING_KV.put(key, String(used + 1), { expirationTtl: QUOTA_KV_TTL_SECONDS });
   return { allowed: true, used: used + 1, limit };
+}
+
+/**
+ * Atomic INCR + EXPIRE against Upstash Redis REST, pipelined in one round-trip. Returns
+ * the new count. EXPIRE is set on every call (Redis ignores it for keys with TTL already
+ * set, and it costs nothing) so we don't need a separate "is this a new key" check —
+ * keeps the call site simple at the cost of one extra command per request.
+ */
+async function upstashIncrWithExpiry(env, key, ttlSeconds) {
+  const res = await fetch(`${env.UPSTASH_REDIS_REST_URL}/pipeline`, {
+    method: "POST",
+    headers: {
+      Authorization: `Bearer ${env.UPSTASH_REDIS_REST_TOKEN}`,
+      "Content-Type": "application/json",
+    },
+    body: JSON.stringify([
+      ["INCR", key],
+      ["EXPIRE", key, String(ttlSeconds)],
+    ]),
+  });
+  if (!res.ok) throw new Error(`Upstash ${res.status}: ${await res.text().catch(() => "")}`);
+  const data = await res.json();
+  const count = data?.[0]?.result;
+  if (typeof count !== "number") throw new Error(`Bad Upstash response: ${JSON.stringify(data)}`);
+  return count;
 }
 
 async function handleGroq(request, env, claims) {

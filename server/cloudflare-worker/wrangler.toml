@@ -10,8 +10,11 @@ compatibility_date = "2025-01-01"
 #
 # GEMINI_*_DAILY_QUOTA — per-uid daily cap on /gemini calls (UTC-day).
 # Tune without redeploying code: `wrangler deploy` is enough after editing.
-# Worst-case cost at the premium cap (Gemini 2.0 Flash, ~$0.005/structured call):
-#   200 calls/day × 30 = ~$30/month — well under the ~₹1,444 net annual sub.
+# Worst-case cost per user maxing every day (Gemini 2.0 Flash, ~$0.005/structured call):
+#   free    10/day × 30 = ~$1.50/month per abuser (no revenue offset).
+#   premium 30/day × 30 = ~$4.50/month — comfortably under the ~$4.24 net monthly sub.
+# Strict enforcement of these caps requires UPSTASH_REDIS_REST_URL/_TOKEN secrets
+# (atomic INCR). Without them, KV is race-prone and a scripted abuser can burst past.
 #
 # RATE_LIMIT_PER_MINUTE — per-uid fixed-window cap across ALL authenticated routes
 # (Spoonacular + Gemini + Groq + billing/verify). Protects the shared Spoonacular
@@ -20,8 +23,8 @@ compatibility_date = "2025-01-01"
 # so on the free plan (1k writes/day) keep this low or upgrade to Workers Paid.
 [vars]
 FIREBASE_PROJECT_ID = "mealtime-96386"
-GEMINI_FREE_DAILY_QUOTA = "25"
-GEMINI_PREMIUM_DAILY_QUOTA = "200"
+GEMINI_FREE_DAILY_QUOTA = "10"
+GEMINI_PREMIUM_DAILY_QUOTA = "30"
 RATE_LIMIT_PER_MINUTE = "60"
 
 # Play Billing: purchaseToken -> uid map (written by /billing/verify, read by /billing/rtdn).
@@ -38,3 +41,7 @@ id = "abc407c7af564e87b701873c57853f55"
 #                                                         API and set the premium claim
 #   RTDN_SECRET                                         — shared secret in the Pub/Sub
 #                                                         push URL (?key=...) for /billing/rtdn
+#   UPSTASH_REDIS_REST_URL, UPSTASH_REDIS_REST_TOKEN    — Upstash Redis REST endpoint
+#                                                         (free tier, no card). Enables
+#                                                         atomic Gemini-quota enforcement;
+#                                                         without them KV is race-prone.
