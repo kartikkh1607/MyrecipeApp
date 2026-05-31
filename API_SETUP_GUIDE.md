@@ -1,8 +1,9 @@
 # API Setup Guide
 
-> **This document is now historical.** As of the Play Billing / Worker refactor (commit `99c42a4`), the app does **not** hold any third-party API keys. All Spoonacular, Gemini, and Groq traffic is proxied through a **Cloudflare Worker** that holds the keys server-side.
->
-> If you are setting the project up for the first time, follow **[`server/cloudflare-worker/README.md`](./server/cloudflare-worker/README.md)** — it is the only place that needs API keys, and the setup is `wrangler login` → three `wrangler secret put` calls → `wrangler deploy`.
+The app holds **no** third-party API keys. Spoonacular, Gemini, and Groq traffic is proxied through a **Cloudflare Worker** that holds the keys server-side.
+
+- **Worker setup (keys live here):** [`server/cloudflare-worker/README.md`](./server/cloudflare-worker/README.md) — `wrangler login` → three `wrangler secret put` calls → `wrangler deploy`.
+- **App setup (this doc):** everything below — what `local.properties` needs, what routes the Worker exposes, auth requirements, offline behavior, and troubleshooting.
 
 ---
 
