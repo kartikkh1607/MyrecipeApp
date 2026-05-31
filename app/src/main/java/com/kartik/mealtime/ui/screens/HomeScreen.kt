@@ -53,8 +53,8 @@ fun HomeScreen(
     userViewModel: UserViewModel = hiltViewModel()
 ) {
     val hapticFeedback = LocalHapticFeedback.current
-    val categoriesState by categoryViewModel.recipeCategoriesState
-    val homeRecipeState by viewModel.homeRecipeState
+    val categoriesState by categoryViewModel.recipeCategoriesState.collectAsStateWithLifecycle()
+    val homeRecipeState by viewModel.homeRecipeState.collectAsStateWithLifecycle()
     val userPrefs by userViewModel.preferences.collectAsStateWithLifecycle()
     val recentRecipes by userViewModel.recentRecipes.collectAsStateWithLifecycle()
 

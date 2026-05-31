@@ -1,8 +1,5 @@
 package com.kartik.mealtime.ui.viewmodel
 
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kartik.mealtime.data.analytics.AnalyticsHelper
@@ -18,10 +15,12 @@ import com.kartik.mealtime.domain.repository.EntitlementRepository
 import com.kartik.mealtime.ui.viewmodel.AiViewModel.Companion.MAX_HISTORY_MESSAGES
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -41,7 +40,6 @@ class AiViewModel @Inject constructor(
         .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), false)
 
     // ── Chat State ─────────────────────────────────────────────────────────────
-    @Immutable
     data class ChatState(
         val messages: List<ChatUiMessage> = emptyList(),
         val isLoading: Boolean = false,
@@ -49,7 +47,6 @@ class AiViewModel @Inject constructor(
         val isTyping: Boolean = false  // AI is "typing" response
     )
 
-    @Immutable
     data class ChatUiMessage(
         val id: String = java.util.UUID.randomUUID().toString(),
         val content: String,
@@ -58,14 +55,13 @@ class AiViewModel @Inject constructor(
         val suggestedRecipes: List<SuggestedRecipe> = emptyList()
     )
 
-    @Immutable
     data class SuggestedRecipe(
         val name: String,
         val description: String
     )
 
-    private val _chatState = mutableStateOf(ChatState())
-    val chatState: State<ChatState> = _chatState
+    private val _chatState = MutableStateFlow(ChatState())
+    val chatState: StateFlow<ChatState> = _chatState.asStateFlow()
 
     /**
      * One-shot signal that the user tried a premium action without entitlement (the proxy
@@ -193,7 +189,6 @@ class AiViewModel @Inject constructor(
 
     // ── Full recipe generation (premium) ──────────────────────────────────────
 
-    @Immutable
     sealed interface RecipeGenState {
         data object Idle : RecipeGenState
         data object Loading : RecipeGenState
@@ -202,8 +197,8 @@ class AiViewModel @Inject constructor(
         data class Error(val message: String) : RecipeGenState
     }
 
-    private val _recipeGenState = mutableStateOf<RecipeGenState>(RecipeGenState.Idle)
-    val recipeGenState: State<RecipeGenState> = _recipeGenState
+    private val _recipeGenState = MutableStateFlow<RecipeGenState>(RecipeGenState.Idle)
+    val recipeGenState: StateFlow<RecipeGenState> = _recipeGenState.asStateFlow()
 
     /**
      * How the recipe currently in [recipeGenState] was produced, so [saveGeneratedRecipe]

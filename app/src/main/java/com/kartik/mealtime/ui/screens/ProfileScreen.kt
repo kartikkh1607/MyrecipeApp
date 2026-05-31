@@ -105,7 +105,7 @@ fun ProfileScreen(
     userViewModel: UserViewModel = hiltViewModel()
 ) {
     val favoritesViewModel: FavoritesViewModel = hiltViewModel()
-    val favoriteRecipes by favoritesViewModel.favoriteRecipes
+    val favoriteRecipes by favoritesViewModel.favoriteRecipes.collectAsStateWithLifecycle()
     val currentUser by authViewModel.currentUser.collectAsStateWithLifecycle()
     val userPrefs by userViewModel.preferences.collectAsStateWithLifecycle()
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()

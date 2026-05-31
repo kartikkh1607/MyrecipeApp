@@ -70,6 +70,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.kartik.mealtime.data.preferences.RecentRecipe
 import com.kartik.mealtime.domain.model.FeaturedRecipe
@@ -300,7 +301,7 @@ internal fun RecipeOfTheWeekHero(
     favoritesViewModel: FavoritesViewModel = hiltViewModel()
 ) {
     val recipe = featured.recipe
-    val favoriteIds by favoritesViewModel.favoriteIds
+    val favoriteIds by favoritesViewModel.favoriteIds.collectAsStateWithLifecycle()
     val saved = favoriteIds.contains(recipe.id)
 
     var pressed by remember { mutableStateOf(false) }

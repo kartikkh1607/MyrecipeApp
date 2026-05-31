@@ -15,13 +15,18 @@ import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.unit.IntOffset
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.navigation.NavBackStackEntry
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
+import androidx.navigation.compose.navigation
 import androidx.navigation.navDeepLink
 import androidx.navigation.toRoute
-import androidx.hilt.navigation.compose.hiltViewModel
 import com.kartik.mealtime.data.source.CategoryDataSource
 import com.kartik.mealtime.ui.screens.AiCreationsScreen
 import com.kartik.mealtime.ui.screens.AuthScreen
@@ -61,6 +66,28 @@ private val searchSpring = spring<Float>(
     stiffness = Spring.StiffnessMedium
 )
 
+/**
+ * Resolves the [CategoryViewModel] scoped to the [BrowseGraph] nested nav graph,
+ * not to the calling composable. All three browse-flow screens (Home, Categories,
+ * CategoryDetail) get the same instance — the cache + selection survive
+ * back-nav between them — and the VM is held only while the user is somewhere in
+ * the browse flow.
+ *
+ * Note on lifetime in this app's bottom-nav topology: [MainScreen] uses
+ * `popUpTo<Home> { inclusive = false }` when switching tabs, so Home (and thus
+ * BrowseGraph) stays on the back stack for the whole session. The scoping is
+ * still worth doing — it constrains which screens may inject the VM and
+ * positions the code for future nav-graph reshuffles without an architectural
+ * rewrite.
+ */
+@Composable
+private fun NavBackStackEntry.browseGraphCategoryViewModel(
+    navController: NavHostController,
+): CategoryViewModel {
+    val parentEntry = remember(this) { navController.getBackStackEntry(BrowseGraph) }
+    return hiltViewModel(parentEntry)
+}
+
 @Composable
 fun Navigation(
     navController: NavHostController,
@@ -68,15 +95,10 @@ fun Navigation(
     authViewModel: AuthViewModel,
     shoppingListViewModel: ShoppingListViewModel,
     searchViewModel: SearchViewModel,
-    // Category state is now owned by a dedicated ViewModel. Sourced here at the
-    // NavHost scope so HomeScreen, RecipeScreen (Categories tab), and
-    // CategoryDetailScreen all share the same instance — pull-to-refresh on one
-    // surface is visible on the others, and the in-memory cache survives back-nav.
-    categoryViewModel: CategoryViewModel = hiltViewModel(),
 ) {
     NavHost(
         navController = navController,
-        startDestination = Home,
+        startDestination = BrowseGraph,
         // ── Push: new screen slides in from right, old screen parallax-slides to left ─
         enterTransition = {
             slideInHorizontally(
@@ -106,36 +128,89 @@ fun Navigation(
         }
     ) {
 
-        // ── Bottom nav screens ─────────────────────────────────────────────────────
+        // ── Browse flow (nested graph) ─────────────────────────────────────────────
+        // Home, Categories, and CategoryDetail share a CategoryViewModel scoped to
+        // BrowseGraph. See browseGraphCategoryViewModel above for the rationale.
+        navigation<BrowseGraph>(startDestination = Home) {
+            composable<Home> { backStackEntry ->
+                val categoryViewModel = backStackEntry.browseGraphCategoryViewModel(navController)
+                HomeScreen(
+                    navController = navController,
+                    viewModel = viewModel,
+                    categoryViewModel = categoryViewModel,
+                )
+            }
 
-        composable<Home> {
-            HomeScreen(
-                navController = navController,
-                viewModel = viewModel,
-                categoryViewModel = categoryViewModel,
-            )
-        }
+            composable<Categories> { backStackEntry ->
+                val categoryViewModel = backStackEntry.browseGraphCategoryViewModel(navController)
+                val categoriesState by categoryViewModel.recipeCategoriesState.collectAsStateWithLifecycle()
+                RecipeScreen(
+                    viewstate = categoriesState,
+                    navigateToDetail = { category ->
+                        navController.navigate(CategoryDetail(categoryId = category.id)) {
+                            launchSingleTop = true
+                        }
+                    },
+                    onRetry = { categoryViewModel.refreshRecipeCategories() }
+                )
+            }
 
-        composable<Categories> {
-            RecipeScreen(
-                viewstate = categoryViewModel.recipeCategoriesState.value,
-                navigateToDetail = { category ->
-                    navController.navigate(CategoryDetail(categoryId = category.id)) {
-                        launchSingleTop = true
+            composable<CategoryDetail> { backStackEntry ->
+                val args = backStackEntry.toRoute<CategoryDetail>()
+                val category = CategoryDataSource.getCategoryById(args.categoryId)
+                if (category == null) {
+                    LaunchedEffect(Unit) { navController.popBackStack() }
+                    return@composable
+                }
+                val categoryViewModel = backStackEntry.browseGraphCategoryViewModel(navController)
+                CategoryDetailScreen(
+                    category = category,
+                    viewModel = viewModel,
+                    categoryViewModel = categoryViewModel,
+                    onBackClick = { navController.popBackStack() },
+                    onRecipeClick = { recipeId ->
+                        navController.navigate(RecipeDetail(recipeId = recipeId)) {
+                            launchSingleTop = true
+                        }
                     }
-                },
-                onRetry = { categoryViewModel.refreshRecipeCategories() }
-            )
+                )
+            }
         }
+
+        // ── Other bottom nav screens ───────────────────────────────────────────────
 
         composable<Search>(
             // Search uses a zoom-in feel instead of a horizontal slide
-            enterTransition    = { scaleIn(initialScale = 0.92f, animationSpec = searchSpring) + fadeIn(animationSpec = tween(300)) },
-            exitTransition     = { scaleOut(targetScale = 0.92f, animationSpec = searchSpring) + fadeOut(animationSpec = tween(250)) },
-            popEnterTransition = { scaleIn(initialScale = 0.92f, animationSpec = searchSpring) + fadeIn(animationSpec = tween(300)) },
-            popExitTransition  = { scaleOut(targetScale = 0.92f, animationSpec = searchSpring) + fadeOut(animationSpec = tween(250)) }
+            enterTransition = {
+                scaleIn(
+                    initialScale = 0.92f,
+                    animationSpec = searchSpring
+                ) + fadeIn(animationSpec = tween(300))
+            },
+            exitTransition = {
+                scaleOut(
+                    targetScale = 0.92f,
+                    animationSpec = searchSpring
+                ) + fadeOut(animationSpec = tween(250))
+            },
+            popEnterTransition = {
+                scaleIn(
+                    initialScale = 0.92f,
+                    animationSpec = searchSpring
+                ) + fadeIn(animationSpec = tween(300))
+            },
+            popExitTransition = {
+                scaleOut(
+                    targetScale = 0.92f,
+                    animationSpec = searchSpring
+                ) + fadeOut(animationSpec = tween(250))
+            }
         ) {
-            SearchScreen(navController = navController, viewModel = viewModel, searchViewModel = searchViewModel)
+            SearchScreen(
+                navController = navController,
+                viewModel = viewModel,
+                searchViewModel = searchViewModel
+            )
         }
 
         composable<Favorites> {
@@ -147,26 +222,8 @@ fun Navigation(
         }
 
         // ── Detail screens ─────────────────────────────────────────────────────────
-
-        composable<CategoryDetail> { backStackEntry ->
-            val args = backStackEntry.toRoute<CategoryDetail>()
-            val category = CategoryDataSource.getCategoryById(args.categoryId)
-            if (category == null) {
-                LaunchedEffect(Unit) { navController.popBackStack() }
-                return@composable
-            }
-            CategoryDetailScreen(
-                category = category,
-                viewModel = viewModel,
-                categoryViewModel = categoryViewModel,
-                onBackClick = { navController.popBackStack() },
-                onRecipeClick = { recipeId ->
-                    navController.navigate(RecipeDetail(recipeId = recipeId)) {
-                        launchSingleTop = true
-                    }
-                }
-            )
-        }
+        // (CategoryDetail lives inside BrowseGraph above so it can share the
+        // graph-scoped CategoryViewModel with Home + Categories.)
 
         composable<RecipeDetail>(
             // Deep links into a recipe detail. Two schemes are wired:
@@ -250,10 +307,20 @@ fun Navigation(
         composable<Chat> {
             ChatScreen(
                 onBackClick = { navController.popBackStack() },
-                onOpenCreations = { navController.navigate(AiCreations) { launchSingleTop = true } },
-                onOpenMealPlanner = { navController.navigate(MealPlanner) { launchSingleTop = true } },
+                onOpenCreations = {
+                    navController.navigate(AiCreations) {
+                        launchSingleTop = true
+                    }
+                },
+                onOpenMealPlanner = {
+                    navController.navigate(MealPlanner) {
+                        launchSingleTop = true
+                    }
+                },
                 onOpenRecipe = { recipeId ->
-                    navController.navigate(RecipeDetail(recipeId = recipeId)) { launchSingleTop = true }
+                    navController.navigate(RecipeDetail(recipeId = recipeId)) {
+                        launchSingleTop = true
+                    }
                 },
                 viewModel = hiltViewModel()
             )
@@ -265,7 +332,9 @@ fun Navigation(
                 shoppingListViewModel = shoppingListViewModel,
                 onBack = { navController.popBackStack() },
                 onOpenRecipe = { recipeId ->
-                    navController.navigate(RecipeDetail(recipeId = recipeId)) { launchSingleTop = true }
+                    navController.navigate(RecipeDetail(recipeId = recipeId)) {
+                        launchSingleTop = true
+                    }
                 }
             )
         }
@@ -275,10 +344,16 @@ fun Navigation(
                 viewModel = hiltViewModel(),
                 onBack = { navController.popBackStack() },
                 onOpenRecipe = { recipeId ->
-                    navController.navigate(RecipeDetail(recipeId = recipeId)) { launchSingleTop = true }
+                    navController.navigate(RecipeDetail(recipeId = recipeId)) {
+                        launchSingleTop = true
+                    }
                 },
                 onOpenChat = { navController.navigate(Chat) { launchSingleTop = true } },
-                onOpenMealPlanner = { navController.navigate(MealPlanner) { launchSingleTop = true } },
+                onOpenMealPlanner = {
+                    navController.navigate(MealPlanner) {
+                        launchSingleTop = true
+                    }
+                },
             )
         }
     }

@@ -1,8 +1,6 @@
 package com.kartik.mealtime.ui.viewmodel
 
-import android.app.Application
 import com.kartik.mealtime.data.analytics.AnalyticsHelper
-import com.kartik.mealtime.data.local.ThemePreferences
 import com.kartik.mealtime.data.preferences.RecentRecipesRepository
 import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import com.kartik.mealtime.domain.model.FeaturedRecipe
@@ -10,12 +8,16 @@ import com.kartik.mealtime.domain.model.FeaturedType
 import com.kartik.mealtime.domain.model.Recipe
 import com.kartik.mealtime.domain.model.RecipeCategory
 import com.kartik.mealtime.domain.model.SearchResult
+import com.kartik.mealtime.domain.model.ThemeMode
 import com.kartik.mealtime.domain.repository.RecipeRepository
+import com.kartik.mealtime.domain.repository.ThemeRepository
 import com.kartik.mealtime.domain.usecase.FindRecipeVideoUseCase
 import com.kartik.mealtime.domain.usecase.GetFeaturedRecipesUseCase
 import com.kartik.mealtime.domain.usecase.GetRecipeDetailsUseCase
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ExperimentalCoroutinesApi
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.resetMain
 import kotlinx.coroutines.test.runTest
@@ -27,11 +29,7 @@ import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
-import org.junit.runner.RunWith
 import org.mockito.Mockito.mock
-import org.robolectric.RobolectricTestRunner
-import org.robolectric.RuntimeEnvironment
-import org.robolectric.annotation.Config
 
 /**
  * Unit tests for [MainViewModel] — covers featured-recipes + recipe-detail state
@@ -42,16 +40,10 @@ import org.robolectric.annotation.Config
  * `runCatching`); a single [FakeRecipeRepository] drives every code path, which
  * keeps assertions about call-counts honest without Mockito suspend stubbing.
  *
- * Robolectric is required: the VM builds a DataStore-backed `themeMode` flow off
- * the injected [android.content.Context] in its field initializer. `sdk = 34`
- * because Robolectric 4.16 can't emulate the project's compileSdk 36, and the
- * stub `Application` keeps the real MyRecipeApplication.onCreate() (→ Firebase)
- * from booting. The `themeMode` flow is `WhileSubscribed`, so with no collector
- * it never actually reads the DataStore file.
+ * No Robolectric: [ThemeRepository] is a pure-Kotlin seam wired to an in-memory
+ * fake here, so the VM never touches DataStore or an Android Context.
  */
 @OptIn(ExperimentalCoroutinesApi::class)
-@RunWith(RobolectricTestRunner::class)
-@Config(sdk = [34], application = Application::class)
 class MainViewModelTest {
 
     // ── Fake repository ─────────────────────────────────────────────────────────
@@ -89,6 +81,14 @@ class MainViewModelTest {
         override suspend fun findRecipeVideoId(recipeName: String): String? = videoId
     }
 
+    private class FakeThemeRepository : ThemeRepository {
+        private val state = MutableStateFlow(ThemeMode.SYSTEM)
+        override fun themeMode(): Flow<ThemeMode> = state
+        override suspend fun setThemeMode(mode: ThemeMode) {
+            state.value = mode
+        }
+    }
+
     // ── Fixtures ─────────────────────────────────────────────────────────────────
 
     private fun recipe(id: String) =
@@ -111,7 +111,7 @@ class MainViewModelTest {
         MainViewModel(
             getFeaturedRecipes = GetFeaturedRecipesUseCase(repo),
             getRecipeDetails = GetRecipeDetailsUseCase(repo),
-            themePreferences = ThemePreferences(RuntimeEnvironment.getApplication()),
+            themeRepository = FakeThemeRepository(),
             analytics = mock(AnalyticsHelper::class.java),
             userPrefsRepo = mock(UserPreferencesRepository::class.java),
             recentRecipesRepo = mock(RecentRecipesRepository::class.java),
@@ -154,7 +154,7 @@ class MainViewModelTest {
         assertFalse(state.loading)
         assertEquals("123", state.recipe?.id)
         assertNull(state.error)
-        assertEquals(recipe("123"), vm.recipeDetailCache["123"])
+        assertEquals(recipe("123"), vm.cachedRecipe("123"))
     }
 
     @Test

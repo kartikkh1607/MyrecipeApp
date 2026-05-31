@@ -52,6 +52,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import coil.compose.AsyncImage
 import com.kartik.mealtime.domain.model.FeaturedRecipe
@@ -77,9 +78,9 @@ fun FeaturedRecipeCarousel(
     modifier: Modifier = Modifier,
     favoritesViewModel: FavoritesViewModel = hiltViewModel()
 ) {
-    val homeRecipeState by viewModel.homeRecipeState
+    val homeRecipeState by viewModel.homeRecipeState.collectAsStateWithLifecycle()
     val featuredRecipes = homeRecipeState.featuredRecipes
-    val favoriteIds by favoritesViewModel.favoriteIds
+    val favoriteIds by favoritesViewModel.favoriteIds.collectAsStateWithLifecycle()
     val hapticFeedback = LocalHapticFeedback.current
 
     val listState = rememberLazyListState()

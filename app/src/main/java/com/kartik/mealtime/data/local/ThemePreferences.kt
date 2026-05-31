@@ -7,6 +7,7 @@ import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.core.intPreferencesKey
 import androidx.datastore.preferences.preferencesDataStore
 import com.kartik.mealtime.domain.model.ThemeMode
+import com.kartik.mealtime.domain.repository.ThemeRepository
 import dagger.hilt.android.qualifiers.ApplicationContext
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
@@ -17,7 +18,7 @@ import javax.inject.Singleton
 private val Context.themeDataStore: DataStore<Preferences> by preferencesDataStore(name = "theme_prefs")
 
 /**
- * Thin wrapper around DataStore that persists the user's [ThemeMode] choice.
+ * DataStore-backed implementation of [ThemeRepository].
  *
  * - Reads: [themeMode] — a [Flow] that emits the current preference.
  * - Writes: [setThemeMode] — suspending function, safe to call from a coroutine.
@@ -27,20 +28,15 @@ private val Context.themeDataStore: DataStore<Preferences> by preferencesDataSto
 @Singleton
 class ThemePreferences @Inject constructor(
     @ApplicationContext private val context: Context,
-) {
+) : ThemeRepository {
 
-    /**
-     * Emits the current [ThemeMode] whenever it changes.
-     * Falls back to [ThemeMode.SYSTEM] if the key doesn't exist yet.
-     */
-    fun themeMode(): Flow<ThemeMode> =
+    override fun themeMode(): Flow<ThemeMode> =
         context.themeDataStore.data.map { prefs ->
             val ordinal = prefs[THEME_KEY] ?: ThemeMode.SYSTEM.ordinal
             ThemeMode.entries.getOrElse(ordinal) { ThemeMode.SYSTEM }
         }
 
-    /** Persists [mode] to DataStore. */
-    suspend fun setThemeMode(mode: ThemeMode) {
+    override suspend fun setThemeMode(mode: ThemeMode) {
         context.themeDataStore.edit { prefs ->
             prefs[THEME_KEY] = mode.ordinal
         }

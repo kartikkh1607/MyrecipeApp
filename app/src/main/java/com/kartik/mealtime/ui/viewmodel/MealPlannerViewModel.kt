@@ -1,9 +1,5 @@
 package com.kartik.mealtime.ui.viewmodel
 
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kartik.mealtime.data.analytics.AnalyticsHelper
@@ -18,10 +14,12 @@ import com.kartik.mealtime.domain.model.Recipe
 import com.kartik.mealtime.domain.repository.EntitlementRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableSharedFlow
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asSharedFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
@@ -50,7 +48,6 @@ class MealPlannerViewModel @Inject constructor(
     private val _upsellEvents = MutableSharedFlow<Unit>(extraBufferCapacity = 1)
     val upsellEvents: SharedFlow<Unit> = _upsellEvents.asSharedFlow()
 
-    @Immutable
     sealed interface MealPlanState {
         data object Idle : MealPlanState
         data object Loading : MealPlanState
@@ -58,18 +55,18 @@ class MealPlannerViewModel @Inject constructor(
         data class Error(val message: String) : MealPlanState
     }
 
-    private val _planState = mutableStateOf<MealPlanState>(MealPlanState.Idle)
-    val planState: State<MealPlanState> = _planState
+    private val _planState = MutableStateFlow<MealPlanState>(MealPlanState.Idle)
+    val planState: StateFlow<MealPlanState> = _planState.asStateFlow()
 
-    private val _selectedDays = mutableIntStateOf(DEFAULT_DAYS)
-    val selectedDays: State<Int> = _selectedDays
+    private val _selectedDays = MutableStateFlow(DEFAULT_DAYS)
+    val selectedDays: StateFlow<Int> = _selectedDays.asStateFlow()
 
     /** Per-meal review sheet — reuses generation's state so GeneratedRecipeSheet just works. */
-    private val _mealSheet = mutableStateOf<AiViewModel.RecipeGenState>(AiViewModel.RecipeGenState.Idle)
-    val mealSheet: State<AiViewModel.RecipeGenState> = _mealSheet
+    private val _mealSheet = MutableStateFlow<AiViewModel.RecipeGenState>(AiViewModel.RecipeGenState.Idle)
+    val mealSheet: StateFlow<AiViewModel.RecipeGenState> = _mealSheet.asStateFlow()
 
     fun setDays(days: Int) {
-        _selectedDays.intValue = days.coerceIn(MIN_DAYS, MAX_DAYS)
+        _selectedDays.value = days.coerceIn(MIN_DAYS, MAX_DAYS)
     }
 
     /** Generates a plan for [selectedDays] days. Premium-gated (also enforced server-side). */
@@ -86,7 +83,7 @@ class MealPlannerViewModel @Inject constructor(
             analytics.logAiChatMessageSent()
 
             val prefs = userPrefsRepo.preferences.first().aiPersonalizationContext()
-            aiService.generateMealPlan(_selectedDays.intValue, prefs).fold(
+            aiService.generateMealPlan(_selectedDays.value, prefs).fold(
                 onSuccess = { _planState.value = MealPlanState.Ready(it) },
                 onFailure = { error ->
                     if (error is PremiumRequiredException ||

@@ -1,9 +1,6 @@
 package com.kartik.mealtime.ui.viewmodel
 
 import android.util.Log
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kartik.mealtime.data.analytics.AnalyticsHelper
@@ -13,6 +10,9 @@ import com.kartik.mealtime.domain.model.RecipeCategory
 import com.kartik.mealtime.domain.usecase.GetCategoriesUseCase
 import com.kartik.mealtime.domain.usecase.GetRecipesByCategoryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -33,14 +33,12 @@ class CategoryViewModel @Inject constructor(
     private val analytics: AnalyticsHelper,
 ) : ViewModel() {
 
-    @Immutable
     data class RecipeCategoryState(
         val loading: Boolean = true,
         val categories: List<RecipeCategory> = emptyList(),
         val error: String? = null
     )
 
-    @Immutable
     data class CategoryRecipesState(
         val loading: Boolean = false,
         val recipes: List<Recipe> = emptyList(),
@@ -50,14 +48,14 @@ class CategoryViewModel @Inject constructor(
         val isLoadingMore: Boolean = false
     )
 
-    private val _recipeCategoriesState = mutableStateOf(RecipeCategoryState())
-    val recipeCategoriesState: State<RecipeCategoryState> = _recipeCategoriesState
+    private val _recipeCategoriesState = MutableStateFlow(RecipeCategoryState())
+    val recipeCategoriesState: StateFlow<RecipeCategoryState> = _recipeCategoriesState.asStateFlow()
 
-    private val _categoryRecipesState = mutableStateOf(CategoryRecipesState())
-    val categoryRecipesState: State<CategoryRecipesState> = _categoryRecipesState
+    private val _categoryRecipesState = MutableStateFlow(CategoryRecipesState())
+    val categoryRecipesState: StateFlow<CategoryRecipesState> = _categoryRecipesState.asStateFlow()
 
-    private val _selectedCategoryId = mutableStateOf<String?>(null)
-    val selectedCategoryId: State<String?> = _selectedCategoryId
+    private val _selectedCategoryId = MutableStateFlow<String?>(null)
+    val selectedCategoryId: StateFlow<String?> = _selectedCategoryId.asStateFlow()
 
     fun selectCategory(id: String?) {
         _selectedCategoryId.value = id

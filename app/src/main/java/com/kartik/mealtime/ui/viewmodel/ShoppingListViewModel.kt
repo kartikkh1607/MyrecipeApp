@@ -1,7 +1,5 @@
 package com.kartik.mealtime.ui.viewmodel
 
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kartik.mealtime.data.analytics.AnalyticsHelper
@@ -14,6 +12,12 @@ import com.kartik.mealtime.data.repository.syncBestEffort
 import com.kartik.mealtime.domain.model.Recipe
 import com.kartik.mealtime.domain.model.ShoppingListItem
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.map
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -34,20 +38,13 @@ class ShoppingListViewModel @Inject constructor(
     private val analytics: AnalyticsHelper
 ) : ViewModel() {
 
-    private val _shoppingList = mutableStateOf<List<ShoppingListItem>>(emptyList())
-    val shoppingList: State<List<ShoppingListItem>> = _shoppingList
+    val shoppingList: StateFlow<List<ShoppingListItem>> = shoppingDao.getAllFlow()
+        .map { entities -> entities.map { it.toShoppingListItem() } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     /** The last recipe name passed to [addToShoppingList]. Used by ShoppingListScreen to auto focus that section. */
-    private val _lastAddedRecipeName = mutableStateOf<String?>(null)
-    val lastAddedRecipeName: State<String?> = _lastAddedRecipeName
-
-    init {
-        viewModelScope.launch {
-            shoppingDao.getAllFlow().collect { entities ->
-                _shoppingList.value = entities.map { it.toShoppingListItem() }
-            }
-        }
-    }
+    private val _lastAddedRecipeName = MutableStateFlow<String?>(null)
+    val lastAddedRecipeName: StateFlow<String?> = _lastAddedRecipeName.asStateFlow()
 
     /**
      * Appends [recipe]'s ingredients to the shopping list, preserving items already
@@ -76,7 +73,7 @@ class ShoppingListViewModel @Inject constructor(
 
     fun toggleShoppingItem(key: String) {
         viewModelScope.launch {
-            val current = _shoppingList.value.find { it.key == key } ?: return@launch
+            val current = shoppingList.value.find { it.key == key } ?: return@launch
             shoppingDao.setChecked(key, !current.isChecked)
         }
     }

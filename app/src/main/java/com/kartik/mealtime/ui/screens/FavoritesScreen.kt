@@ -105,11 +105,11 @@ fun FavoritesScreen(
     viewModel: MainViewModel
 ) {
     val favoritesViewModel: FavoritesViewModel = hiltViewModel()
-    val favoriteRecipes by favoritesViewModel.favoriteRecipes
-    val sortedFavorites by favoritesViewModel.sortedFavoriteRecipes
-    val favoriteIds by favoritesViewModel.favoriteIds
+    val favoriteRecipes by favoritesViewModel.favoriteRecipes.collectAsStateWithLifecycle()
+    val sortedFavorites by favoritesViewModel.sortedFavoriteRecipes.collectAsStateWithLifecycle()
+    val favoriteIds by favoritesViewModel.favoriteIds.collectAsStateWithLifecycle()
     val isGridMode by favoritesViewModel.favoritesGridMode.collectAsStateWithLifecycle()
-    val currentSort by favoritesViewModel.favoritesSortOrder
+    val currentSort by favoritesViewModel.favoritesSortOrder.collectAsStateWithLifecycle()
     val hapticFeedback = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = androidx.compose.runtime.rememberCoroutineScope()

@@ -55,6 +55,7 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import com.kartik.mealtime.R
 import com.kartik.mealtime.ui.components.BannerAd
 import com.kartik.mealtime.ui.viewmodel.FavoritesViewModel
@@ -71,7 +72,7 @@ internal fun SearchIdleState(
     onTagClick: (String) -> Unit
 ) {
     val popularTags = stringArrayResource(R.array.search_popular_tags).toList()
-    val recentSearches by viewModel.recentSearches
+    val recentSearches by viewModel.recentSearches.collectAsStateWithLifecycle()
     var visible by remember { mutableStateOf(false) }
     LaunchedEffect(Unit) { delay(80); visible = true }
 
@@ -303,7 +304,7 @@ fun SearchResults(
 ) {
     // Searches are launched from SearchScreen via a debounced snapshotFlow.
     val favoritesViewModel: FavoritesViewModel = hiltViewModel()
-    val searchState by searchViewModel.searchState
+    val searchState by searchViewModel.searchState.collectAsStateWithLifecycle()
 
     // Hoisted above the list — same lambda instance across ALL recompositions,
     // so no card recomposes just because the parent SearchResults recomposed.

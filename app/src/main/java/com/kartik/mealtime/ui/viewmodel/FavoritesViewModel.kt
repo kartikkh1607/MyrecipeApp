@@ -1,16 +1,17 @@
 package com.kartik.mealtime.ui.viewmodel
 
-import androidx.compose.runtime.State
-import androidx.compose.runtime.derivedStateOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import com.kartik.mealtime.data.repository.FavoritesRepository
 import com.kartik.mealtime.domain.model.Recipe
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -29,12 +30,12 @@ class FavoritesViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
 ) : ViewModel() {
 
-    private val _favoriteRecipes = mutableStateOf<List<Recipe>>(emptyList())
-    val favoriteRecipes: State<List<Recipe>> = _favoriteRecipes
+    val favoriteRecipes: StateFlow<List<Recipe>> = favoritesRepository.favorites
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
-    val favoriteIds: State<Set<String>> = derivedStateOf {
-        _favoriteRecipes.value.mapTo(mutableSetOf()) { it.id }
-    }
+    val favoriteIds: StateFlow<Set<String>> = favoriteRecipes
+        .map { recipes -> recipes.mapTo(mutableSetOf()) { it.id } }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, emptySet())
 
     /**
      * Persisted grid/list toggle for the Favorites screen. Backed by DataStore so it
@@ -60,33 +61,27 @@ class FavoritesViewModel @Inject constructor(
         DIFFICULTY("Easiest")
     }
 
-    private val _favoritesSortOrder = mutableStateOf(FavoritesSortOrder.RECENTLY_ADDED)
-    val favoritesSortOrder: State<FavoritesSortOrder> = _favoritesSortOrder
+    private val _favoritesSortOrder = MutableStateFlow(FavoritesSortOrder.RECENTLY_ADDED)
+    val favoritesSortOrder: StateFlow<FavoritesSortOrder> = _favoritesSortOrder.asStateFlow()
 
-    val sortedFavoriteRecipes: State<List<Recipe>> = derivedStateOf {
-        val recipes = _favoriteRecipes.value
-        when (_favoritesSortOrder.value) {
-            FavoritesSortOrder.RECENTLY_ADDED -> recipes
-            FavoritesSortOrder.NAME_AZ -> recipes.sortedBy { it.name.lowercase() }
-            FavoritesSortOrder.NAME_ZA -> recipes.sortedByDescending { it.name.lowercase() }
-            FavoritesSortOrder.RATING -> recipes.sortedByDescending { it.rating }
-            FavoritesSortOrder.COOK_TIME -> recipes.sortedBy { it.prepTime + it.cookTime }
-            FavoritesSortOrder.DIFFICULTY -> recipes.sortedBy { it.difficulty.ordinal }
-        }
-    }
+    val sortedFavoriteRecipes: StateFlow<List<Recipe>> =
+        combine(favoriteRecipes, _favoritesSortOrder) { recipes, order ->
+            when (order) {
+                FavoritesSortOrder.RECENTLY_ADDED -> recipes
+                FavoritesSortOrder.NAME_AZ -> recipes.sortedBy { it.name.lowercase() }
+                FavoritesSortOrder.NAME_ZA -> recipes.sortedByDescending { it.name.lowercase() }
+                FavoritesSortOrder.RATING -> recipes.sortedByDescending { it.rating }
+                FavoritesSortOrder.COOK_TIME -> recipes.sortedBy { it.prepTime + it.cookTime }
+                FavoritesSortOrder.DIFFICULTY -> recipes.sortedBy { it.difficulty.ordinal }
+            }
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
 
     fun setFavoritesSortOrder(order: FavoritesSortOrder) {
         _favoritesSortOrder.value = order
     }
 
-    init {
-        viewModelScope.launch {
-            favoritesRepository.favorites.collect { _favoriteRecipes.value = it }
-        }
-    }
-
     fun toggleFavorite(recipe: Recipe) {
-        val isFav = _favoriteRecipes.value.any { it.id == recipe.id }
+        val isFav = favoriteRecipes.value.any { it.id == recipe.id }
         viewModelScope.launch { favoritesRepository.toggleFavorite(recipe, isFav) }
     }
 
@@ -99,4 +94,3 @@ class FavoritesViewModel @Inject constructor(
         viewModelScope.launch { favoritesRepository.addFavorite(recipe) }
     }
 }
-

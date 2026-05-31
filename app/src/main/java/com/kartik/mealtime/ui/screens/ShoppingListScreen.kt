@@ -55,6 +55,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardCapitalization
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
 import com.kartik.mealtime.domain.model.ShoppingListItem
 import com.kartik.mealtime.ui.components.BrandedSnackbarHost
@@ -139,9 +140,9 @@ fun ShoppingListScreen(
     viewModel: ShoppingListViewModel,
     aiViewModel: AiViewModel
 ) {
-    val allItems by viewModel.shoppingList
-    val checkedCount by remember { derivedStateOf { viewModel.shoppingList.value.count { it.isChecked } } }
-    val totalCount by remember { derivedStateOf { viewModel.shoppingList.value.size } }
+    val allItems by viewModel.shoppingList.collectAsStateWithLifecycle()
+    val checkedCount by remember { derivedStateOf { allItems.count { it.isChecked } } }
+    val totalCount by remember { derivedStateOf { allItems.size } }
     val remainingCount by remember { derivedStateOf { totalCount - checkedCount } }
     val hapticFeedback = LocalHapticFeedback.current
     val snackbarHostState = remember { SnackbarHostState() }
@@ -154,7 +155,7 @@ fun ShoppingListScreen(
     // AI panel state
     var showAiPanel by remember { mutableStateOf(false) }
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = false)
-    val chatState by aiViewModel.chatState
+    val chatState by aiViewModel.chatState.collectAsStateWithLifecycle()
     var aiInputText by remember { mutableStateOf("") }
 
     fun submitCustomItem() {
@@ -167,7 +168,7 @@ fun ShoppingListScreen(
     }
 
     // Read focus from ViewModel — set by addToShoppingList before navigation
-    val focusRecipeName by viewModel.lastAddedRecipeName
+    val focusRecipeName by viewModel.lastAddedRecipeName.collectAsStateWithLifecycle()
 
     // false (absent) = expanded; true = collapsed
     val collapsedSections = remember { mutableStateMapOf<String, Boolean>() }

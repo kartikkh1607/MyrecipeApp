@@ -10,6 +10,14 @@ import kotlinx.serialization.Serializable
  * Screens with arguments: @Serializable data class with the arg as a field
  */
 
+// ── Nested graph: browse flow ─────────────────────────────────────────────────
+// Wraps Home + Categories + CategoryDetail so CategoryViewModel can be scoped to
+// the graph's NavBackStackEntry (see Navigation.kt). Keeps the VM out of the
+// activity-wide scope and prevents non-browse screens (Search, Favorites,
+// Settings) from accidentally injecting it.
+@Serializable
+object BrowseGraph
+
 // ── Bottom nav screens ────────────────────────────────────────────────────────
 @Serializable
 object Home

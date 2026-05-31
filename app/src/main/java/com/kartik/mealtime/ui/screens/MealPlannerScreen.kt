@@ -80,9 +80,9 @@ fun MealPlannerScreen(
     billingViewModel: BillingViewModel = hiltViewModel(),
 ) {
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
-    val planState by viewModel.planState
-    val selectedDays by viewModel.selectedDays
-    val mealSheet by viewModel.mealSheet
+    val planState by viewModel.planState.collectAsStateWithLifecycle()
+    val selectedDays by viewModel.selectedDays.collectAsStateWithLifecycle()
+    val mealSheet by viewModel.mealSheet.collectAsStateWithLifecycle()
     val productDetails by billingViewModel.productDetails.collectAsStateWithLifecycle()
     val context = LocalContext.current
     val activity = remember(context) { context.findActivity() }

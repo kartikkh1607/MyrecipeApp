@@ -95,8 +95,8 @@ fun ChatScreen(
     viewModel: AiViewModel,
     billingViewModel: BillingViewModel = hiltViewModel()
 ) {
-    val chatState by viewModel.chatState
-    val genState by viewModel.recipeGenState
+    val chatState by viewModel.chatState.collectAsStateWithLifecycle()
+    val genState by viewModel.recipeGenState.collectAsStateWithLifecycle()
     val isPremium by viewModel.isPremium.collectAsStateWithLifecycle()
     val productDetails by billingViewModel.productDetails.collectAsStateWithLifecycle()
     val listState = rememberLazyListState()

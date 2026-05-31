@@ -1,9 +1,6 @@
 package com.kartik.mealtime.ui.viewmodel
 
 import android.util.Log
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kartik.mealtime.data.analytics.AnalyticsHelper
@@ -12,6 +9,9 @@ import com.kartik.mealtime.domain.model.SearchResult
 import com.kartik.mealtime.domain.usecase.SearchRecipesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -28,7 +28,6 @@ class SearchViewModel @Inject constructor(
     private val analytics: AnalyticsHelper
 ) : ViewModel() {
 
-    @Immutable
     data class SearchState(
         val loading: Boolean = false,
         val loadingMore: Boolean = false,
@@ -38,13 +37,13 @@ class SearchViewModel @Inject constructor(
         val query: String = ""
     )
 
-    private val _searchState = mutableStateOf(SearchState())
-    val searchState: State<SearchState> = _searchState
+    private val _searchState = MutableStateFlow(SearchState())
+    val searchState: StateFlow<SearchState> = _searchState.asStateFlow()
 
     // ── Recent Searches ───────────────────────────────────────────────────────
     // In-memory only — session history, max 5 entries, most-recent first.
-    private val _recentSearches = mutableStateOf<List<String>>(emptyList())
-    val recentSearches: State<List<String>> = _recentSearches
+    private val _recentSearches = MutableStateFlow<List<String>>(emptyList())
+    val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
 
     /** Adds [query] to the top of the recent list (deduped, capped at 5). */
     fun addRecentSearch(query: String) {

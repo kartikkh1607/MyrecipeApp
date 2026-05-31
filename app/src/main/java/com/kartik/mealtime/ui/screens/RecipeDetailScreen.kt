@@ -92,7 +92,7 @@ fun RecipeDetailScreen(
     viewModel: MainViewModel,
     shoppingListViewModel: ShoppingListViewModel
 ) {
-    val swipeIds by viewModel.recipeSwipeIds
+    val swipeIds by viewModel.recipeSwipeIds.collectAsStateWithLifecycle()
     val hasSwipeList = swipeIds.size > 1 && swipeIds.contains(recipeId)
 
     if (hasSwipeList) {
@@ -164,8 +164,8 @@ private fun RecipeDetailPage(
     // a key the shared genState would render a GeneratedRecipeSheet on every composed page.
     val aiViewModel: AiViewModel = hiltViewModel(key = "remix-$recipeId")
     val billingViewModel: BillingViewModel = hiltViewModel()
-    val cachedRecipe = viewModel.recipeDetailCache[recipeId]
-    val recipeDetailState by viewModel.recipeDetailState
+    val cachedRecipe = viewModel.cachedRecipe(recipeId)
+    val recipeDetailState by viewModel.recipeDetailState.collectAsStateWithLifecycle()
 
     LaunchedEffect(recipeId) {
         if (cachedRecipe == null) viewModel.fetchRecipeDetails(recipeId)
@@ -224,7 +224,7 @@ private fun RecipeDetailPage(
 
     // ── AI Remix (premium) ────────────────────────────────────────────────────
     val isPremium by aiViewModel.isPremium.collectAsStateWithLifecycle()
-    val remixState by aiViewModel.recipeGenState
+    val remixState by aiViewModel.recipeGenState.collectAsStateWithLifecycle()
     val productDetails by billingViewModel.productDetails.collectAsStateWithLifecycle()
     var showRemixOptions by remember { mutableStateOf(false) }
     var showUpsell by remember { mutableStateOf(false) }

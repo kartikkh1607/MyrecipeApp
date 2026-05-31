@@ -1,27 +1,26 @@
 package com.kartik.mealtime.ui.viewmodel
 
 import android.util.Log
-import androidx.compose.runtime.Immutable
-import androidx.compose.runtime.State
-import androidx.compose.runtime.mutableStateMapOf
-import androidx.compose.runtime.mutableStateOf
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.kartik.mealtime.data.analytics.AnalyticsHelper
-import com.kartik.mealtime.data.local.ThemePreferences
 import com.kartik.mealtime.data.preferences.RecentRecipesRepository
 import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import com.kartik.mealtime.domain.model.FeaturedRecipe
 import com.kartik.mealtime.domain.model.Recipe
 import com.kartik.mealtime.domain.model.ThemeMode
+import com.kartik.mealtime.domain.repository.ThemeRepository
 import com.kartik.mealtime.domain.usecase.FindRecipeVideoUseCase
 import com.kartik.mealtime.domain.usecase.GetFeaturedRecipesUseCase
 import com.kartik.mealtime.domain.usecase.GetRecipeDetailsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.stateIn
+import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
@@ -29,23 +28,21 @@ import javax.inject.Inject
  * Presentation-layer ViewModel.
  *
  * Responsibilities:
- *  - Hold and expose UI state
+ *  - Hold and expose UI state as Kotlin [StateFlow]s — keeps this layer free of
+ *    Compose-runtime imports so it can be reused outside Compose (and tested
+ *    without the Robolectric shim).
  *  - Delegate ALL data operations to use cases (no Retrofit, no sample data, no mapping here)
  *  - React to UI events (search query, refresh, category selection, etc.)
- *
- * Issue #4 fix: exposes [themeMode] from DataStore and [setThemeMode] to update it.
- * Issue #6 fix: [searchRecipes] now delays 300 ms before firing so rapid keystrokes
- *               cancel the coroutine before any network call is made.
  */
 @HiltViewModel
 class MainViewModel @Inject constructor(
     private val getFeaturedRecipes: GetFeaturedRecipesUseCase,
     private val getRecipeDetails: GetRecipeDetailsUseCase,
-    private val themePreferences: ThemePreferences,
+    private val themeRepository: ThemeRepository,
     private val analytics: AnalyticsHelper,
     private val userPrefsRepo: UserPreferencesRepository,
     private val recentRecipesRepo: RecentRecipesRepository,
-    private val findRecipeVideo: FindRecipeVideoUseCase
+    private val findRecipeVideo: FindRecipeVideoUseCase,
 ) : ViewModel() {
 
     // ── Recipe Video (YouTube) ────────────────────────────────────────────────
@@ -67,24 +64,25 @@ class MainViewModel @Inject constructor(
     }
 
     // ── Recipe detail cache — keyed by recipe ID ─────────────────────────────
-    // Populated on every successful fetchRecipeDetails call so that the pager
-    // can show already-loaded recipes instantly without re-fetching.
-    val recipeDetailCache = mutableStateMapOf<String, Recipe>()
+    // Populated on every successful fetchRecipeDetails call so the pager can
+    // show already-loaded recipes instantly without re-fetching.
+    private val _recipeDetailCache = MutableStateFlow<Map<String, Recipe>>(emptyMap())
+    val recipeDetailCache: StateFlow<Map<String, Recipe>> = _recipeDetailCache.asStateFlow()
 
-    private val _recipeSwipeIds = mutableStateOf<List<String>>(emptyList())
-    val recipeSwipeIds: State<List<String>> = _recipeSwipeIds
+    private val _recipeSwipeIds = MutableStateFlow<List<String>>(emptyList())
+    val recipeSwipeIds: StateFlow<List<String>> = _recipeSwipeIds.asStateFlow()
 
     fun setRecipeSwipeList(ids: List<String>) {
         _recipeSwipeIds.value = ids
     }
 
-    // ── Theme State (Issue #4) ────────────────────────────────────────────────
+    // ── Theme State ───────────────────────────────────────────────────────────
 
     /**
      * Emits the user's persisted theme choice.
-     * Collected from DataStore via [ThemePreferences]; defaults to [ThemeMode.SYSTEM].
+     * Collected from DataStore via [ThemeRepository]; defaults to [ThemeMode.SYSTEM].
      */
-    val themeMode: StateFlow<ThemeMode> = themePreferences
+    val themeMode: StateFlow<ThemeMode> = themeRepository
         .themeMode()
         .stateIn(
             scope = viewModelScope,
@@ -95,7 +93,7 @@ class MainViewModel @Inject constructor(
     /** Persists the chosen [mode] to DataStore. Change is immediately reflected in [themeMode]. */
     fun setThemeMode(mode: ThemeMode) {
         viewModelScope.launch {
-            themePreferences.setThemeMode(mode)
+            themeRepository.setThemeMode(mode)
         }
     }
 
@@ -120,26 +118,24 @@ class MainViewModel @Inject constructor(
     }
 
     // ── Home Screen State ─────────────────────────────────────────────────────
-    @Immutable
     data class HomeRecipeState(
         val loading: Boolean = true,
         val featuredRecipes: List<FeaturedRecipe> = emptyList(),
         val error: String? = null
     )
 
-    private val _homeRecipeState = mutableStateOf(HomeRecipeState())
-    val homeRecipeState: State<HomeRecipeState> = _homeRecipeState
+    private val _homeRecipeState = MutableStateFlow(HomeRecipeState())
+    val homeRecipeState: StateFlow<HomeRecipeState> = _homeRecipeState.asStateFlow()
 
     // ── Recipe Detail State ───────────────────────────────────────────────────
-    @Immutable
     data class RecipeDetailState(
         val loading: Boolean = true,
         val recipe: Recipe? = null,
         val error: String? = null
     )
 
-    private val _recipeDetailState = mutableStateOf(RecipeDetailState())
-    val recipeDetailState: State<RecipeDetailState> = _recipeDetailState
+    private val _recipeDetailState = MutableStateFlow(RecipeDetailState())
+    val recipeDetailState: StateFlow<RecipeDetailState> = _recipeDetailState.asStateFlow()
 
     // ─────────────────────────────────────────────────────────────────────────
     init {
@@ -173,7 +169,7 @@ class MainViewModel @Inject constructor(
             onSuccess = {
                 _recipeDetailState.value = RecipeDetailState(loading = false, recipe = it)
                 it?.let { r ->
-                    recipeDetailCache[r.id] = r
+                    _recipeDetailCache.update { cache -> cache + (r.id to r) }
                     analytics.logRecipeViewed(r.id, r.name)
                 }
             },
@@ -183,6 +179,9 @@ class MainViewModel @Inject constructor(
             }
         )
     }
+
+    /** O(1) cache lookup for the pager; null when the recipe hasn't been loaded yet. */
+    fun cachedRecipe(recipeId: String): Recipe? = _recipeDetailCache.value[recipeId]
 
     /**
      * Records a recipe view for personalization — updates streak, increments

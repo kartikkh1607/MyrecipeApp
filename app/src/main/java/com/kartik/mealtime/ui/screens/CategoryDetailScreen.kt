@@ -49,6 +49,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import coil.compose.AsyncImage
 import com.kartik.mealtime.domain.model.DietaryFilter
 import com.kartik.mealtime.domain.model.RecipeCategory
@@ -81,10 +82,10 @@ fun CategoryDetailScreen(
     // Observe favorites at composable scope — reads inside items{} won't
     // trigger recomposition on their own without this delegation.
     val favoritesViewModel: FavoritesViewModel = hiltViewModel()
-    val favoriteIds by favoritesViewModel.favoriteIds
+    val favoriteIds by favoritesViewModel.favoriteIds.collectAsStateWithLifecycle()
 
     // Get category recipes state from ViewModel
-    val categoryRecipesState by categoryViewModel.categoryRecipesState
+    val categoryRecipesState by categoryViewModel.categoryRecipesState.collectAsStateWithLifecycle()
 
     // Fetch recipes when category changes or screen is first loaded
     LaunchedEffect(category.id) {
