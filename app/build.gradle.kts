@@ -141,6 +141,23 @@ android {
         }
     }
 
+    lint {
+        // Fail the build on any lint error so CI catches regressions; without this,
+        // `lintDebug` reports errors but exits 0 and the CI job passes regardless.
+        abortOnError = true
+        // Treat warnings as errors so newly-introduced ones can't accumulate silently.
+        warningsAsErrors = true
+        // Grandfather the existing 76 lint errors into a baseline so the new
+        // quality gate only fails on regressions. Refresh with `./gradlew :app:updateLintBaseline`
+        // after a deliberate cleanup pass.
+        baseline = file("lint-baseline.xml")
+        // Still emit reports uploaded by CI for debuggability.
+        htmlReport = true
+        xmlReport = true
+        // Don't gate the build on lint checking test sources — keeps fixtures lenient.
+        checkTestSources = false
+    }
+
     // Expose the exported Room schemas as androidTest assets so MigrationTestHelper
     // can replay each schema version against an in-memory database. Schemas live in
     // app/schemas/ (configured via `ksp.arg("room.schemaLocation", ...)` above).
