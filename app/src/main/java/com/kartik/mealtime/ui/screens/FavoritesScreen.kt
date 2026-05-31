@@ -29,32 +29,25 @@ import androidx.compose.foundation.layout.statusBarsPadding
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
-import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.lazy.rememberLazyListState
+import androidx.compose.foundation.lazy.grid.rememberLazyGridState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Explore
-import androidx.compose.material.icons.filled.Favorite
 import androidx.compose.material.icons.filled.FavoriteBorder
-import androidx.compose.material.icons.filled.GridView
-import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.ViewList
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
-import androidx.compose.material3.Card
-import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilterChip
 import androidx.compose.material3.FilterChipDefaults
 import androidx.compose.material3.Icon
-import androidx.compose.material3.IconButton
-import androidx.compose.material3.IconButtonDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHostState
@@ -73,8 +66,6 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
-import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.hapticfeedback.HapticFeedbackType
 import androidx.compose.ui.platform.LocalHapticFeedback
@@ -85,9 +76,11 @@ import androidx.compose.ui.unit.sp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.navigation.NavHostController
-import coil.compose.AsyncImage
 import com.kartik.mealtime.domain.model.Recipe
 import com.kartik.mealtime.ui.components.BrandedSnackbarHost
+import com.kartik.mealtime.ui.components.GridListToggle
+import com.kartik.mealtime.ui.components.RecipeCardH
+import com.kartik.mealtime.ui.components.RecipeCardV
 import com.kartik.mealtime.ui.navigation.Favorites
 import com.kartik.mealtime.ui.navigation.LocalTabReselectEvents
 import com.kartik.mealtime.ui.navigation.RecipeDetail
@@ -127,6 +120,10 @@ fun FavoritesScreen(
         }
     }
 
+    val onRemoveFavorite = remember { favoritesViewModel::removeFavorite }
+    val onAddFavorite = remember { favoritesViewModel::addFavorite }
+    val onToggleFavorite = remember { favoritesViewModel::toggleFavorite }
+
     Scaffold(
         snackbarHost = { BrandedSnackbarHost(snackbarHostState) },
         containerColor = MaterialTheme.colorScheme.background,
@@ -138,52 +135,52 @@ fun FavoritesScreen(
                 .background(MaterialTheme.colorScheme.background)
                 .padding(innerPadding)
                 .statusBarsPadding()
-                .padding(horizontal = 16.dp)
+                .padding(horizontal = 20.dp)
         ) {
-            // ── Header ────────────────────────────────────────────────────────────
+            // ── Header: "Saved" + count, grid/list toggle on the right ──────────
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
-                    .padding(top = 8.dp, bottom = 16.dp),
+                    .padding(top = 6.dp, bottom = 0.dp),
                 horizontalArrangement = Arrangement.SpaceBetween,
-                verticalAlignment = Alignment.CenterVertically
+                verticalAlignment = Alignment.Bottom
             ) {
-                Column {
+                Column(modifier = Modifier.weight(1f)) {
                     Text(
-                        text = "Favorite Recipes",
-                        style = MaterialTheme.typography.headlineLarge,
+                        text = "Saved",
+                        style = MaterialTheme.typography.headlineLarge.copy(
+                            fontWeight = FontWeight.SemiBold,
+                            fontSize = 26.sp,
+                            lineHeight = 28.sp
+                        ),
                         color = MaterialTheme.colorScheme.onBackground
                     )
-                    if (favoriteRecipes.isNotEmpty()) {
-                        Text(
-                            text = "${favoriteRecipes.size} saved recipe${if (favoriteRecipes.size > 1) "s" else ""}",
-                            style = MaterialTheme.typography.bodyMedium,
-                            color = MaterialTheme.colorScheme.onSurfaceVariant
-                        )
-                    }
+                    Spacer(Modifier.height(2.dp))
+                    Text(
+                        text = if (favoriteRecipes.isEmpty())
+                            "Tap the ♥ to save recipes here"
+                        else
+                            "${favoriteRecipes.size} ${if (favoriteRecipes.size == 1) "recipe" else "recipes"} you love",
+                        style = MaterialTheme.typography.bodyMedium.copy(fontSize = 13.5.sp),
+                        color = MaterialTheme.colorScheme.onSurfaceVariant
+                    )
                 }
-
                 if (favoriteRecipes.isNotEmpty()) {
-                    IconButton(
-                        onClick = {
-                            favoritesViewModel.toggleFavoritesGridMode()
-                            hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
-                        },
-                        colors = IconButtonDefaults.iconButtonColors(
-                            contentColor = MaterialTheme.colorScheme.primary
-                        )
-                    ) {
-                        Icon(
-                            imageVector = if (isGridMode) Icons.Default.ViewList else Icons.Default.GridView,
-                            contentDescription = "Toggle view",
-                            modifier = Modifier.size(28.dp)
-                        )
-                    }
+                    GridListToggle(
+                        isGrid = isGridMode,
+                        onChange = { wantGrid ->
+                            if (wantGrid != isGridMode) {
+                                hapticFeedback.performHapticFeedback(HapticFeedbackType.LongPress)
+                                favoritesViewModel.toggleFavoritesGridMode()
+                            }
+                        }
+                    )
                 }
             }
 
-            // ── Sort chips row ─────────────────────────────────────────────────
+            // ── Sort chips row ──────────────────────────────────────────────────
             if (favoriteRecipes.isNotEmpty()) {
+                Spacer(Modifier.height(18.dp))
                 FavoritesSortBar(
                     currentSort = currentSort,
                     onSortSelected = { order ->
@@ -191,14 +188,10 @@ fun FavoritesScreen(
                         favoritesViewModel.setFavoritesSortOrder(order)
                     }
                 )
-                Spacer(modifier = Modifier.height(14.dp))
+                Spacer(Modifier.height(16.dp))
             }
 
-            // Stable method references hoisted to avoid recomposition of list items
-            val onRemoveFavorite = remember { favoritesViewModel::removeFavorite }
-            val onAddFavorite = remember { favoritesViewModel::addFavorite }
-
-            // ── Content ──────────────────────────────────────────────────────────
+            // ── Content ─────────────────────────────────────────────────────────
             AnimatedContent(
                 targetState = favoriteRecipes.isEmpty(),
                 transitionSpec = { fadeIn(tween(300)) togetherWith fadeOut(tween(200)) },
@@ -221,8 +214,9 @@ fun FavoritesScreen(
                                 columns = GridCells.Fixed(2),
                                 state = gridState,
                                 modifier = Modifier.fillMaxSize(),
-                                horizontalArrangement = Arrangement.spacedBy(12.dp),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                horizontalArrangement = Arrangement.spacedBy(13.dp),
+                                verticalArrangement = Arrangement.spacedBy(13.dp),
+                                contentPadding = PaddingValues(bottom = 24.dp)
                             ) {
                                 itemsIndexed(
                                     sortedFavorites,
@@ -259,18 +253,29 @@ fun FavoritesScreen(
                                     AnimatedVisibility(
                                         visible = visible,
                                         enter = scaleIn(
-                                            initialScale = 0.85f,
+                                            initialScale = 0.9f,
                                             animationSpec = spring(
                                                 dampingRatio = Spring.DampingRatioNoBouncy,
                                                 stiffness = 300f
                                             )
                                         ) + fadeIn(tween(200))
                                     ) {
-                                        CompactFavoriteCard(
-                                            recipe = recipe,
-                                            onRemove = onRemove,
-                                            onClick = onGridClick
-                                        )
+                                        // Long-press on the card removes (matches list-mode swipe);
+                                        // the heart in the corner also toggles.
+                                        Box(
+                                            modifier = Modifier.combinedClickable(
+                                                onClick = onGridClick,
+                                                onLongClick = onRemove,
+                                                onLongClickLabel = "Remove from favorites"
+                                            )
+                                        ) {
+                                            RecipeCardV(
+                                                recipe = recipe,
+                                                isFavorite = favoriteIds.contains(recipe.id),
+                                                onClick = onGridClick,
+                                                onFavoriteToggle = { onToggleFavorite(recipe) }
+                                            )
+                                        }
                                     }
                                 }
                             }
@@ -278,7 +283,8 @@ fun FavoritesScreen(
                             LazyColumn(
                                 state = listState,
                                 modifier = Modifier.fillMaxSize(),
-                                verticalArrangement = Arrangement.spacedBy(12.dp)
+                                verticalArrangement = Arrangement.spacedBy(12.dp),
+                                contentPadding = PaddingValues(bottom = 24.dp)
                             ) {
                                 itemsIndexed(
                                     sortedFavorites,
@@ -324,11 +330,12 @@ fun FavoritesScreen(
                                             )
                                         ) + fadeIn(tween(200))
                                     ) {
-                                        SwipeToDeleteFavoriteCard(
+                                        SwipeToDeleteLinenCard(
                                             recipe = recipe,
                                             isFavorite = favoriteIds.contains(recipe.id),
                                             onDelete = onDelete,
-                                            onClick = onListClick
+                                            onClick = onListClick,
+                                            onFavoriteToggle = { onToggleFavorite(recipe) }
                                         )
                                     }
                                 }
@@ -382,7 +389,7 @@ private fun FavoritesSortBar(
                     selectedContainerColor = MaterialTheme.colorScheme.primary,
                     selectedLabelColor = MaterialTheme.colorScheme.onPrimary
                 ),
-                shape = RoundedCornerShape(20.dp)
+                shape = RoundedCornerShape(999.dp)
             )
         }
     }
@@ -391,11 +398,12 @@ private fun FavoritesSortBar(
 // ── Swipe-to-delete wrapper for list mode ─────────────────────────────────────
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun SwipeToDeleteFavoriteCard(
+private fun SwipeToDeleteLinenCard(
     recipe: Recipe,
     isFavorite: Boolean,
     onDelete: () -> Unit,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    onFavoriteToggle: () -> Unit,
 ) {
     val dismissState = rememberSwipeToDismissBoxState(
         confirmValueChange = { value ->
@@ -428,7 +436,7 @@ private fun SwipeToDeleteFavoriteCard(
             Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .clip(RoundedCornerShape(16.dp))
+                    .clip(RoundedCornerShape(18.dp))
                     .background(bgColor),
                 contentAlignment = Alignment.CenterEnd
             ) {
@@ -457,115 +465,16 @@ private fun SwipeToDeleteFavoriteCard(
         enableDismissFromStartToEnd = false,
         enableDismissFromEndToStart = true
     ) {
-        EnhancedRecipeCard(
+        RecipeCardH(
             recipe = recipe,
             isFavorite = isFavorite,
-            onFavoriteToggle = { onDelete() },
-            onClick = onClick
+            onClick = onClick,
+            onFavoriteToggle = onFavoriteToggle
         )
     }
 }
 
-// ── Compact grid card ─────────────────────────────────────────────────────────
-@OptIn(ExperimentalMaterial3Api::class)
-@Composable
-private fun CompactFavoriteCard(
-    recipe: Recipe,
-    onRemove: () -> Unit,
-    onClick: () -> Unit
-) {
-    var isPressed by remember { mutableStateOf(false) }
-    val scale by animateFloatAsState(
-        targetValue = if (isPressed) 0.95f else 1f,
-        animationSpec = spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = 400f),
-        label = "card_scale",
-        finishedListener = { isPressed = false }
-    )
-    val cardOverlay = remember {
-        Brush.verticalGradient(listOf(Color.Transparent, Color.Black.copy(alpha = 0.7f)))
-    }
-    val ratingText = remember(recipe.rating) { String.format("%.1f", recipe.rating) }
-
-    // Grid card: tap opens the recipe, long-press removes it (matches the list-mode
-    // swipe-to-dismiss + undo flow). The corner heart was a 32dp tap target right where
-    // the thumb grabs the card — too easy to mis-tap, and semantically odd on a screen
-    // of items the user has already favorited.
-    Card(
-        modifier = Modifier
-            .fillMaxWidth()
-            .height(180.dp)
-            .graphicsLayer { scaleX = scale; scaleY = scale }
-            .combinedClickable(
-                onClick = {
-                    isPressed = true
-                    onClick()
-                },
-                onLongClick = onRemove,
-                onLongClickLabel = "Remove from favorites",
-            ),
-        shape = RoundedCornerShape(16.dp),
-        elevation = CardDefaults.cardElevation(defaultElevation = 4.dp)
-    ) {
-        Box(modifier = Modifier.fillMaxSize()) {
-            Box(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .background(MaterialTheme.colorScheme.surfaceVariant)
-            ) {
-                AsyncImage(
-                    model = recipe.imageUrl,
-                    contentDescription = recipe.name,
-                    modifier = Modifier.fillMaxSize(),
-                    contentScale = androidx.compose.ui.layout.ContentScale.Crop,
-                )
-            }
-            Box(modifier = Modifier
-                .fillMaxSize()
-                .background(cardOverlay))
-            Column(
-                modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(10.dp)
-            ) {
-                Text(
-                    recipe.name,
-                    style = MaterialTheme.typography.labelLarge,
-                    fontWeight = FontWeight.Bold,
-                    color = Color.White,
-                    maxLines = 2
-                )
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(4.dp)
-                ) {
-                    Icon(
-                        Icons.Default.Star,
-                        null,
-                        tint = com.kartik.mealtime.ui.theme.StarGold,
-                        modifier = Modifier.size(12.dp)
-                    )
-                    Text(
-                        ratingText,
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.9f)
-                    )
-                    Text(
-                        "·",
-                        color = Color.White.copy(alpha = 0.7f),
-                        style = MaterialTheme.typography.labelSmall
-                    )
-                    Text(
-                        "${recipe.prepTime + recipe.cookTime} min",
-                        style = MaterialTheme.typography.labelSmall,
-                        color = Color.White.copy(alpha = 0.8f)
-                    )
-                }
-            }
-        }
-    }
-}
-
-// ── Empty state ────────────────────────────────────────────────────────────────
+// ── Empty state ───────────────────────────────────────────────────────────────
 @Composable
 fun EmptyFavoritesState(onExploreClick: () -> Unit = {}) {
     var visible by remember { mutableStateOf(false) }
