@@ -9,6 +9,10 @@ plugins {
     alias(libs.plugins.hilt)
     alias(libs.plugins.google.services)
     alias(libs.plugins.firebase.crashlytics.plugin)
+    // Consumer side of the baseline profile pipeline: takes the .txt produced
+    // by the :baselineprofile module and packages it into the AAB so the
+    // ART optimiser AOT-compiles startup-critical classes on install.
+    alias(libs.plugins.android.baselineprofile)
 }
 
 ksp {
@@ -218,6 +222,9 @@ dependencies {
 
     // Baseline Profile
     implementation(libs.androidx.profileinstaller)
+    // Pulls the generated profile from the :baselineprofile producer module
+    // and bundles it into app/src/<variant>/generated/baselineProfiles/.
+    baselineProfile(project(":baselineprofile"))
 
     // Core & Compose BOM
     implementation(libs.androidx.core.ktx)

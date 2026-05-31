@@ -21,4 +21,5 @@ dependencyResolutionManagement {
 
 rootProject.name = "MyrecipeApp"
 include(":app")
+include(":baselineprofile")
  

@@ -1,6 +1,10 @@
 [versions]
 agp = "9.2.1"
-benchmarkMacroJunit4 = "1.4.1"
+# Bumped to 1.5.0-alpha06 because the 1.4.x line predates AGP 9 and the
+# baselineprofile plugin refuses to apply on AGP 9 modules. Both libs are
+# build-time only (test module + Gradle plugin) — never shipped to users.
+benchmarkMacroJunit4 = "1.5.0-alpha06"
+baselineprofile = "1.5.0-alpha06"
 coilCompose = "2.7.0"
 converterGson = "3.0.0"
 datastorePreferences = "1.2.1"
@@ -111,4 +115,6 @@ hilt = { id = "com.google.dagger.hilt.android", version.ref = "hilt" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 google-services = { id = "com.google.gms.google-services", version.ref = "googleServices" }
 firebase-crashlytics-plugin = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlyticsPlugin" }
+android-test = { id = "com.android.test", version.ref = "agp" }
+android-baselineprofile = { id = "androidx.baselineprofile", version.ref = "baselineprofile" }
 
