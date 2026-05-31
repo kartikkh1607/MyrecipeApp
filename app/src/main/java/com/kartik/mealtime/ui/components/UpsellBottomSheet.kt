@@ -27,6 +27,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -35,6 +36,10 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
+import com.airbnb.lottie.compose.LottieAnimation
+import com.airbnb.lottie.compose.LottieCompositionSpec
+import com.airbnb.lottie.compose.LottieConstants
+import com.airbnb.lottie.compose.rememberLottieComposition
 import com.android.billingclient.api.ProductDetails
 import com.kartik.mealtime.data.billing.BillingManager
 import com.kartik.mealtime.ui.theme.Amber
@@ -138,20 +143,7 @@ private fun UpsellHero(title: String, description: String) {
             modifier = Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
-            Box(
-                modifier = Modifier
-                    .size(72.dp)
-                    .clip(CircleShape)
-                    .background(Color.White.copy(alpha = 0.22f)),
-                contentAlignment = Alignment.Center,
-            ) {
-                Icon(
-                    imageVector = Icons.Default.WorkspacePremium,
-                    contentDescription = null,
-                    tint = Color.White,
-                    modifier = Modifier.size(40.dp),
-                )
-            }
+            HeroVisual()
             Spacer(Modifier.height(14.dp))
             Text(
                 text = title,
@@ -163,6 +155,43 @@ private fun UpsellHero(title: String, description: String) {
                 text = description,
                 style = MaterialTheme.typography.bodyMedium,
                 color = Color.White.copy(alpha = 0.88f),
+            )
+        }
+    }
+}
+
+/**
+ * Lottie demo of the AI generating a meal plan — the visual hook that sells the feature
+ * before the user has paid. Loads from assets/upsell_meal_plan.json and loops forever.
+ *
+ * If the asset is missing or fails to parse, [rememberLottieComposition] returns null
+ * and the crown icon is shown instead, so the build/runtime never breaks on a missing
+ * file. Drop the real LottieFiles export at app/src/main/assets/upsell_meal_plan.json.
+ */
+@Composable
+private fun HeroVisual() {
+    val composition by rememberLottieComposition(
+        LottieCompositionSpec.Asset("upsell_meal_plan.json")
+    )
+    if (composition != null) {
+        LottieAnimation(
+            composition = composition,
+            iterations = LottieConstants.IterateForever,
+            modifier = Modifier.size(160.dp),
+        )
+    } else {
+        Box(
+            modifier = Modifier
+                .size(72.dp)
+                .clip(CircleShape)
+                .background(Color.White.copy(alpha = 0.22f)),
+            contentAlignment = Alignment.Center,
+        ) {
+            Icon(
+                imageVector = Icons.Default.WorkspacePremium,
+                contentDescription = null,
+                tint = Color.White,
+                modifier = Modifier.size(40.dp),
             )
         }
     }

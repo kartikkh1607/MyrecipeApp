@@ -184,6 +184,10 @@ dependencies {
     // data/billing/BillingEntitlementRepository -> EntitlementRepository seam.
     implementation(libs.billing.ktx)
 
+    // Lottie — paywall hero animation in UpsellBottomSheet. Loads from
+    // assets/upsell_meal_plan.json; missing asset degrades to the crown icon fallback.
+    implementation(libs.lottie.compose)
+
     // Google AdMob — banner + interstitial ads (Phase A monetization).
     // Production ad unit IDs go in data/ads/AdConfig.kt; test IDs are baked in.
     implementation(libs.play.services.ads)
