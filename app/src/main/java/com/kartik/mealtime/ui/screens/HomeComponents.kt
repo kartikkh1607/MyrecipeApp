@@ -77,6 +77,7 @@ import com.kartik.mealtime.domain.model.FeaturedRecipe
 import com.kartik.mealtime.domain.model.RecipeCategory
 import com.kartik.mealtime.ui.theme.StarGold
 import com.kartik.mealtime.ui.viewmodel.FavoritesViewModel
+import kotlinx.collections.immutable.ImmutableList
 import java.util.Locale
 import androidx.compose.ui.text.intl.Locale as ComposeLocale
 import androidx.compose.ui.text.toUpperCase
@@ -541,7 +542,7 @@ private fun GlassMetaPill(text: String) {
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun TodaysPickCard(
-    featured: List<FeaturedRecipe>,
+    featured: ImmutableList<FeaturedRecipe>,
     onClick: (recipeId: String) -> Unit
 ) {
     val pick = remember(featured) {
@@ -759,7 +760,7 @@ private fun QuickActionCard(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun BrowseByMoodRow(
-    categories: List<RecipeCategory>,
+    categories: ImmutableList<RecipeCategory>,
     onCategoryClick: (RecipeCategory) -> Unit,
     onSeeAll: () -> Unit
 ) {
@@ -823,7 +824,7 @@ internal fun BrowseByMoodRow(
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun RecentlyViewedSection(
-    recipes: List<RecentRecipe>,
+    recipes: ImmutableList<RecentRecipe>,
     onRecipeClick: (recipeId: String) -> Unit
 ) {
     Column {

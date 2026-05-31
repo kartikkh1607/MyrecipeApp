@@ -198,6 +198,10 @@ dependencies {
     // Kotlinx Serialization (required for type-safe Navigation 2.8+)
     implementation(libs.kotlinx.serialization.json)
 
+    // Immutable collections so Compose can treat StateFlow-backed lists as stable
+    // (skips recomposition when the list reference is unchanged — see HomeRecipeState etc.).
+    implementation(libs.kotlinx.collections.immutable)
+
     // Material 3 Extended Icons
     implementation(libs.androidx.compose.material.icons.extended)
 

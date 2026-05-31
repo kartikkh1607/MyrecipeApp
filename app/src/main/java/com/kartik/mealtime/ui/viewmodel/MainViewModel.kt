@@ -14,6 +14,9 @@ import com.kartik.mealtime.domain.usecase.FindRecipeVideoUseCase
 import com.kartik.mealtime.domain.usecase.GetFeaturedRecipesUseCase
 import com.kartik.mealtime.domain.usecase.GetRecipeDetailsUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
@@ -69,11 +72,11 @@ class MainViewModel @Inject constructor(
     private val _recipeDetailCache = MutableStateFlow<Map<String, Recipe>>(emptyMap())
     val recipeDetailCache: StateFlow<Map<String, Recipe>> = _recipeDetailCache.asStateFlow()
 
-    private val _recipeSwipeIds = MutableStateFlow<List<String>>(emptyList())
-    val recipeSwipeIds: StateFlow<List<String>> = _recipeSwipeIds.asStateFlow()
+    private val _recipeSwipeIds = MutableStateFlow<ImmutableList<String>>(persistentListOf())
+    val recipeSwipeIds: StateFlow<ImmutableList<String>> = _recipeSwipeIds.asStateFlow()
 
     fun setRecipeSwipeList(ids: List<String>) {
-        _recipeSwipeIds.value = ids
+        _recipeSwipeIds.value = ids.toImmutableList()
     }
 
     // ── Theme State ───────────────────────────────────────────────────────────
@@ -118,9 +121,11 @@ class MainViewModel @Inject constructor(
     }
 
     // ── Home Screen State ─────────────────────────────────────────────────────
+    // featuredRecipes is ImmutableList so Compose treats HomeRecipeState as stable
+    // — without it, every LazyRow render would recompose the carousel items.
     data class HomeRecipeState(
         val loading: Boolean = true,
-        val featuredRecipes: List<FeaturedRecipe> = emptyList(),
+        val featuredRecipes: ImmutableList<FeaturedRecipe> = persistentListOf(),
         val error: String? = null
     )
 
@@ -204,7 +209,7 @@ class MainViewModel @Inject constructor(
         },
         call = { getFeaturedRecipes(forceRefresh) },
         onSuccess = {
-            _homeRecipeState.value = HomeRecipeState(loading = false, featuredRecipes = it)
+            _homeRecipeState.value = HomeRecipeState(loading = false, featuredRecipes = it.toImmutableList())
         },
         onFailure = {
             Log.w(TAG, "loadFeaturedRecipes: ${it.message}")

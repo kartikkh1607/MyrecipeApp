@@ -10,6 +10,9 @@ import com.kartik.mealtime.domain.model.RecipeCategory
 import com.kartik.mealtime.domain.usecase.GetCategoriesUseCase
 import com.kartik.mealtime.domain.usecase.GetRecipesByCategoryUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -35,13 +38,13 @@ class CategoryViewModel @Inject constructor(
 
     data class RecipeCategoryState(
         val loading: Boolean = true,
-        val categories: List<RecipeCategory> = emptyList(),
+        val categories: ImmutableList<RecipeCategory> = persistentListOf(),
         val error: String? = null
     )
 
     data class CategoryRecipesState(
         val loading: Boolean = false,
-        val recipes: List<Recipe> = emptyList(),
+        val recipes: ImmutableList<Recipe> = persistentListOf(),
         val error: String? = null,
         val totalLoaded: Int = 0,
         val hasMore: Boolean = false,
@@ -96,10 +99,11 @@ class CategoryViewModel @Inject constructor(
     fun getRecipesByCategory(categoryId: String) {
         val cached = categoryCache[categoryId]
         if (cached != null && (System.currentTimeMillis() - cached.second) < CACHE_TTL_MS) {
+            val cachedRecipes = cached.first.toImmutableList()
             _categoryRecipesState.value = CategoryRecipesState(
                 loading = false,
-                recipes = cached.first,
-                totalLoaded = cached.first.size,
+                recipes = cachedRecipes,
+                totalLoaded = cachedRecipes.size,
                 hasMore = false
             )
             return
@@ -115,7 +119,7 @@ class CategoryViewModel @Inject constructor(
                     analytics.logCategoryViewed(categoryId, categoryName)
                     _categoryRecipesState.value = CategoryRecipesState(
                         loading = false,
-                        recipes = newRecipes,
+                        recipes = newRecipes.toImmutableList(),
                         totalLoaded = newRecipes.size,
                         hasMore = newRecipes.size >= 20
                     )
@@ -141,14 +145,15 @@ class CategoryViewModel @Inject constructor(
             val offset = current.totalLoaded
             getByCategoryUseCase(categoryId, offset = offset, append = true).fold(
                 onSuccess = { newRecipes ->
+                    val merged = (current.recipes + newRecipes).toImmutableList()
                     val updated = current.copy(
                         isLoadingMore = false,
-                        recipes = current.recipes + newRecipes,
+                        recipes = merged,
                         totalLoaded = current.totalLoaded + newRecipes.size,
                         hasMore = newRecipes.size >= 20
                     )
                     _categoryRecipesState.value = updated
-                    categoryCache[categoryId] = Pair(updated.recipes, System.currentTimeMillis())
+                    categoryCache[categoryId] = Pair(merged, System.currentTimeMillis())
                 },
                 onFailure = {
                     Log.w(TAG, "loadMoreCategoryRecipes: ${it.message}")
@@ -168,7 +173,7 @@ class CategoryViewModel @Inject constructor(
             getCategories().fold(
                 onSuccess = {
                     _recipeCategoriesState.value =
-                        RecipeCategoryState(loading = false, categories = it)
+                        RecipeCategoryState(loading = false, categories = it.toImmutableList())
                     Log.d(TAG, "Loaded ${it.size} categories")
                 },
                 onFailure = {

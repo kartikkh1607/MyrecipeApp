@@ -8,6 +8,9 @@ import com.kartik.mealtime.domain.model.Recipe
 import com.kartik.mealtime.domain.model.SearchResult
 import com.kartik.mealtime.domain.usecase.SearchRecipesUseCase
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -31,7 +34,7 @@ class SearchViewModel @Inject constructor(
     data class SearchState(
         val loading: Boolean = false,
         val loadingMore: Boolean = false,
-        val recipes: List<Recipe> = emptyList(),
+        val recipes: ImmutableList<Recipe> = persistentListOf(),
         val totalResults: Int = 0,
         val error: String? = null,
         val query: String = ""
@@ -42,8 +45,8 @@ class SearchViewModel @Inject constructor(
 
     // ── Recent Searches ───────────────────────────────────────────────────────
     // In-memory only — session history, max 5 entries, most-recent first.
-    private val _recentSearches = MutableStateFlow<List<String>>(emptyList())
-    val recentSearches: StateFlow<List<String>> = _recentSearches.asStateFlow()
+    private val _recentSearches = MutableStateFlow<ImmutableList<String>>(persistentListOf())
+    val recentSearches: StateFlow<ImmutableList<String>> = _recentSearches.asStateFlow()
 
     /** Adds [query] to the top of the recent list (deduped, capped at 5). */
     fun addRecentSearch(query: String) {
@@ -51,16 +54,16 @@ class SearchViewModel @Inject constructor(
         if (trimmed.isBlank()) return
         val updated = (listOf(trimmed) + _recentSearches.value.filter {
             it.lowercase() != trimmed.lowercase()
-        }).take(5)
+        }).take(5).toImmutableList()
         _recentSearches.value = updated
     }
 
     fun clearRecentSearch(query: String) {
-        _recentSearches.value = _recentSearches.value.filter { it != query }
+        _recentSearches.value = _recentSearches.value.filter { it != query }.toImmutableList()
     }
 
     fun clearAllRecentSearches() {
-        _recentSearches.value = emptyList()
+        _recentSearches.value = persistentListOf()
     }
 
     // ── Search-result cache — keyed by "query|offset", value = (result, cachedAt) ─
@@ -95,7 +98,7 @@ class SearchViewModel @Inject constructor(
             _searchState.value = SearchState(
                 loading = false,
                 loadingMore = false,
-                recipes = cached.first.recipes,
+                recipes = cached.first.recipes.toImmutableList(),
                 totalResults = cached.first.totalResults,
                 query = query
             )
@@ -108,7 +111,7 @@ class SearchViewModel @Inject constructor(
                     loading = true,
                     error = null,
                     query = query,
-                    recipes = emptyList(),
+                    recipes = persistentListOf(),
                     totalResults = 0,
                     loadingMore = false
                 )
@@ -122,7 +125,7 @@ class SearchViewModel @Inject constructor(
                             SearchState(
                                 loading = false,
                                 loadingMore = false,
-                                recipes = it.recipes,
+                                recipes = it.recipes.toImmutableList(),
                                 totalResults = it.totalResults,
                                 query = query
                             )
@@ -156,7 +159,7 @@ class SearchViewModel @Inject constructor(
         if (cachedPage != null && (System.currentTimeMillis() - cachedPage.second) < SEARCH_CACHE_TTL_MS) {
             _searchState.value = _searchState.value.copy(
                 loadingMore = false,
-                recipes = currentState.recipes + cachedPage.first.recipes,
+                recipes = (currentState.recipes + cachedPage.first.recipes).toImmutableList(),
                 totalResults = cachedPage.first.totalResults
             )
             return
@@ -169,7 +172,7 @@ class SearchViewModel @Inject constructor(
                         searchCache[pageKey] = result to System.currentTimeMillis()
                         _searchState.value = _searchState.value.copy(
                             loadingMore = false,
-                            recipes = currentState.recipes + result.recipes, // append
+                            recipes = (currentState.recipes + result.recipes).toImmutableList(), // append
                             totalResults = result.totalResults
                         )
                     },

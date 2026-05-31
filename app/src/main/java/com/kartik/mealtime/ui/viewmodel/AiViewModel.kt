@@ -14,6 +14,9 @@ import com.kartik.mealtime.domain.model.Recipe
 import com.kartik.mealtime.domain.repository.EntitlementRepository
 import com.kartik.mealtime.ui.viewmodel.AiViewModel.Companion.MAX_HISTORY_MESSAGES
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableSharedFlow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharedFlow
@@ -41,7 +44,7 @@ class AiViewModel @Inject constructor(
 
     // ── Chat State ─────────────────────────────────────────────────────────────
     data class ChatState(
-        val messages: List<ChatUiMessage> = emptyList(),
+        val messages: ImmutableList<ChatUiMessage> = persistentListOf(),
         val isLoading: Boolean = false,
         val error: String? = null,
         val isTyping: Boolean = false  // AI is "typing" response
@@ -52,7 +55,7 @@ class AiViewModel @Inject constructor(
         val content: String,
         val isUser: Boolean,
         val timestamp: Long = System.currentTimeMillis(),
-        val suggestedRecipes: List<SuggestedRecipe> = emptyList()
+        val suggestedRecipes: ImmutableList<SuggestedRecipe> = persistentListOf()
     )
 
     data class SuggestedRecipe(
@@ -94,7 +97,7 @@ class AiViewModel @Inject constructor(
     init {
         // Welcome message
         _chatState.value = ChatState(
-            messages = listOf(
+            messages = persistentListOf(
                 ChatUiMessage(
                     content = "Hi there! I'm your AI recipe assistant. Tell me what ingredients you have, what you're craving, or any cooking questions you have!",
                     isUser = false
@@ -119,7 +122,7 @@ class AiViewModel @Inject constructor(
             // Add user message
             val userMsg = ChatUiMessage(content = trimmed, isUser = true)
             _chatState.value = _chatState.value.copy(
-                messages = _chatState.value.messages + userMsg,
+                messages = (_chatState.value.messages + userMsg).toImmutableList(),
                 isTyping = true,
                 error = null
             )
@@ -154,7 +157,7 @@ class AiViewModel @Inject constructor(
                         suggestedRecipes = suggestions
                     )
                     _chatState.value = _chatState.value.copy(
-                        messages = _chatState.value.messages + aiMsg,
+                        messages = (_chatState.value.messages + aiMsg).toImmutableList(),
                         isTyping = false
                     )
                 },
@@ -178,7 +181,7 @@ class AiViewModel @Inject constructor(
     fun clearChat() {
         conversationHistory.clear()
         _chatState.value = ChatState(
-            messages = listOf(
+            messages = persistentListOf(
                 ChatUiMessage(
                     content = "Hi there! I'm your AI recipe assistant. Tell me what ingredients you have, what you're craving, or any cooking questions you have!",
                     isUser = false
@@ -309,7 +312,7 @@ class AiViewModel @Inject constructor(
         }
     }
 
-    private fun extractRecipeSuggestions(text: String): List<SuggestedRecipe> {
+    private fun extractRecipeSuggestions(text: String): ImmutableList<SuggestedRecipe> {
         val suggestions = mutableListOf<SuggestedRecipe>()
 
         // Look for patterns like **Recipe Name** - Description
@@ -323,7 +326,7 @@ class AiViewModel @Inject constructor(
             )
         }
 
-        return suggestions.take(5)
+        return suggestions.take(5).toImmutableList()
     }
 
 }

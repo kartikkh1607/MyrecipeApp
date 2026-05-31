@@ -6,6 +6,9 @@ import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import com.kartik.mealtime.data.repository.FavoritesRepository
 import com.kartik.mealtime.domain.model.Recipe
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -30,8 +33,9 @@ class FavoritesViewModel @Inject constructor(
     private val userPreferencesRepository: UserPreferencesRepository,
 ) : ViewModel() {
 
-    val favoriteRecipes: StateFlow<List<Recipe>> = favoritesRepository.favorites
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val favoriteRecipes: StateFlow<ImmutableList<Recipe>> = favoritesRepository.favorites
+        .map { it.toImmutableList() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, persistentListOf())
 
     val favoriteIds: StateFlow<Set<String>> = favoriteRecipes
         .map { recipes -> recipes.mapTo(mutableSetOf()) { it.id } }
@@ -64,17 +68,17 @@ class FavoritesViewModel @Inject constructor(
     private val _favoritesSortOrder = MutableStateFlow(FavoritesSortOrder.RECENTLY_ADDED)
     val favoritesSortOrder: StateFlow<FavoritesSortOrder> = _favoritesSortOrder.asStateFlow()
 
-    val sortedFavoriteRecipes: StateFlow<List<Recipe>> =
+    val sortedFavoriteRecipes: StateFlow<ImmutableList<Recipe>> =
         combine(favoriteRecipes, _favoritesSortOrder) { recipes, order ->
             when (order) {
                 FavoritesSortOrder.RECENTLY_ADDED -> recipes
-                FavoritesSortOrder.NAME_AZ -> recipes.sortedBy { it.name.lowercase() }
-                FavoritesSortOrder.NAME_ZA -> recipes.sortedByDescending { it.name.lowercase() }
-                FavoritesSortOrder.RATING -> recipes.sortedByDescending { it.rating }
-                FavoritesSortOrder.COOK_TIME -> recipes.sortedBy { it.prepTime + it.cookTime }
-                FavoritesSortOrder.DIFFICULTY -> recipes.sortedBy { it.difficulty.ordinal }
+                FavoritesSortOrder.NAME_AZ -> recipes.sortedBy { it.name.lowercase() }.toImmutableList()
+                FavoritesSortOrder.NAME_ZA -> recipes.sortedByDescending { it.name.lowercase() }.toImmutableList()
+                FavoritesSortOrder.RATING -> recipes.sortedByDescending { it.rating }.toImmutableList()
+                FavoritesSortOrder.COOK_TIME -> recipes.sortedBy { it.prepTime + it.cookTime }.toImmutableList()
+                FavoritesSortOrder.DIFFICULTY -> recipes.sortedBy { it.difficulty.ordinal }.toImmutableList()
             }
-        }.stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+        }.stateIn(viewModelScope, SharingStarted.Eagerly, persistentListOf())
 
     fun setFavoritesSortOrder(order: FavoritesSortOrder) {
         _favoritesSortOrder.value = order

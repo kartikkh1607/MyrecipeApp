@@ -9,6 +9,9 @@ import com.kartik.mealtime.data.preferences.RecentRecipesRepository
 import com.kartik.mealtime.data.preferences.UserPreferences
 import com.kartik.mealtime.data.preferences.UserPreferencesRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
@@ -41,11 +44,12 @@ class UserViewModel @Inject constructor(
         )
 
     /** Recently-viewed recipes — drives the "Recently viewed" row on HomeScreen. */
-    val recentRecipes: StateFlow<List<RecentRecipe>> = recentRecipesRepo.recents
+    val recentRecipes: StateFlow<ImmutableList<RecentRecipe>> = recentRecipesRepo.recents
+        .map { it.toImmutableList() }
         .stateIn(
             scope = viewModelScope,
             started = SharingStarted.WhileSubscribed(5_000),
-            initialValue = emptyList()
+            initialValue = persistentListOf()
         )
 
     /** Live favorites count — used by Profile stats row. */

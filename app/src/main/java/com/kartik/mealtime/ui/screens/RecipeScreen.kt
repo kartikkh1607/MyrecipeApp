@@ -66,6 +66,7 @@ import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
 import com.kartik.mealtime.domain.model.RecipeCategory
 import com.kartik.mealtime.ui.components.GridSkeletonScreen
+import kotlinx.collections.immutable.ImmutableList
 import com.kartik.mealtime.ui.navigation.Categories
 import com.kartik.mealtime.ui.navigation.LocalTabReselectEvents
 import com.kartik.mealtime.ui.viewmodel.CategoryViewModel
@@ -177,7 +178,7 @@ fun RecipeScreen(
 
 @Composable
 fun CategoryGridDisplay(
-    categories: List<RecipeCategory>,
+    categories: ImmutableList<RecipeCategory>,
     navigateToDetail: (RecipeCategory) -> Unit,
     gridState: LazyGridState = rememberLazyGridState()
 ) {

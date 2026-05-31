@@ -83,6 +83,7 @@ import androidx.compose.ui.graphics.drawscope.Stroke
 import com.kartik.mealtime.domain.model.ShoppingListItem
 import com.kartik.mealtime.ui.theme.ForestGreen
 import com.kartik.mealtime.ui.viewmodel.AiViewModel
+import kotlinx.collections.immutable.ImmutableList
 import kotlinx.coroutines.delay
 import kotlin.math.roundToInt
 
@@ -90,7 +91,7 @@ import kotlin.math.roundToInt
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 internal fun ShoppingAiPanel(
-    items: List<ShoppingListItem>,
+    items: ImmutableList<ShoppingListItem>,
     chatState: AiViewModel.ChatState,
     inputText: String,
     onInputChange: (String) -> Unit,

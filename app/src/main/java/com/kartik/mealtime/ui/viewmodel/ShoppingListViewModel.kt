@@ -12,6 +12,9 @@ import com.kartik.mealtime.data.repository.syncBestEffort
 import com.kartik.mealtime.domain.model.Recipe
 import com.kartik.mealtime.domain.model.ShoppingListItem
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
@@ -38,9 +41,9 @@ class ShoppingListViewModel @Inject constructor(
     private val analytics: AnalyticsHelper
 ) : ViewModel() {
 
-    val shoppingList: StateFlow<List<ShoppingListItem>> = shoppingDao.getAllFlow()
-        .map { entities -> entities.map { it.toShoppingListItem() } }
-        .stateIn(viewModelScope, SharingStarted.Eagerly, emptyList())
+    val shoppingList: StateFlow<ImmutableList<ShoppingListItem>> = shoppingDao.getAllFlow()
+        .map { entities -> entities.map { it.toShoppingListItem() }.toImmutableList() }
+        .stateIn(viewModelScope, SharingStarted.Eagerly, persistentListOf())
 
     /** The last recipe name passed to [addToShoppingList]. Used by ShoppingListScreen to auto focus that section. */
     private val _lastAddedRecipeName = MutableStateFlow<String?>(null)

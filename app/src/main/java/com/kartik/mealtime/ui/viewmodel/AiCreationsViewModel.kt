@@ -5,8 +5,12 @@ import androidx.lifecycle.viewModelScope
 import com.kartik.mealtime.data.repository.AiRecipeRepository
 import com.kartik.mealtime.domain.model.Recipe
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.collections.immutable.ImmutableList
+import kotlinx.collections.immutable.persistentListOf
+import kotlinx.collections.immutable.toImmutableList
 import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 import javax.inject.Inject
@@ -21,8 +25,9 @@ class AiCreationsViewModel @Inject constructor(
     private val repository: AiRecipeRepository
 ) : ViewModel() {
 
-    val creations: StateFlow<List<Recipe>> = repository.creations
-        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), emptyList())
+    val creations: StateFlow<ImmutableList<Recipe>> = repository.creations
+        .map { it.toImmutableList() }
+        .stateIn(viewModelScope, SharingStarted.WhileSubscribed(5_000), persistentListOf())
 
     fun delete(id: String) {
         viewModelScope.launch { repository.delete(id) }
