@@ -20,7 +20,7 @@ android {
         minSdk = 28
         // Match :app's targetSdk so the macrobenchmark exercises the same
         // platform behaviour the shipped app will see.
-        targetSdk = 35
+        targetSdk = 36
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 

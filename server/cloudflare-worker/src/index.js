@@ -23,8 +23,12 @@
  *   FIREBASE_PROJECT_ID
  */
 
-const GEMINI_MODEL = "gemini-2.0-flash";
-const GROQ_MODEL = "llama-3.3-70b-versatile";
+// Models are overridable from wrangler.toml [vars] so the next retirement is a config
+// change, not a code change. The previous defaults both stopped working in 2026:
+// gemini-2.0-flash was shut down on 1 Jun 2026, and Groq moved llama-3.3-70b-versatile
+// to enterprise-only on 26 Aug 2026.
+const GEMINI_MODEL_DEFAULT = "gemini-3.5-flash-lite";
+const GROQ_MODEL_DEFAULT = "meta-llama/llama-4-scout-17b-16e-instruct";
 
 // ── Play Billing entitlement ───────────────────────────────────────────────
 const ANDROID_PACKAGE_NAME = "com.kartik.mealtime";
@@ -63,7 +67,8 @@ const RATE_LIMIT_KV_TTL_SECONDS = 120;
 //
 // Gemini structured-generation responses → KV (low volume — premium-gated and
 // per-user-daily-capped — so the cross-edge hit rate is worth the write cost).
-const SPOON_CACHE_TTL_SECONDS = 7 * 24 * 60 * 60;     // recipe data barely changes
+// Spoonacular's terms allow caching user-requested data for at most 1 hour.
+const SPOON_CACHE_TTL_SECONDS = 60 * 60;
 const GEMINI_CACHE_TTL_SECONDS = 30 * 24 * 60 * 60;   // generated recipes are reusable
 
 export default {
@@ -218,7 +223,7 @@ async function handleGemini(request, env, ctx, claims) {
   }
 
   const upstreamUrl =
-    `https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent` +
+    `https://generativelanguage.googleapis.com/v1beta/models/${env.GEMINI_MODEL || GEMINI_MODEL_DEFAULT}:generateContent` +
     `?key=${env.GEMINI_API_KEY}`;
 
   try {
@@ -339,7 +344,7 @@ async function handleGroq(request, env, claims) {
         Authorization: `Bearer ${env.GROQ_API_KEY}`,
       },
       // Server injects the model; app sends { messages, temperature, max_tokens, ... }
-      body: JSON.stringify({ model: GROQ_MODEL, ...incoming }),
+      body: JSON.stringify({ ...incoming, model: env.GROQ_MODEL || GROQ_MODEL_DEFAULT }),
     });
     return passthrough(upstream);
   } catch (e) {

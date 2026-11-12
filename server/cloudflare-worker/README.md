@@ -77,7 +77,7 @@ the app can be pointed at it.
   `Retry-After` header. Counter lives in `BILLING_KV` (`rl:<uid>:<minute>`), TTL 120 s.
   Fails open if KV is unavailable so a KV blip doesn't lock everyone out.
 - **Shared response cache (first user pays):**
-  - `GET /spoonacular/*` (2xx only) → Cloudflare **Cache API**, 7-day TTL. Key is the
+  - `GET /spoonacular/*` (2xx only) → Cloudflare **Cache API**, 1-hour TTL (the most Spoonacular's terms allow). Key is the
     normalised path + query (sort + trim + lowercase, `apiKey` excluded), so "Pasta " and
     "pasta" collapse to one entry. Per-edge on `workers.dev`, zone-wide on a custom domain.
   - `POST /gemini` structured-output calls (2xx only) → **KV** (`cache:gemini:<sha256>`),

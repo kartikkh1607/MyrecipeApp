@@ -26,6 +26,9 @@ FIREBASE_PROJECT_ID = "mealtime-96386"
 GEMINI_FREE_DAILY_QUOTA = "10"
 GEMINI_PREMIUM_DAILY_QUOTA = "30"
 RATE_LIMIT_PER_MINUTE = "60"
+# Upstream models. Change here (and `wrangler deploy`) when a provider retires one.
+GEMINI_MODEL = "gemini-3.5-flash-lite"
+GROQ_MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
 
 # Play Billing: purchaseToken -> uid map (written by /billing/verify, read by /billing/rtdn).
 # Create once and paste the printed id here:  wrangler kv namespace create BILLING_KV
