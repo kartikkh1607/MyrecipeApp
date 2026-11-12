@@ -27,9 +27,9 @@ class GroqAiService @Inject constructor(
 ) : AiService {
 
     private companion object {
-        // Change this to whichever model your Groq account has access to
-        // (e.g. "llama-3.3-70b-versatile", "llama-3.1-8b-instant", "gemma2-9b-it").
-        const val MODEL = "llama-3.3-70b-versatile"
+        // Informational only: the Worker always sets the model itself (GROQ_MODEL in
+        // wrangler.toml), so a retired model is fixed with a deploy, not an app update.
+        const val MODEL = "meta-llama/llama-4-scout-17b-16e-instruct"
     }
 
     /**

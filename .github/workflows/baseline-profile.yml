@@ -27,7 +27,7 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # Hardware acceleration via KVM — without this the emulator falls back
       # to software rendering and the macrobenchmark can time out.
@@ -38,13 +38,13 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Stub local.properties for CI
         run: echo "PROXY_BASE_URL=https://ci.invalid" > local.properties
@@ -130,7 +130,7 @@ jobs:
       # Upload the generated profile so it can be inspected even when the
       # auto-commit step is skipped (e.g. tag pushes commit to a detached HEAD).
       - name: Upload baseline profile artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: baseline-profile
           path: app/src/**/generated/baselineProfiles/baseline-prof.txt

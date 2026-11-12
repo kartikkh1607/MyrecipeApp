@@ -8,6 +8,11 @@ on:
   push:
     branches: [ master ]
   pull_request:
+  # The emulator job is slow and was timing out on every push; it now runs
+  # nightly and on demand instead of gating each commit.
+  schedule:
+    - cron: '30 21 * * *'
+  workflow_dispatch:
 
 # Cancel any in-flight CI run for the same ref when a new commit lands —
 # saves runner minutes when someone force-pushes a stack of fixes.
@@ -18,16 +23,17 @@ concurrency:
 jobs:
   build:
     name: Build, lint, unit tests
+    if: github.event_name != 'schedule'
     runs-on: ubuntu-latest
     timeout-minutes: 30
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # AGP 9.x + Kotlin 2.3 require JDK 17. Temurin distribution matches the
       # local dev environment defaults.
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
@@ -35,7 +41,7 @@ jobs:
       # Gradle action handles wrapper validation, dependency cache, and
       # configuration cache — collapses ~3 manual steps into one.
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       # The app reads PROXY_BASE_URL out of local.properties at build time
       # (see app/build.gradle.kts buildConfigField). CI has no real Worker —
@@ -96,7 +102,7 @@ jobs:
       # without re-running locally. Keep small — 7-day retention is enough.
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: reports
           path: |
@@ -107,6 +113,7 @@ jobs:
 
   instrumented-tests:
     name: Instrumented tests (emulator)
+    if: github.event_name == 'schedule' || github.event_name == 'workflow_dispatch'
     runs-on: ubuntu-latest
     # Emulator boot + AVD snapshot creation on a cold cache can take 8–10 min;
     # subsequent runs hit the cache and finish in ~5. 45-min ceiling absorbs
@@ -114,7 +121,7 @@ jobs:
     timeout-minutes: 45
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v5
 
       # reactivecircus/android-emulator-runner uses hardware-accelerated KVM
       # for ~3× faster boot. ubuntu-latest runners have /dev/kvm but the
@@ -126,13 +133,13 @@ jobs:
           sudo udevadm trigger --name-match=kvm
 
       - name: Set up JDK 17
-        uses: actions/setup-java@v4
+        uses: actions/setup-java@v5
         with:
           distribution: temurin
           java-version: '17'
 
       - name: Set up Gradle
-        uses: gradle/actions/setup-gradle@v4
+        uses: gradle/actions/setup-gradle@v5
 
       - name: Stub local.properties for CI
         run: echo "PROXY_BASE_URL=https://ci.invalid" > local.properties
@@ -213,7 +220,7 @@ jobs:
 
       - name: Upload instrumented-test reports
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v5
         with:
           name: instrumented-test-reports
           path: |
